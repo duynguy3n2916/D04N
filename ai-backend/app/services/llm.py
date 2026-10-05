@@ -88,16 +88,19 @@ def _call_provider(system: str, messages: list[dict], max_tokens: int, json_mode
     if provider == "openai":
         if not settings.openai_api_key:
             raise LLMError("Chưa cấu hình OPENAI_API_KEY.")
-        kwargs = {}
+        kwargs = {"model": settings.openai_llm_model,
+                  "messages": [{"role": "system", "content": system}] + messages,
+                  # max_completion_tokens dùng được cho cả gpt-4o / gpt-4.1 lẫn các model suy luận (o*, gpt-5)
+                  "max_completion_tokens": max_tokens, "temperature": temperature}
         if json_mode:
             kwargs["response_format"] = {"type": "json_object"}
-        resp = _openai_client().chat.completions.create(
-            model=settings.openai_llm_model,
-            messages=[{"role": "system", "content": system}] + messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            **kwargs,
-        )
+        try:
+            resp = _openai_client().chat.completions.create(**kwargs)
+        except Exception as e:  # một số model chỉ nhận temperature mặc định -> gọi lại không kèm temperature
+            if "temperature" not in str(e):
+                raise
+            kwargs.pop("temperature")
+            resp = _openai_client().chat.completions.create(**kwargs)
         usage = getattr(resp, "usage", None)
         return (resp.choices[0].message.content or "", getattr(usage, "prompt_tokens", None),
                 getattr(usage, "completion_tokens", None), getattr(resp, "model", settings.openai_llm_model))
