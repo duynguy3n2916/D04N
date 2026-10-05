@@ -1,0 +1,440 @@
+{
+ "description": "Bộ mẫu đánh giá gắn với dữ liệu demo (lesson_oop.md + video-01.srt). Thay bằng 50-100 câu từ học liệu thật trước khi báo cáo.",
+ "samples": [
+  {
+   "id": "q01",
+   "split": "test",
+   "question": "Lập trình hướng đối tượng là gì?",
+   "expected_answer": "OOP là phương pháp lập trình tổ chức chương trình thành các đối tượng, mỗi đối tượng kết hợp dữ liệu (thuộc tính) và hành vi (phương thức).",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Giới thiệu lập trình hướng đối tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 10,
+     "end": 28
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q02",
+   "split": "test",
+   "question": "Phân biệt lớp và đối tượng.",
+   "expected_answer": "Lớp là bản thiết kế mô tả thuộc tính và phương thức; đối tượng là thể hiện cụ thể được tạo ra từ lớp.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Lớp và đối tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 28,
+     "end": 93
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q03",
+   "split": "test",
+   "question": "Hàm __init__ trong Python dùng để làm gì?",
+   "expected_answer": "__init__ là hàm khởi tạo, được gọi tự động khi tạo đối tượng mới để gán giá trị ban đầu cho thuộc tính.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Lớp và đối tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 68,
+     "end": 84
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q04",
+   "split": "dev",
+   "question": "Tham số self trong phương thức Python đại diện cho gì?",
+   "expected_answer": "self đại diện cho chính đối tượng đang được thao tác.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Lớp và đối tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 76,
+     "end": 84
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q05",
+   "split": "test",
+   "question": "Tính đóng gói là gì và mục đích của nó?",
+   "expected_answer": "Đóng gói gom dữ liệu và phương thức vào một lớp, che giấu chi tiết bên trong; mục đích bảo vệ dữ liệu và giữ đối tượng ở trạng thái hợp lệ.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đóng gói"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 93,
+     "end": 152
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q06",
+   "split": "test",
+   "question": "Getter và setter dùng để làm gì?",
+   "expected_answer": "Getter và setter là phương thức đọc và cập nhật thuộc tính private một cách có kiểm soát.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đóng gói"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 134,
+     "end": 143
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q07",
+   "split": "dev",
+   "question": "Trong Python làm thế nào để hạn chế truy cập trực tiếp vào thuộc tính?",
+   "expected_answer": "Đặt tên thuộc tính bắt đầu bằng hai dấu gạch dưới, ví dụ __so_du.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đóng gói"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q08",
+   "split": "test",
+   "question": "Kế thừa là gì? Cho ví dụ.",
+   "expected_answer": "Kế thừa cho phép lớp con tái sử dụng thuộc tính và phương thức của lớp cha; ví dụ lớp Cho kế thừa lớp DongVat (quan hệ is-a).",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính kế thừa"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 152,
+     "end": 200
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q09",
+   "split": "test",
+   "question": "Hàm super() trong Python được dùng để làm gì?",
+   "expected_answer": "super() dùng để gọi phương thức của lớp cha, thường là super().__init__() trong hàm khởi tạo lớp con.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính kế thừa"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 176,
+     "end": 183
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q10",
+   "split": "dev",
+   "question": "Python và Java khác nhau thế nào về đa kế thừa?",
+   "expected_answer": "Python hỗ trợ đa kế thừa; Java chỉ cho đơn kế thừa với lớp nhưng có thể cài đặt nhiều interface.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính kế thừa"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 192,
+     "end": 200
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q11",
+   "split": "test",
+   "question": "Đa hình là gì?",
+   "expected_answer": "Đa hình là khả năng cùng một lời gọi phương thức nhưng hành vi khác nhau tùy đối tượng cụ thể.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đa hình"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 201,
+     "end": 250
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q12",
+   "split": "test",
+   "question": "Phân biệt ghi đè phương thức và nạp chồng phương thức.",
+   "expected_answer": "Ghi đè: lớp con định nghĩa lại phương thức của lớp cha cùng tên, cùng tham số (đa hình lúc chạy). Nạp chồng: nhiều phương thức cùng tên khác tham số trong một lớp (đa hình lúc biên dịch).",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đa hình"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 224,
+     "end": 250
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q13",
+   "split": "dev",
+   "question": "Python có hỗ trợ nạp chồng phương thức giống Java không?",
+   "expected_answer": "Không theo kiểu Java; Python thường dùng tham số mặc định để thay thế.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đa hình"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q14",
+   "split": "test",
+   "question": "Tính trừu tượng trong OOP là gì?",
+   "expected_answer": "Trừu tượng là chỉ thể hiện đặc điểm cần thiết và ẩn chi tiết cài đặt phức tạp.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính trừu tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 250,
+     "end": 288
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q15",
+   "split": "test",
+   "question": "Làm sao tạo lớp trừu tượng trong Python?",
+   "expected_answer": "Kế thừa ABC từ module abc và đánh dấu phương thức bằng decorator @abstractmethod.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính trừu tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 272,
+     "end": 280
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q16",
+   "split": "test",
+   "question": "Có thể tạo đối tượng trực tiếp từ lớp trừu tượng không?",
+   "expected_answer": "Không, lớp trừu tượng không thể tạo đối tượng trực tiếp; lớp con phải cài đặt các phương thức trừu tượng.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính trừu tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 265,
+     "end": 288
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q17",
+   "split": "test",
+   "question": "OOP có những tính chất cơ bản nào?",
+   "expected_answer": "Bốn tính chất: đóng gói, kế thừa, đa hình và trừu tượng.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Bốn tính chất cơ bản của OOP"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 289,
+     "end": 297
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q18",
+   "split": "test",
+   "question": "Phân biệt kết tập (aggregation) và hợp thành (composition).",
+   "expected_answer": "Kết tập: đối tượng thành phần tồn tại độc lập với đối tượng chứa; hợp thành: thành phần bị hủy khi đối tượng chứa bị hủy.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Quan hệ giữa các lớp"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q19",
+   "split": "dev",
+   "question": "Nguyên tắc composition over inheritance khuyên điều gì?",
+   "expected_answer": "Ưu tiên dùng hợp thành khi quan hệ giữa hai lớp không thực sự là 'là một', giúp hệ thống linh hoạt hơn.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Quan hệ giữa các lớp"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q20",
+   "split": "test",
+   "question": "So sánh lập trình hướng đối tượng với lập trình thủ tục.",
+   "expected_answer": "Thủ tục tổ chức thành hàm và dữ liệu tách rời, hợp chương trình nhỏ; OOP gắn dữ liệu với hành vi trong đối tượng, hợp hệ thống lớn cần mở rộng.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "So sánh với lập trình thủ tục"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q21",
+   "split": "test",
+   "question": "Nhược điểm của lập trình hướng đối tượng là gì?",
+   "expected_answer": "Thiết kế ban đầu phức tạp hơn và có thể tốn tài nguyên hơn với chương trình đơn giản.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "So sánh với lập trình thủ tục"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "u01",
+   "split": "test",
+   "question": "Thuật toán Dijkstra dùng để làm gì?",
+   "expected_answer": "Hệ thống nên trả lời rằng học liệu không có thông tin này.",
+   "relevant_sources": [],
+   "answerable": false
+  },
+  {
+   "id": "u02",
+   "split": "test",
+   "question": "Ai là tổng thống đầu tiên của Hoa Kỳ?",
+   "expected_answer": "Hệ thống nên trả lời rằng học liệu không có thông tin này.",
+   "relevant_sources": [],
+   "answerable": false
+  },
+  {
+   "id": "u03",
+   "split": "dev",
+   "question": "Cách cấu hình định tuyến OSPF trên router Cisco?",
+   "expected_answer": "Hệ thống nên trả lời rằng học liệu không có thông tin này.",
+   "relevant_sources": [],
+   "answerable": false
+  }
+ ]
+}
