@@ -8,7 +8,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
@@ -110,6 +110,12 @@ def health():
 
 
 if FRONTEND_DIST.joinpath("index.html").exists():
+    @app.get("/app/pdf.worker.min.mjs", include_in_schema=False)
+    def pdf_worker():
+        """Worker của pdf.js (trình xem slide): luôn trả đúng kiểu JavaScript, kể cả trên Windows."""
+        return FileResponse(FRONTEND_DIST / "pdf.worker.min.mjs", media_type="text/javascript",
+                            headers={"Cache-Control": "no-cache"})
+
     app.mount("/app", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
 
