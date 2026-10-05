@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import mimetypes
 import os
 import threading
 from contextlib import asynccontextmanager
@@ -20,6 +21,12 @@ from app.routers import (admin, auth, chat, documents, evaluation, jobs as jobs_
 from app.services import evaluation as _ev, ingestion as _ing, jobs, transcription as _tr  # noqa: F401 (đăng ký job)
 from app.services import tutor_explain as _te  # noqa: F401 (đăng ký job tutor_explain)
 from app.services.workflow import sweep_expired
+
+# Windows lấy kiểu file từ registry: .mjs (pdf.js worker) hay .js có thể bị trả về text/plain,
+# trình duyệt sẽ từ chối nạp như JavaScript module. Khai báo cố định để chạy giống nhau trên mọi máy.
+for _ext, _type in ((".js", "text/javascript"), (".mjs", "text/javascript"), (".css", "text/css"),
+                    (".wasm", "application/wasm"), (".svg", "image/svg+xml"), (".json", "application/json")):
+    mimetypes.add_type(_type, _ext)
 
 log = logging.getLogger("app")
 FRONTEND_DIST = Path(os.environ.get("FRONTEND_DIST", Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"))
