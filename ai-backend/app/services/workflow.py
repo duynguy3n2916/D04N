@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.context import get_request_id
 from app.core.errors import AppError
-from app.core.llm_schemas import QuestionItem
+from app.core.llm_schemas import AgentQuestionItem
 from app.core.prompts import QUESTION_AGENT, wrap_documents
 from app.core.security import Principal
 from app.core.utils import as_aware, fmt_ts, normalize_text, utcnow
@@ -243,7 +243,9 @@ def trigger_agent(db: Session, user: Principal, video_id: str, current_time: flo
     segs, tr = transcript_window(db, video_id, window_start, current_time)
     if tr is None:
         return no("no_transcript")
-    if len(segs) < 2:
+    # cần ít nhất 2 đoạn, HOẶC 1 đoạn đủ dài (video có phụ đề gộp thành đoạn lớn)
+    enough = len(segs) >= 2 or (len(segs) == 1 and len(segs[0].text.split()) >= 12)
+    if not enough:
         return no("insufficient_recent_transcript")
 
     _transition(db, s, S.GENERATE_QUESTION, "agent_trigger")
@@ -256,13 +258,13 @@ def trigger_agent(db: Session, user: Principal, video_id: str, current_time: flo
     if recent:
         prompt += "\n\nCác câu đã hỏi (không lặp lại):\n" + "\n".join(f"- {q}" for q in recent)
     try:
-        item, res = llm.complete_json("agent_question", QUESTION_AGENT, prompt, QuestionItem, max_tokens=1200,
+        item, res = llm.complete_json("agent_question", QUESTION_AGENT, prompt, AgentQuestionItem, max_tokens=1200,
                                       user_id=user.user_id)
-        if item.type not in ("multiple_choice", "true_false"):
-            raise ValueError("Question Agent cần câu hỏi trắc nghiệm")
         if normalize_text(item.question) in {normalize_text(q) for q in recent}:
             raise ValueError("Câu hỏi trùng câu đã hỏi")
     except Exception as e:
+        log.warning("agent_generation_failed", extra={"extra_fields": {
+            "video_id": video_id, "error": f"{type(e).__name__}: {str(getattr(e, 'detail', e))[:300]}"}})
         s = lock_session(db, user.user_id, video_id)
         if s.current_state == S.GENERATE_QUESTION.value:
             _transition(db, s, S.VIDEO_PLAYING, f"generation_failed: {str(getattr(e, 'detail', e))[:200]}")

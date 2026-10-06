@@ -54,6 +54,10 @@ class QuestionItem(BaseModel):
         return self
 
 
+class AgentQuestionItem(QuestionItem):
+    type: Literal["multiple_choice", "true_false"] = "multiple_choice"
+
+
 class QuizOutput(BaseModel):
     questions: list[QuestionItem]
 

@@ -48,6 +48,32 @@ def test_transcript_import_versions_rollback(client, teacher):
     assert client.get(f"/ai/videos/{VID}/transcript", headers=sv_b).status_code == 404
 
 
+def test_uploaded_video_transcription_is_available_to_player(client, teacher, monkeypatch):
+    from app.services import transcription
+
+    vid = "vid-auto-subtitles"
+    monkeypatch.setattr(transcription, "transcribe_media", lambda *_args: [
+        {"start_time": 1.0, "end_time": 3.0, "text": "Phụ đề tự tạo"},
+    ])
+    r = client.post("/ai/media/videos", headers=teacher,
+                    files={"file": ("lesson.mp4", io.BytesIO(b"sample video"), "video/mp4")},
+                    data={"video_id": vid, "class_id": "lop-a", "transcribe": "true"})
+    assert r.status_code == 201, r.text
+    assert r.json()["job_id"]
+
+    job = client.get(f"/ai/media/videos/{vid}/transcription-job", headers=teacher)
+    assert job.status_code == 200
+    assert job.json()["job_id"] == r.json()["job_id"]
+    assert job.json()["status"] == "succeeded"
+
+    student = token(client, "sv-auto-subtitles", "student", ["lop-a"])
+    transcript = client.get(f"/ai/videos/{vid}/transcript", headers=student)
+    assert transcript.status_code == 200
+    assert transcript.json()["segments"] == [
+        {"start_time": 1.0, "end_time": 3.0, "text": "Phụ đề tự tạo"},
+    ]
+
+
 def test_teacher_video_questions_draft_flow(client, teacher, fake_llm):
     r = client.post(f"/ai/videos/{VID}/generate-question", headers=teacher, json={"timestamp": 30})
     assert r.status_code == 200, r.text
@@ -173,6 +199,21 @@ def test_agent_generation_failure_returns_to_playing(client, teacher, fake_llm):
     r = client.post("/ai/question-agent/trigger", headers=student, json={"video_id": VID, "current_time": 110})
     assert r.json()["triggered"] is False and r.json()["reason"] == "generation_failed"
     assert r.json()["state"] == "VIDEO_PLAYING"
+
+
+def test_agent_accepts_one_substantial_transcript_segment(client, teacher, fake_llm):
+    vid = "vid-one-long-segment"
+    words = "Hôm nay chúng ta học về tính đóng gói trong lập trình hướng đối tượng và cách bảo vệ dữ liệu của lớp."
+    r = client.put(f"/ai/videos/{vid}/transcript", headers=teacher, json={"segments": [
+        {"start_time": 0, "end_time": 90, "text": words},
+    ]})
+    assert r.status_code == 200, r.text
+    student = token(client, "sv-one-segment", "student", ["lop-a"])
+    r = client.post("/ai/question-agent/trigger", headers=student,
+                    json={"video_id": vid, "current_time": 45})
+    assert r.status_code == 200, r.text
+    assert r.json()["triggered"] is True
+    assert r.json()["question"]["origin"] == "agent"
 
 
 def test_concurrent_triggers_create_single_question(client, teacher, fake_llm):

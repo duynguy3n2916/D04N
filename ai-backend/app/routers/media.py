@@ -15,9 +15,11 @@ from app.core.utils import clean_id, parse_uuid
 from app.database import get_db
 from app.models.documents import AIDocument
 from app.models.learning import MediaVideo
+from app.models.observability import AIJob
 from app.models.transcript import VideoTranscript
 from app.models.video_question import VideoQuestion
 from app.services import jobs
+from app.services.jobs import job_to_dict
 from app.services.storage import safe_extension, save_upload
 
 router = APIRouter(prefix="/ai", tags=["media"])
@@ -116,6 +118,20 @@ def transcribe_stored(video_id: str, language: str = "vi", user: Principal = Dep
                                                "class_id": v.class_id, "created_by": user.user_id,
                                                "delete_file": False}, created_by=user.user_id)
     return JSONResponse(status_code=202, content=jobs.job_to_dict(job))
+
+
+@router.get("/media/videos/{video_id}/transcription-job")
+def latest_transcription_job(video_id: str, user: Principal = Depends(require_teacher),
+                             db: Session = Depends(get_db)):
+    v = db.get(MediaVideo, video_id)
+    if not v or not user.can_access_class(v.class_id):
+        raise AppError(404, "NOT_FOUND", "Không tìm thấy video.")
+    q = db.query(AIJob).filter(AIJob.job_type == "transcribe_video",
+                               AIJob.payload["video_id"].astext == video_id)
+    if not user.is_admin:
+        q = q.filter(AIJob.created_by == user.user_id)
+    job = q.order_by(AIJob.created_at.desc(), AIJob.id.desc()).first()
+    return job_to_dict(job) if job else None
 
 
 @router.get("/media/videos/{video_id}/file")
