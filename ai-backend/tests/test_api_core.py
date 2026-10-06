@@ -146,3 +146,32 @@ def test_admin_llm_stats(client, admin, teacher):
     assert client.get("/ai/admin/llm-stats", headers=teacher).status_code == 403
     tasks = {t["task"] for t in client.get("/ai/admin/llm-stats", headers=admin).json()["tasks"]}
     assert "teacher_quiz" in tasks
+
+
+def test_tutor_daily_quota_per_lesson(client, teacher, fake_llm, monkeypatch):
+    from app.config import settings
+    monkeypatch.setattr(settings, "tutor_daily_limit_per_lesson", 3)
+    student = token(client, "sv-quota", "student", ["lop-a"])
+
+    def ask(q="Đóng gói là gì?"):
+        return client.post("/ai/chat", headers=student, json={"question": q, "lesson_id": "lesson-core"})
+
+    # còn 3 lượt ngay từ đầu
+    q = client.get("/ai/chat/quota?lesson_id=lesson-core", headers=student).json()["quota"]
+    assert q == {"used": 0, "limit": 3, "remaining": 3, "resets_at": q["resets_at"]}
+
+    r = ask(); assert r.status_code == 200 and r.json()["quota"]["remaining"] == 2
+    ask(); r = ask()
+    assert r.json()["quota"]["remaining"] == 0
+
+    # lượt thứ 4 bị chặn (429), không gọi thêm LLM
+    n = len(fake_llm.calls)
+    r = ask()
+    assert r.status_code == 429 and r.json()["error"]["code"] == "TUTOR_QUOTA_EXCEEDED"
+    assert r.json()["error"]["details"]["remaining"] == 0 and len(fake_llm.calls) == n
+
+    # bài khác có hạn mức riêng; giáo viên không bị giới hạn
+    assert client.get("/ai/chat/quota?lesson_id=lesson-khac", headers=student).json()["quota"]["remaining"] == 3
+    assert client.get("/ai/chat/quota?lesson_id=lesson-core", headers=teacher).json()["quota"] is None
+    r = client.post("/ai/chat", headers=teacher, json={"question": "Đóng gói là gì?", "lesson_id": "lesson-core"})
+    assert r.status_code == 200 and r.json()["quota"] is None

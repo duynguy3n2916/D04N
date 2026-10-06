@@ -319,6 +319,10 @@ textarea.input, .field textarea { min-height: 110px; resize: vertical; line-heig
 .tutor-head strong { flex: 1; font-size: 18px; font-weight: 900; }
 .tutor-ctx { padding: 9px 16px; background: #F7FBFF; border-bottom: 2px solid var(--line); font-size: 14px; font-weight: 700; color: #4A6F8A; }
 .tutor-ctx b { color: var(--blue-dark); }
+.tutor-ctx { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.quota-pill { flex: 0 0 auto; font-size: 12px; font-weight: 900; padding: 3px 9px; border-radius: 99px; background: var(--green-soft); color: var(--green-text); white-space: nowrap; }
+.quota-pill.quota-low { background: var(--yellow-soft); color: var(--yellow-text); }
+.quota-pill.quota-out { background: var(--red-soft); color: var(--red-text); }
 .tutor-msgs { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
 .bubble-user { align-self: flex-end; max-width: 86%; background: var(--blue); color: #fff; border-radius: 16px 16px 4px 16px; padding: 10px 14px; font-size: 15px; font-weight: 700; white-space: pre-wrap; }
 .bubble-quote { display: block; border-left: 3px solid rgba(255,255,255,.6); padding-left: 8px; margin-bottom: 6px; font-weight: 600; opacity: .9; font-size: 14px; }

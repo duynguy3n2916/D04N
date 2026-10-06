@@ -848,7 +848,7 @@ uvicorn app.main:app --reload --port 8000
 | P4 – Bảo mật | JWT + vai trò + phạm vi lớp; CORS whitelist; upload tên uuid, giới hạn dung lượng | ✅ Xong |
 | P5 – Mở rộng | Ngân hàng câu hỏi duyệt từng câu; phiên bản transcript + rollback; tóm tắt hội thoại; sinh bù câu thiếu | ✅ Xong. Chưa làm: hybrid search, streaming, xuất đề DOCX |
 
-Kiểm thử: 30 bài pytest chạy trên Postgres + pgvector thật (LLM giả lập), cộng kịch bản giao diện đầy đủ cho giáo viên, học sinh, admin.
+Kiểm thử: 31 bài pytest chạy trên Postgres + pgvector thật (LLM giả lập), cộng kịch bản giao diện đầy đủ cho giáo viên, học sinh, admin.
 
 ---
 

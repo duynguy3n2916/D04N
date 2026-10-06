@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { api, errorText, fmtTime, storage, type ChatResponse, type Source } from '../lib/api';
+import { api, ApiError, errorText, fmtTime, storage, type ChatResponse, type Source, type TutorQuota } from '../lib/api';
 import { Icon } from './Icon';
 import { Markdown } from './Markdown';
 import { Mascot } from './Mascot';
@@ -36,6 +36,7 @@ export function TutorPanel({ lessonCode, context, quote, onClearQuote, onSource,
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
+  const [quota, setQuota] = useState<TutorQuota | null>(null);
   const [history, setHistory] = useState<{ conversation_id: string; created_at: string; lesson_id: string }[] | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -53,11 +54,20 @@ export function TutorPanel({ lessonCode, context, quote, onClearQuote, onSource,
   }, [convId]);
 
   useEffect(() => { listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: 'smooth' }); }, [msgs, busy]);
+
+  // số lượt hỏi còn lại cho bài này hôm nay
+  useEffect(() => {
+    let alive = true;
+    api<{ quota: TutorQuota | null }>(`/ai/chat/quota?lesson_id=${encodeURIComponent(lessonCode)}`)
+      .then((r) => alive && setQuota(r.quota)).catch(() => {});
+    return () => { alive = false; };
+  }, [lessonCode]);
   useEffect(() => { if (quote) inputRef.current?.focus(); }, [quote]);
 
   const send = async (raw?: string) => {
     const question = (raw ?? text).trim() || (quote ? 'Giải thích giúp mình đoạn này.' : '');
     if (!question || busy) return;
+    if (quota && quota.remaining <= 0) return;
     const q = quote;
     setMsgs((m) => [...m, { role: 'user', content: question, quote: q || undefined }]);
     setText('');
@@ -73,8 +83,14 @@ export function TutorPanel({ lessonCode, context, quote, onClearQuote, onSource,
       } });
       if (r.conversation_id !== convId) { setConvId(r.conversation_id); storage.set(convKey, r.conversation_id); }
       setMsgs((m) => [...m, { role: 'assistant', content: r.answer, sources: r.sources, hint: r.hint_mode, refused: r.refused }]);
+      if (r.quota) setQuota(r.quota);
     } catch (e) {
-      setMsgs((m) => [...m, { role: 'assistant', content: errorText(e), error: true }]);
+      if (e instanceof ApiError && e.code === 'TUTOR_QUOTA_EXCEEDED') {
+        if (e.details) setQuota(e.details as TutorQuota);
+        setMsgs((m) => [...m, { role: 'assistant', content: e.message, hint: true }]);
+      } else {
+        setMsgs((m) => [...m, { role: 'assistant', content: errorText(e), error: true }]);
+      }
     } finally {
       setBusy(false);
     }
@@ -101,7 +117,11 @@ export function TutorPanel({ lessonCode, context, quote, onClearQuote, onSource,
         <IconButton icon="history" label="Lịch sử trò chuyện" onClick={openHistory} active={!!history} />
         <IconButton icon="x" label="Đóng Tutor" onClick={onClose} />
       </div>
-      <div className="tutor-ctx">Đang xem: <b>{context.label}</b></div>
+      <div className="tutor-ctx">
+        <span>Đang xem: <b>{context.label}</b></span>
+        {quota && <span className={`quota-pill ${quota.remaining === 0 ? 'quota-out' : quota.remaining <= 5 ? 'quota-low' : ''}`}
+          title="Số lượt hỏi Tutor còn lại cho bài này hôm nay">{quota.remaining}/{quota.limit} lượt hỏi</span>}
+      </div>
       {history && (
         <div className="col" style={{ padding: 12, gap: 6, borderBottom: '2px solid var(--line)' }}>
           <strong className="small">Các cuộc trò chuyện của bài này</strong>
@@ -141,7 +161,7 @@ export function TutorPanel({ lessonCode, context, quote, onClearQuote, onSource,
         ))}
         {busy && <div className="bubble-bot" style={{ alignSelf: 'flex-start' }}><span className="typing" aria-label="Tutor đang trả lời"><i /><i /><i /></span></div>}
       </div>
-      {!busy && (context.suggestions?.length ?? 0) > 0 && msgs.length < 2 && (
+      {!busy && quota?.remaining !== 0 && (context.suggestions?.length ?? 0) > 0 && msgs.length < 2 && (
         <div className="tutor-sugg">{context.suggestions!.map((s) => <button key={s} className="chip" onClick={() => send(s)}>{s}</button>)}</div>
       )}
       {quote && (
@@ -152,8 +172,9 @@ export function TutorPanel({ lessonCode, context, quote, onClearQuote, onSource,
       <form className="tutor-form" onSubmit={(e) => { e.preventDefault(); send(); }} aria-label="Gửi câu hỏi cho Tutor">
         <label className="sr-only" htmlFor="tutor-input">Câu hỏi cho Tutor</label>
         <textarea id="tutor-input" ref={inputRef} rows={1} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey}
-          placeholder={quote ? 'Hỏi về đoạn đã chọn…' : 'Hỏi về nội dung đang xem…'} />
-        <button type="submit" className="send" aria-label="Gửi" disabled={busy || (!text.trim() && !quote)}><Icon name="send" size={22} stroke={2.6} /></button>
+          disabled={quota?.remaining === 0}
+          placeholder={quota?.remaining === 0 ? 'Đã hết lượt hỏi hôm nay' : quote ? 'Hỏi về đoạn đã chọn…' : 'Hỏi về nội dung đang xem…'} />
+        <button type="submit" className="send" aria-label="Gửi" disabled={busy || quota?.remaining === 0 || (!text.trim() && !quote)}><Icon name="send" size={22} stroke={2.6} /></button>
       </form>
       <p className="tutor-foot">Tutor chỉ dùng tài liệu của bài và có thể sai — hãy đối chiếu với bài giảng.</p>
     </aside>

@@ -65,7 +65,7 @@ Nguồn mà Tutor trích dẫn bấm được: nguồn video tua tới đúng gi
 | `python init_db.py --seed` | Nạp dữ liệu demo + bộ 24 câu đánh giá |
 | `python init_db.py --reembed` | Sau khi đổi model embedding / `EMBEDDING_DIM`: đổi kích thước vector và tạo lại embedding |
 | `python init_db.py --reset` | Xóa toàn bộ dữ liệu AI (có hỏi xác nhận) |
-| `pip install -r requirements-dev.txt && pytest` | Chạy 30 bài test (cần Postgres; đặt `TEST_DATABASE_URL` nếu khác `postgresql://postgres:postgres@localhost:5433/ai_pytest`) |
+| `pip install -r requirements-dev.txt && pytest` | Chạy 31 bài test (cần Postgres; đặt `TEST_DATABASE_URL` nếu khác `postgresql://postgres:postgres@localhost:5433/ai_pytest`) |
 
 ## Tài khoản & xác thực
 

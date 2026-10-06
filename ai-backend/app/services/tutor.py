@@ -1,8 +1,10 @@
 """Tutor Agent: hội thoại có căn cứ trên RAG, ưu tiên lời giảng quanh thời điểm video, khóa đáp án khi đang kiểm tra."""
 import logging
 import re
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -88,6 +90,31 @@ def _leaks_answer(answer: str, q: VideoQuestion) -> bool:
     return q.type == "multiple_choice" and len(body) > 12 and body in text
 
 
+def _day_start_utc() -> tuple[datetime, datetime]:
+    """0 giờ hôm nay theo múi giờ ứng dụng, quy về UTC (để so với created_at lưu dạng UTC)."""
+    try:
+        tz = ZoneInfo(settings.app_timezone)
+    except Exception:
+        tz = timezone.utc
+    local = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
+    return local, local.astimezone(timezone.utc)
+
+
+def tutor_quota(db: Session, user: Principal, lesson_id: str | None) -> dict | None:
+    """Số lượt hỏi Tutor còn lại cho (học sinh, bài, hôm nay). None nếu không áp dụng giới hạn."""
+    limit = settings.tutor_daily_limit_per_lesson
+    if user.is_teacher or not lesson_id or limit <= 0:
+        return None
+    day_local, day_utc = _day_start_utc()
+    used = (db.query(func.count(AIMessage.id))
+            .join(AIConversation, AIMessage.conversation_id == AIConversation.id)
+            .filter(AIConversation.student_id == user.user_id, AIConversation.lesson_id == lesson_id,
+                    AIMessage.role == "user", AIMessage.created_at >= day_utc)
+            .scalar() or 0)
+    return {"used": int(used), "limit": limit, "remaining": max(0, limit - int(used)),
+            "resets_at": (day_local + timedelta(days=1)).isoformat()}
+
+
 def ask(db: Session, user: Principal, *, question: str, conversation_id=None, course_id=None, class_id=None,
         lesson_id=None, video_id=None, video_time: float | None = None, top_k: int | None = None,
         focus_document_id=None, focus_page: int | None = None, selected_text: str | None = None) -> dict:
@@ -96,6 +123,14 @@ def ask(db: Session, user: Principal, *, question: str, conversation_id=None, co
     lesson_id = lesson_id or conv.lesson_id
     course_id = course_id or conv.course_id
     video_id = video_id or conv.video_id
+
+    # Giới hạn số lượt hỏi Tutor mỗi bài / ngày (đếm trước khi gọi LLM, không tạo tin nhắn nếu vượt)
+    quota = tutor_quota(db, user, lesson_id)
+    if quota and quota["remaining"] <= 0:
+        raise AppError(429, "TUTOR_QUOTA_EXCEEDED",
+                       f"Bạn đã dùng hết {quota['limit']} lượt hỏi Tutor cho bài này hôm nay. "
+                       "Hãy xem lại các nguồn Tutor đã trích hoặc quay lại vào ngày mai nhé. "
+                       "Video, slide và bài kiểm tra vẫn học bình thường.", quota)
 
     # Hint mode do server quyết định từ trạng thái phiên video, không tin cờ phía client
     active_q = workflow.active_question_for_hint(db, user, video_id) if not user.is_teacher else None
@@ -181,4 +216,5 @@ def ask(db: Session, user: Principal, *, question: str, conversation_id=None, co
         "model": res.model if res else None,
         "prompt_version": meta.get("prompt_version"),
         "request_id": get_request_id(),
+        "quota": tutor_quota(db, user, lesson_id),
     }

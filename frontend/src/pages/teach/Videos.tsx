@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { PageHeader } from '../../components/AppShell';
 import { Icon } from '../../components/Icon';
 import { Badge, Button, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
-import { api, errorText, fmtTime, mediaUrl, pollJob, type TranscriptSegment } from '../../lib/api';
+import { api, errorText, fmtTime, mediaUrl, type Job, type TranscriptSegment } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { Link, navigate } from '../../lib/router';
 
@@ -122,6 +122,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
   const toast = useToast();
   const info = useAsync((s) => api<VideoRow[]>('/ai/media/videos', { signal: s }).then((xs) => xs.find((x) => x.video_id === videoId) || null), [videoId]);
   const tr = useAsync((s) => api<Transcript>(`/ai/videos/${encodeURIComponent(videoId)}/transcript`, { signal: s }).catch((e) => { if (e?.status === 404) return null; throw e; }), [videoId]);
+  const transcriptionJob = useAsync((s) => api<Job | null>(`/ai/media/videos/${encodeURIComponent(videoId)}/transcription-job`, { signal: s }), [videoId]);
   const qs = useAsync((s) => api<TQuestion[]>(`/ai/videos/${encodeURIComponent(videoId)}/questions/manage`, { signal: s }), [videoId]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [now, setNow] = useState(0);
@@ -129,18 +130,38 @@ export function VideoDetail({ videoId }: { videoId: string }) {
   const [job, setJob] = useState<string | null>(null);
   const [editQ, setEditQ] = useState<TQuestion | 'new' | null>(null);
   const [gen, setGen] = useState(false);
+  const handledJob = useRef<string | null>(null);
 
   const v = info.data;
   const src = v?.has_file ? mediaUrl(`/ai/media/videos/${encodeURIComponent(videoId)}/file`) : v?.source_url || null;
   const seek = (t: number) => { const el = videoRef.current; if (el) { el.currentTime = t; el.play().catch(() => {}); } };
+  const currentCaption = tr.data?.segments.find((s) => now >= s.start_time && now <= s.end_time + 0.3);
+
+  useEffect(() => {
+    const j = transcriptionJob.data;
+    if (!j) return;
+    if (j.status === 'queued' || j.status === 'running') {
+      setJob(`Đang phiên âm… ${j.progress != null ? Math.round(j.progress * 100) + '%' : ''} ${j.message || ''}`);
+      setTab('transcript');
+      const timer = window.setTimeout(transcriptionJob.reload, 1500);
+      return () => window.clearTimeout(timer);
+    }
+    if (handledJob.current === j.job_id) return;
+    handledJob.current = j.job_id;
+    if (j.status === 'succeeded') {
+      setJob(null);
+      tr.reload(); info.reload(); setTab('transcript');
+    } else {
+      setJob(`Phiên âm lỗi: ${j.error || j.message || 'Không rõ nguyên nhân'}`);
+      setTab('transcript');
+    }
+  }, [transcriptionJob.data]);
 
   const transcribe = async () => {
     try {
-      const j = await api<{ job_id: string }>(`/ai/media/videos/${encodeURIComponent(videoId)}/transcribe`, { method: 'POST' });
+      await api<{ job_id: string }>(`/ai/media/videos/${encodeURIComponent(videoId)}/transcribe`, { method: 'POST' });
       setJob('Đang phiên âm…');
-      const r = await pollJob(j.job_id, (x) => setJob(`Đang phiên âm… ${x.progress != null ? Math.round(x.progress * 100) + '%' : ''} ${x.message || ''}`));
-      setJob(r.status === 'succeeded' ? null : `Lỗi: ${r.error}`);
-      if (r.status === 'succeeded') { toast('Đã tạo phụ đề', 'success'); tr.reload(); info.reload(); }
+      transcriptionJob.reload();
     } catch (e) { setJob(null); toast(errorText(e), 'error'); }
   };
 
@@ -175,8 +196,11 @@ export function VideoDetail({ videoId }: { videoId: string }) {
       <div className="split">
         <div className="main">
           {src ? (
-            <video ref={videoRef} src={src} controls style={{ width: '100%', borderRadius: 16, background: '#000', aspectRatio: '16/9' }}
-              onTimeUpdate={(e) => setNow(e.currentTarget.currentTime)} />
+            <div style={{ position: 'relative' }}>
+              <video ref={videoRef} src={src} controls style={{ display: 'block', width: '100%', borderRadius: 16, background: '#000', aspectRatio: '16/9' }}
+                onTimeUpdate={(e) => setNow(e.currentTarget.currentTime)} />
+              {currentCaption && <div className="player-caption" style={{ bottom: 70, pointerEvents: 'none' }}>{currentCaption.text}</div>}
+            </div>
           ) : info.loading ? <Spinner /> : <Empty title="Video chưa có file">Tải file lên ở trang danh sách (cùng mã video).</Empty>}
           <div className="card col" style={{ gap: 10 }}>
             <div className="row" style={{ justifyContent: 'space-between' }}>
@@ -188,6 +212,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
               </div>
             </div>
             {!tr.data && !tr.loading && <p className="muted small" style={{ fontWeight: 700 }}>Cần có phụ đề trước khi AI soạn câu hỏi.</p>}
+            {tr.error && <ErrorBox message={tr.error} onRetry={tr.reload} />}
           </div>
         </div>
         <div className="side">
@@ -229,7 +254,8 @@ export function VideoDetail({ videoId }: { videoId: string }) {
           )}
           {tab === 'transcript' && (
             <TranscriptEditor videoId={videoId} tr={tr.data} loading={tr.loading} now={now} onSeek={seek} hasFile={!!v?.has_file}
-              job={job} onTranscribe={transcribe} onSaved={() => { tr.reload(); info.reload(); }} />
+              job={job} transcribing={transcriptionJob.data?.status === 'queued' || transcriptionJob.data?.status === 'running'}
+              onTranscribe={transcribe} onSaved={() => { tr.reload(); info.reload(); }} />
           )}
         </div>
       </div>
@@ -238,9 +264,9 @@ export function VideoDetail({ videoId }: { videoId: string }) {
   );
 }
 
-function TranscriptEditor({ videoId, tr, loading, now, onSeek, hasFile, job, onTranscribe, onSaved }: {
+function TranscriptEditor({ videoId, tr, loading, now, onSeek, hasFile, job, transcribing, onTranscribe, onSaved }: {
   videoId: string; tr: Transcript | null; loading: boolean; now: number; onSeek: (t: number) => void; hasFile: boolean;
-  job: string | null; onTranscribe: () => void; onSaved: () => void;
+  job: string | null; transcribing: boolean; onTranscribe: () => void; onSaved: () => void;
 }) {
   const toast = useToast();
   const [segs, setSegs] = useState<TranscriptSegment[]>([]);
@@ -275,7 +301,7 @@ function TranscriptEditor({ videoId, tr, loading, now, onSeek, hasFile, job, onT
         <div className="row">
           <input ref={fileRef} type="file" accept=".srt,.vtt,.json,.txt" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) importFile(f); }} />
           <Button size="sm" variant="ghost" icon="upload" onClick={() => fileRef.current?.click()} disabled={busy}>Nhập .srt/.vtt</Button>
-          {hasFile && <Button size="sm" variant="ghost" icon="wand" onClick={onTranscribe} disabled={!!job}>Phiên âm lại</Button>}
+          {hasFile && <Button size="sm" variant="ghost" icon="wand" onClick={onTranscribe} disabled={transcribing}>Phiên âm lại</Button>}
           {tr && <IconButton icon="history" label="Các phiên bản" active={showVersions} onClick={() => setShowVersions((x) => !x)} />}
         </div>
       </div>

@@ -44,6 +44,13 @@ def chat(req: ChatRequest, user: Principal = Depends(get_current_user), db: Sess
     )
 
 
+@router.get("/chat/quota")
+def tutor_quota(lesson_id: str | None = None, user: Principal = Depends(get_current_user),
+                db: Session = Depends(get_db)):
+    """Số lượt hỏi Tutor còn lại cho bài này hôm nay (None = không giới hạn, vd giáo viên)."""
+    return {"quota": tutor.tutor_quota(db, user, clean_id(lesson_id))}
+
+
 @router.post("/retrieve")
 def retrieve_only(req: ChatRequest, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
     """Kiểm tra retrieval (không gọi LLM). min_score=0 để thấy cả các kết quả dưới ngưỡng."""

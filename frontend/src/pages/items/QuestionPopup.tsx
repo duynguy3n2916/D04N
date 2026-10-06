@@ -131,6 +131,9 @@ export function QuestionPopup({ question, deadlineAt, result, onSubmit, onTimeou
                         </>}
                   </div>
                 )}
+                {result.tutor_status === 'failed' && (
+                  <p className="muted small" style={{ marginTop: 6 }}>Tutor AI chưa soạn được lời giải thích (lỗi khi gọi mô hình AI). Bấm “Hỏi Tutor thêm” để hỏi lại.</p>
+                )}
                 {!ok && <button className="src" style={{ marginTop: 8 }} onClick={onAskTutor}><Icon name="sparkle" size={14} />Hỏi Tutor thêm</button>}
               </div>
             </div>

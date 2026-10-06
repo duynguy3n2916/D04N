@@ -69,6 +69,7 @@ class Settings(BaseSettings):
 
     # --- Học tập / gamification ---
     app_timezone: str = "Asia/Ho_Chi_Minh"  # dùng để tính "hôm nay" và chuỗi ngày học
+    tutor_daily_limit_per_lesson: int = 15  # số lượt hỏi Tutor mỗi học sinh / bài / ngày (0 = không giới hạn)
     default_daily_goal_xp: int = 50
     xp_video_question: int = 10
     xp_agent_question: int = 15

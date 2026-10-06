@@ -120,18 +120,34 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
     }
   };
 
+  // Lý do Question Agent không hỏi đã báo cho học sinh (mỗi lý do chỉ báo 1 lần / video, tránh làm phiền)
+  const agentNotified = useRef<Set<string>>(new Set());
+  const agentNotice = (reason: string, text: string) => {
+    if (agentNotified.current.has(reason)) return;
+    agentNotified.current.add(reason);
+    toast(text, 'error');
+  };
+
   const heartbeat = async () => {
     if (busyRef.current || !advanced) return;
     busyRef.current = true;
     try {
       const el = videoRef.current;
-      const r = await api<SessionStatus & { triggered: boolean; question?: PublicQuestion }>('/ai/question-agent/trigger',
+      const r = await api<SessionStatus & { triggered: boolean; reason?: string; error?: string; question?: PublicQuestion }>('/ai/question-agent/trigger',
         { json: { video_id: vid, current_time: el?.currentTime || 0, advanced_mode: true } });
+      console.info('[Question Agent]', r.triggered ? 'đã hỏi' : r.reason, r.error || '');
       if (r.triggered && r.question) {
         el?.pause();
         setPopup({ question: r.question, deadlineAt: Date.now() + (r.deadline_remaining_seconds ?? 120) * 1000, result: null });
+      } else if (r.reason === 'generation_failed') {
+        agentNotice('generation_failed', `AI chưa đặt được câu hỏi mở rộng: ${r.error || 'lỗi gọi mô hình AI'}`);
+      } else if (r.reason === 'no_transcript') {
+        agentNotice('no_transcript', 'Video chưa có phụ đề nên AI chưa thể đặt câu hỏi mở rộng.');
       }
-    } catch { /* bỏ qua: agent là tính năng phụ */ } finally { busyRef.current = false; }
+    } catch (e) {
+      console.warn('[Question Agent] lỗi', e);
+      agentNotice('request_failed', `Không gọi được Question Agent: ${errorText(e)}`);
+    } finally { busyRef.current = false; }
   };
 
   const nextUndone = (from: number, to: number) => questions.find((q) => !doneSet.current.has(q.question_id) && q.timestamp > from && q.timestamp <= to);
@@ -317,7 +333,11 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
             <button className="ctl" onClick={() => seek(t - 10)} aria-label="Lùi 10 giây"><Icon name="rewind" size={22} /></button>
             <span className="time">{fmtTime(t)} / {fmtTime(duration)}</span>
             <span style={{ flex: 1 }} />
-            {advanced && <span className="badge badge-purple" title="Question Agent đang bật">AI hỏi mở rộng</span>}
+            <button className={`badge ${advanced ? 'badge-purple' : ''}`} style={{ cursor: 'pointer', border: 0 }} aria-pressed={advanced}
+              title="Bật/tắt Question Agent: AI thỉnh thoảng dừng video để hỏi một câu vận dụng"
+              onClick={() => { const on = !advanced; setAdvanced(on); storage.set('mam.advanced', on ? '1' : '0'); playedSinceBeat.current = 0; }}>
+              AI hỏi mở rộng: {advanced ? 'Bật' : 'Tắt'}
+            </button>
             <button className={`ctl ${captions ? 'ctl-on' : ''}`} aria-pressed={captions} aria-label="Phụ đề"
               onClick={() => { setCaptions(!captions); storage.set('mam.captions', captions ? '0' : '1'); }}><Icon name="captions" size={24} /></button>
             <button className="ctl ctl-text" onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Cài đặt phát">{speed}x</button>
