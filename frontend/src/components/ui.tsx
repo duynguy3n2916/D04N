@@ -69,15 +69,21 @@ export function Modal({ open, onClose, title, children, wide, dismissable = true
   open: boolean; onClose?: () => void; title?: string; children: ReactNode; wide?: boolean; dismissable?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const closeOptions = useRef({ onClose, dismissable });
+  useEffect(() => { closeOptions.current = { onClose, dismissable }; }, [onClose, dismissable]);
   useEffect(() => {
     if (!open) return;
     const prev = document.activeElement as HTMLElement | null;
     ref.current?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && dismissable) onClose?.(); };
+    const onKey = (e: KeyboardEvent) => {
+      const options = closeOptions.current;
+      if (e.key === 'Escape' && options.dismissable) options.onClose?.();
+    };
     ref.current?.addEventListener('keydown', onKey);
     const el = ref.current;
     return () => { el?.removeEventListener('keydown', onKey); prev?.focus?.(); };
-  }, [open, dismissable, onClose]);
+    // Chỉ đặt/khôi phục focus khi mở hoặc đóng, không làm lại khi form render vì đang gõ.
+  }, [open]);
   if (!open) return null;
   return (
     <div className="overlay" onMouseDown={(e) => { if (dismissable && e.target === e.currentTarget) onClose?.(); }}>

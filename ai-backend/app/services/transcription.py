@@ -225,6 +225,20 @@ def save_transcript_version(db: Session, video_id: str, segments: list[dict], *,
     prev = (db.query(VideoTranscript).filter(VideoTranscript.video_id == video_id, VideoTranscript.is_active.is_not(False))
             .order_by(VideoTranscript.created_at.desc()).first())
     max_version = db.query(func.max(VideoTranscript.version)).filter(VideoTranscript.video_id == video_id).scalar() or 0
+    if prev is None:
+        from app.models.learning import LessonItem, MediaVideo
+        linked = (db.query(LessonItem).filter(LessonItem.video_id == video_id, LessonItem.type == "video")
+                  .order_by(LessonItem.created_at, LessonItem.id).first())
+        if linked:
+            lesson = linked.lesson
+            lesson_id = lesson_id or lesson.code
+            course_id = course_id or lesson.chapter.course.code
+            if class_id is None:
+                class_id = lesson.chapter.course.class_id
+        else:
+            media = db.get(MediaVideo, video_id)
+            if media and class_id is None:
+                class_id = media.class_id
     tr = VideoTranscript(
         video_id=video_id, version=max_version + 1, is_active=True, source=source, language=language,
         model_version=model_version, status="ready", created_by=created_by,

@@ -102,4 +102,6 @@ def schema_hint(model: type[BaseModel]) -> str:
         "GradeOutput": '{"verdict": "correct | partial | incorrect", "feedback": "..."}',
         "JudgeOutput": '{"groundedness": 0.9, "correctness": 0.8, "context_relevance": 0.7, "reason": "..."}',
     }
+    if model is AgentQuestionItem:
+        return "Trả về DUY NHẤT một JSON hợp lệ theo mẫu, không kèm markdown:\n" + examples["QuestionItem"]
     return "Trả về DUY NHẤT một JSON hợp lệ theo mẫu, không kèm markdown:\n" + examples.get(model.__name__, "{}")

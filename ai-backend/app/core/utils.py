@@ -45,6 +45,11 @@ def fmt_ts(seconds: float | None) -> str:
     return f"{h:d}:{m:02d}:{sec:02d}" if h else f"{m:02d}:{sec:02d}"
 
 
+def generate_code(prefix: str) -> str:
+    """Mã ổn định, không phụ thuộc tên hay vị trí trong khóa học."""
+    return f"{prefix}-{uuid.uuid4().hex}"
+
+
 _OPTION_PREFIX = re.compile(r"^\s*([A-Ha-h])\s*[\.\)\:\-]\s*")
 
 

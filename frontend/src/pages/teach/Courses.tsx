@@ -20,7 +20,7 @@ interface DocRow { document_id: string; title: string; source_type: string; stat
 export function Courses() {
   const list = useAsync((s) => api<CourseRow[]>('/ai/courses', { signal: s }), []);
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ code: '', title: '', description: '', class_id: '' });
+  const [form, setForm] = useState({ title: '', description: '', class_id: '' });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -53,16 +53,13 @@ export function Courses() {
       </div>
       <Modal open={open} onClose={() => setOpen(false)} title="Tạo khóa học">
         <div className="modal-body">
-          <div className="form-grid">
-            <Field label="Mã khóa học" hint="Chữ, số, dấu gạch. VD: OOP-K66"><input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} /></Field>
-            <Field label="Lớp (tùy chọn)" hint="Để trống = mọi lớp"><input value={form.class_id} onChange={(e) => setForm({ ...form, class_id: e.target.value })} /></Field>
-          </div>
           <Field label="Tên khóa học"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
+          <Field label="Lớp (tùy chọn)" hint="Để trống = mọi lớp"><input value={form.class_id} onChange={(e) => setForm({ ...form, class_id: e.target.value })} /></Field>
           <Field label="Mô tả"><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
           {err && <ErrorBox message={err} />}
           <div className="row" style={{ justifyContent: 'flex-end' }}>
             <Button variant="ghost" onClick={() => setOpen(false)}>Hủy</Button>
-            <Button loading={busy} disabled={!form.code.trim() || !form.title.trim()} onClick={create}>Tạo</Button>
+            <Button loading={busy} disabled={!form.title.trim()} onClick={create}>Tạo</Button>
           </div>
         </div>
       </Modal>
@@ -158,7 +155,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
             tree.setData(t); setDlg(null);
           }} />
       )}
-      {c && dlg?.kind === 'lesson' && <LessonDialog course={c} chapterId={dlg.chapterId} lesson={dlg.lesson} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); }} />}
+      {c && dlg?.kind === 'lesson' && <LessonDialog chapterId={dlg.chapterId} lesson={dlg.lesson} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); }} />}
       {c && dlg?.kind === 'item' && <ItemDialog course={c} lesson={dlg.lesson} item={dlg.item} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); toast('Đã lưu mục học', 'success'); }} />}
     </>
   );
@@ -224,16 +221,13 @@ function CourseDialog({ course, onClose, onSaved }: { course: AdminCourse; onClo
   );
 }
 
-function LessonDialog({ course, chapterId, lesson, onClose, onSaved }: { course: AdminCourse; chapterId: string; lesson?: AdminLesson; onClose: () => void; onSaved: (c: AdminCourse) => void }) {
-  const [f, setF] = useState({ code: lesson?.code || '', title: lesson?.title || '', description: lesson?.description || '' });
+function LessonDialog({ chapterId, lesson, onClose, onSaved }: { chapterId: string; lesson?: AdminLesson; onClose: () => void; onSaved: (c: AdminCourse) => void }) {
+  const [f, setF] = useState({ title: lesson?.title || '', description: lesson?.description || '' });
   return (
-    <FormModal title={lesson ? 'Sửa bài học' : 'Thêm bài học'} onClose={onClose} canSave={!!f.title.trim() && !!f.code.trim()}
+    <FormModal title={lesson ? 'Sửa bài học' : 'Thêm bài học'} onClose={onClose} canSave={!!f.title.trim()}
       onSave={async () => onSaved(lesson
         ? await api<AdminCourse>(`/ai/lessons/${lesson.lesson_id}`, { method: 'PATCH', json: { title: f.title, description: f.description } })
         : await api<AdminCourse>(`/ai/chapters/${chapterId}/lessons`, { json: f }))}>
-      <Field label="Mã bài học" hint={lesson ? 'Không đổi được — tài liệu và transcript gắn theo mã này.' : `Dùng làm lesson_id trong Knowledge Base. VD: ${course.code}-B01`}>
-        <input value={f.code} disabled={!!lesson} onChange={(e) => setF({ ...f, code: e.target.value })} />
-      </Field>
       <Field label="Tên bài"><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></Field>
       <Field label="Mô tả ngắn"><textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field>
     </FormModal>

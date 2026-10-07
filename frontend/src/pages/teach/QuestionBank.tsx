@@ -9,6 +9,8 @@ interface BankItem {
   question: string; type: string; difficulty: string; options?: string[] | null; correct_answer?: string; correct_index?: number | null; explanation?: string; sources?: string[];
 }
 interface Stats { reviewed: number; approved: number; approved_without_edit: number; approved_with_edit: number; rejected: number; pending: number; acceptance_rate: number | null }
+interface TeachingSource { document_id: string; title: string; kind: 'video' | 'reading' | 'slide' | 'document' }
+const SOURCE_KIND = { video: 'Video', reading: 'Bài đọc', slide: 'Slide', document: 'Tài liệu' };
 
 /** Danh sách mã bài học từ các khóa học (dùng cho ô chọn). */
 export function useLessonCodes() {
@@ -24,7 +26,7 @@ export function LessonSelect({ value, onChange, allowAll }: { value: string; onC
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)}>
       {allowAll ? <option value="">Tất cả bài</option> : <option value="">— Chọn bài học —</option>}
-      {lessons.data?.map((l) => <option key={l.code} value={l.code}>{l.code} · {l.title}</option>)}
+      {lessons.data?.map((l) => <option key={l.code} value={l.code}>{l.course} · {l.title}</option>)}
     </select>
   );
 }
@@ -109,6 +111,11 @@ export function QuestionBank() {
 function GenerateDialog({ defaultLesson, onClose, onDone }: { defaultLesson: string; onClose: () => void; onDone: (lesson: string) => void }) {
   const toast = useToast();
   const [lesson, setLesson] = useState(defaultLesson);
+  const [selected, setSelected] = useState<string[]>([]);
+  const sources = useAsync(async (s) => ({ lesson, items: lesson
+    ? await api<TeachingSource[]>(`/ai/teacher/sources?lesson_id=${encodeURIComponent(lesson)}`, { signal: s }) : [] }), [lesson]);
+  const available = sources.data?.lesson === lesson ? sources.data.items : [];
+  const selectedIds = selected.filter((id) => available.some((source) => source.document_id === id));
   const [count, setCount] = useState(5);
   const [focus, setFocus] = useState('');
   const [types, setTypes] = useState<string[]>(['multiple_choice']);
@@ -117,7 +124,8 @@ function GenerateDialog({ defaultLesson, onClose, onDone }: { defaultLesson: str
   const run = async () => {
     setBusy(true); setErr(null);
     try {
-      const r = await api<{ generated: number; requested: number }>('/ai/teacher/generate-quiz', { json: { lesson_id: lesson, count, question_types: types, context_query: focus || null } });
+      const r = await api<{ generated: number; requested: number }>('/ai/teacher/generate-quiz', { json: { lesson_id: lesson,
+        document_ids: selectedIds, count, question_types: types, context_query: focus || null } });
       toast(`AI đã soạn ${r.generated}/${r.requested} câu — hãy xem lại và duyệt`, 'success');
       onDone(lesson);
     } catch (e) { setErr(errorText(e)); } finally { setBusy(false); }
@@ -125,8 +133,31 @@ function GenerateDialog({ defaultLesson, onClose, onDone }: { defaultLesson: str
   const toggle = (t: string) => setTypes((xs) => (xs.includes(t) ? xs.filter((x) => x !== t) : [...xs, t]));
   return (
     <Modal open onClose={onClose} title="AI soạn câu hỏi" dismissable={!busy}>
-      <form className="modal-body" onSubmit={(e) => { e.preventDefault(); if (lesson && types.length) run(); }}>
-        <Field label="Bài học" hint="AI chỉ dùng tài liệu, bài đọc và phụ đề video của bài này."><LessonSelect value={lesson} onChange={setLesson} /></Field>
+      <form className="modal-body" onSubmit={(e) => { e.preventDefault(); if (lesson && types.length && selectedIds.length && !sources.loading && !busy) run(); }}>
+        <Field label="Bài học"><LessonSelect value={lesson} onChange={(code) => { setLesson(code); setSelected([]); }} /></Field>
+        {lesson && <fieldset className="card col" style={{ gap: 10 }} disabled={busy}>
+          <legend className="field-label">Nguồn để AI soạn câu hỏi</legend>
+          <p className="small muted" style={{ margin: 0 }}>Chọn một hoặc nhiều nguồn. AI chỉ đọc nội dung đã chọn.</p>
+          {sources.loading && <Spinner />}
+          {sources.error && <ErrorBox message={sources.error} onRetry={sources.reload} />}
+          {!sources.loading && !sources.error && !available.length && <p className="small muted">
+            Chưa có nguồn sẵn sàng. Thêm slide, bài đọc hoặc video có phụ đề vào bài học trước.
+          </p>}
+          {available.length > 0 && <>
+            <div className="row">
+              <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(available.map((s) => s.document_id))}>Chọn tất cả</Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setSelected([])}>Bỏ chọn</Button>
+              <span className="small muted">Đã chọn {selectedIds.length}/{available.length} nguồn</span>
+            </div>
+            <div className="col" style={{ gap: 10, maxHeight: 220, overflowY: 'auto' }}>
+              {available.map((source) => <label key={source.document_id} className="check">
+                <input type="checkbox" checked={selectedIds.includes(source.document_id)} onChange={(e) => setSelected((ids) =>
+                  e.target.checked ? [...ids, source.document_id] : ids.filter((id) => id !== source.document_id))} />
+                <span><b>{SOURCE_KIND[source.kind]}</b> · {source.title}</span>
+              </label>)}
+            </div>
+          </>}
+        </fieldset>}
         <div className="form-grid">
           <Field label="Số câu"><input type="number" min={1} max={20} value={count} onChange={(e) => setCount(Number(e.target.value))} /></Field>
           <Field label="Tập trung vào (tùy chọn)"><input value={focus} onChange={(e) => setFocus(e.target.value)} placeholder="VD: tính đóng gói" /></Field>
@@ -138,7 +169,7 @@ function GenerateDialog({ defaultLesson, onClose, onDone }: { defaultLesson: str
         {err && <ErrorBox message={err} />}
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Hủy</Button>
-          <Button type="submit" icon="wand" loading={busy} disabled={!lesson || !types.length}>Soạn câu hỏi</Button>
+          <Button type="submit" icon="wand" loading={busy} disabled={!lesson || !types.length || !selectedIds.length || sources.loading || !!sources.error}>Soạn câu hỏi</Button>
         </div>
       </form>
     </Modal>

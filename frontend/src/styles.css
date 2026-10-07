@@ -237,13 +237,35 @@ textarea.input, .field textarea { min-height: 110px; resize: vertical; line-heig
 .player video { width: 100%; display: block; aspect-ratio: 16 / 9; background: #000; }
 .player:fullscreen { max-width: none; border-radius: 0; display: flex; flex-direction: column; justify-content: center; }
 .player:fullscreen video { flex: 1; min-height: 0; height: auto; aspect-ratio: auto; object-fit: contain; }
-.player:fullscreen .player-caption { font-size: 26px; bottom: 150px; }
+.player:fullscreen .player-caption { bottom: 100px; }
 .player:fullscreen .overlay { position: absolute; }
 /* Chế độ rộng: ẩn mục lục, video trải hết bề ngang, cao tối đa vừa cửa sổ (viền đen hai bên nếu cần) */
 .lesson-wide .player { max-width: none; }
 .lesson-wide .player video { max-height: calc(100vh - 200px); object-fit: contain; }
 .player-caption { position: absolute; left: 50%; transform: translateX(-50%); bottom: 82px; max-width: 86%; text-align: center; background: rgba(0,0,0,.72);
-  color: #fff; font-size: 17px; font-weight: 700; padding: 6px 14px; border-radius: 8px; pointer-events: none; }
+  color: #fff; font-size: calc(clamp(14px, 2.2cqw, 32px) * var(--caption-scale, 1)); font-weight: 700; padding: 6px 14px; border-radius: 8px; pointer-events: none;
+  line-height: 1.4; white-space: pre-line; overflow-wrap: anywhere; text-shadow: 0 1px 3px #000, 0 0 2px #000; z-index: 2; max-height: calc(100% - 90px); overflow: auto; }
+.player, .teacher-video-stage { container-type: inline-size; }
+.ctl:disabled { opacity: .4; cursor: default; }
+.ctl:focus-visible { outline: 2px solid #fff; outline-offset: -3px; }
+.video-settings { min-width: min(320px, calc(100% - 24px)); max-width: calc(100% - 24px); max-height: calc(100% - 80px); overflow-y: auto; }
+.caption-settings { border: 0; border-top: 1px solid var(--line); margin: 10px 0; padding: 8px 0; min-width: 0; }
+.caption-settings legend { font-weight: 900; font-size: 14px; padding: 0 10px; }
+.caption-settings select { width: auto; min-width: 100px; min-height: 34px; padding: 4px 8px; }
+.caption-settings input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--green); }
+.caption-preview { position: relative; background: #425466; border-radius: 8px; margin: 8px; padding: 12px; text-align: center; }
+.caption-preview .player-caption { position: static; transform: none; display: inline-block; max-width: 100%; max-height: none; font-size: calc(16px * var(--caption-scale, 1)); }
+.caption-settings > .pill { margin-left: 8px; }
+.teacher-player { position: relative; background: #000; border-radius: 16px; overflow: hidden; }
+.teacher-video-stage { position: relative; }
+.teacher-video-stage video { display: block; width: 100%; background: #000; aspect-ratio: 16/9; object-fit: contain; }
+.teacher-video-stage .player-caption { bottom: 70px; }
+.teacher-player-tools { display: flex; align-items: center; justify-content: flex-end; gap: 4px; padding: 2px 8px; color: #fff; background: var(--dark); }
+.teacher-player-tools > span { margin-right: auto; font-size: 13px; padding-left: 8px; }
+.teacher-player:fullscreen { border-radius: 0; display: flex; flex-direction: column; }
+.teacher-player:fullscreen .teacher-video-stage { flex: 1; min-height: 0; }
+.teacher-player:fullscreen video { height: 100%; aspect-ratio: auto; }
+.teacher-player:fullscreen .teacher-player-tools { flex-shrink: 0; }
 .player-bigplay { position: absolute; inset: 0 0 70px 0; display: flex; align-items: center; justify-content: center; background: none; border: none; cursor: pointer; }
 .player-bigplay span { width: 84px; height: 84px; border-radius: 50%; background: var(--green); box-shadow: 0 6px 0 var(--green-dark); color: #fff; display: flex; align-items: center; justify-content: center; }
 .player-bar { padding: 4px 12px 8px; display: flex; flex-direction: column; gap: 2px; color: #fff; }

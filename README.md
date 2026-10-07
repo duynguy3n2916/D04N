@@ -24,6 +24,8 @@ thích đáp án; giáo viên dùng AI để soạn câu hỏi và quản lý l�
 - Nguồn Tutor trích dẫn bấm được: tua video tới đúng giây, mở slide đúng trang.
 
 ### Giáo viên / quản trị
+- Tạo khóa học và bài học bằng tên; hệ thống tự sinh mã. Khi thêm video, chọn khóa học → bài học để gắn trực tiếp, hoặc lưu vào thư viện.
+- Khi AI soạn câu hỏi, chọn rõ các nguồn video / bài đọc / slide. Slide hoặc bài đọc đã bỏ khỏi bài không còn được dùng làm nguồn của bài đó; file vẫn có thể lưu trong thư viện để dùng lại.
 - Soạn khóa học (chương, bài, mục học), tải video, phiên âm (Whisper) hoặc nhập phụ đề `.srt/.vtt`, sửa phụ đề có phiên bản.
 - **AI soạn câu hỏi** theo mốc video hoặc theo bài; ngân hàng câu hỏi với quy trình sửa / duyệt / từ chối.
 - Quản lý học liệu (Knowledge Base), xem các đoạn đã chia để Tutor truy xuất.

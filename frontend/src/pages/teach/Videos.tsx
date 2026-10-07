@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { PageHeader } from '../../components/AppShell';
 import { Icon } from '../../components/Icon';
+import { activeCaption, CaptionSettings, useVideoCaptions, VideoCaption } from '../../components/VideoCaptions';
 import { Badge, Button, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
 import { api, errorText, fmtTime, mediaUrl, type Job, type TranscriptSegment } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
@@ -16,6 +17,10 @@ interface TQuestion {
 }
 interface Transcript { version: number; source: string; language: string; segments: TranscriptSegment[] }
 interface Version { version: number; is_active: boolean; source: string; model_version: string; created_at: string }
+interface CourseChoice { course_id: string; title: string }
+interface CourseDestination extends CourseChoice {
+  chapters: { chapter_id: string; title: string; lessons: { lesson_id: string; title: string }[] }[];
+}
 
 // ---------------------------------------------------------------- Danh sách video
 
@@ -55,7 +60,12 @@ export function Videos() {
 
 function UploadDialog({ onClose, onDone }: { onClose: () => void; onDone: (videoId: string) => void }) {
   const [mode, setMode] = useState<'file' | 'url'>('file');
-  const [f, setF] = useState({ video_id: '', title: '', class_id: '', lesson_id: '', url: '', transcribe: true });
+  const [f, setF] = useState({ title: '', class_id: '', course_id: '', target_lesson_id: '', url: '', transcribe: true });
+  const courses = useAsync((s) => api<CourseChoice[]>('/ai/courses', { signal: s }), []);
+  const destination = useAsync((s) => f.course_id
+    ? api<CourseDestination>(`/ai/courses/${f.course_id}`, { signal: s }) : Promise.resolve(null), [f.course_id]);
+  const selectedCourse = destination.data?.course_id === f.course_id ? destination.data : null;
+  const lessonExists = !!selectedCourse?.chapters.some((ch) => ch.lessons.some((ls) => ls.lesson_id === f.target_lesson_id));
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -64,23 +74,27 @@ function UploadDialog({ onClose, onDone }: { onClose: () => void; onDone: (video
   const submit = async () => {
     setBusy(true); setErr(null);
     try {
+      let videoId: string;
       if (mode === 'url') {
-        await api('/ai/media/videos/url', { json: { video_id: f.video_id, title: f.title || null, source_url: f.url } });
+        const r = await api<VideoRow>('/ai/media/videos/url', { json: { title: f.title.trim(), source_url: f.url,
+          target_lesson_id: f.target_lesson_id || null, class_id: f.course_id ? null : f.class_id || null } });
+        videoId = r.video_id;
       } else {
         const fd = new FormData();
-        fd.append('video_id', f.video_id); fd.append('file', file!);
+        fd.append('file', file!);
         if (f.title) fd.append('title', f.title);
-        if (f.class_id) fd.append('class_id', f.class_id);
-        if (f.lesson_id) fd.append('lesson_id', f.lesson_id);
+        if (!f.course_id && f.class_id) fd.append('class_id', f.class_id);
+        if (f.target_lesson_id) fd.append('target_lesson_id', f.target_lesson_id);
         fd.append('transcribe', String(f.transcribe));
         setMsg('Đang tải lên…');
-        const r = await api<{ job_id?: string }>('/ai/media/videos', { form: fd });
+        const r = await api<VideoRow & { job_id?: string }>('/ai/media/videos', { form: fd });
+        videoId = r.video_id;
         if (r.job_id) setMsg('Đã tải lên. Phiên âm đang chạy nền — xem tiến độ ở trang video.');
       }
-      onDone(f.video_id);
+      onDone(videoId);
     } catch (e) { setErr(errorText(e)); setMsg(null); } finally { setBusy(false); }
   };
-  const valid = !!f.video_id.trim() && (mode === 'url' ? /^https?:\/\//.test(f.url) : !!file);
+  const valid = !!f.title.trim() && (!f.course_id || lessonExists) && (mode === 'url' ? /^https?:\/\//.test(f.url) : !!file);
 
   return (
     <Modal open onClose={onClose} title="Thêm video" dismissable={!busy}>
@@ -89,17 +103,37 @@ function UploadDialog({ onClose, onDone }: { onClose: () => void; onDone: (video
           <button type="button" className={mode === 'file' ? 'on' : ''} onClick={() => setMode('file')}>Tải file lên</button>
           <button type="button" className={mode === 'url' ? 'on' : ''} onClick={() => setMode('url')}>Link .mp4</button>
         </div>
-        <div className="form-grid">
-          <Field label="Mã video" hint="VD: OOP-B01-V1"><input value={f.video_id} onChange={(e) => setF({ ...f, video_id: e.target.value })} /></Field>
-          <Field label="Tiêu đề"><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></Field>
-        </div>
+        <Field label="Tiêu đề video"><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></Field>
+        <Field label="Khóa học" hint="Chọn khóa học để thêm video vào một bài, hoặc lưu vào thư viện trước.">
+          <select value={f.course_id} disabled={courses.loading || busy}
+            onChange={(e) => setF({ ...f, course_id: e.target.value, target_lesson_id: '' })}>
+            <option value="">Lưu vào thư viện video</option>
+            {courses.data?.map((c) => <option key={c.course_id} value={c.course_id}>{c.title}</option>)}
+          </select>
+        </Field>
+        {courses.error && <ErrorBox message={courses.error} onRetry={courses.reload} />}
+        {f.course_id ? (
+          <>
+            <Field label="Bài học" hint="Video sẽ được thêm vào cuối bài học đã chọn.">
+              <select value={f.target_lesson_id} disabled={destination.loading || busy}
+                onChange={(e) => setF({ ...f, target_lesson_id: e.target.value })}>
+                <option value="">— Chọn bài học —</option>
+                {selectedCourse?.chapters.map((ch) => <optgroup key={ch.chapter_id} label={ch.title}>
+                  {ch.lessons.map((ls) => <option key={ls.lesson_id} value={ls.lesson_id}>{ls.title}</option>)}
+                </optgroup>)}
+              </select>
+            </Field>
+            {!destination.loading && selectedCourse && !selectedCourse.chapters.some((ch) => ch.lessons.length) &&
+              <p className="small muted">Khóa học chưa có bài. Thêm chương và bài học trong mục Khóa học trước.</p>}
+            {destination.error && <ErrorBox message={destination.error} onRetry={destination.reload} />}
+          </>
+        ) : <Field label="Lớp (tùy chọn)" hint="Để trống = mọi lớp"><input value={f.class_id} onChange={(e) => setF({ ...f, class_id: e.target.value })} /></Field>}
         {mode === 'file' ? (
           <>
-            <Field label="File video/audio" hint="mp4, webm, mov, mp3, m4a, wav…"><input type="file" accept="video/*,audio/*" onChange={(e) => setFile(e.target.files?.[0] || null)} /></Field>
-            <div className="form-grid">
-              <Field label="Lớp (tùy chọn)"><input value={f.class_id} onChange={(e) => setF({ ...f, class_id: e.target.value })} /></Field>
-              <Field label="Mã bài học (tùy chọn)" hint="Để transcript thuộc đúng bài"><input value={f.lesson_id} onChange={(e) => setF({ ...f, lesson_id: e.target.value })} /></Field>
-            </div>
+            <Field label="File video/audio" hint="mp4, webm, mov, mp3, m4a, wav…"><input type="file" accept="video/*,audio/*" onChange={(e) => {
+              const selected = e.target.files?.[0] || null; setFile(selected);
+              if (selected && !f.title.trim()) setF({ ...f, title: selected.name.replace(/\.[^.]+$/, '') });
+            }} /></Field>
             <label className="check"><input type="checkbox" checked={f.transcribe} onChange={(e) => setF({ ...f, transcribe: e.target.checked })} />Tự phiên âm bằng Whisper sau khi tải lên</label>
           </>
         ) : (
@@ -125,6 +159,10 @@ export function VideoDetail({ videoId }: { videoId: string }) {
   const transcriptionJob = useAsync((s) => api<Job | null>(`/ai/media/videos/${encodeURIComponent(videoId)}/transcription-job`, { signal: s }), [videoId]);
   const qs = useAsync((s) => api<TQuestion[]>(`/ai/videos/${encodeURIComponent(videoId)}/questions/manage`, { signal: s }), [videoId]);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const playerRef = useRef<HTMLDivElement>(null);
+  const captionPreferences = useVideoCaptions();
+  const [captionMenu, setCaptionMenu] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const [now, setNow] = useState(0);
   const [tab, setTab] = useState<'questions' | 'transcript'>('questions');
   const [job, setJob] = useState<string | null>(null);
@@ -134,8 +172,18 @@ export function VideoDetail({ videoId }: { videoId: string }) {
 
   const v = info.data;
   const src = v?.has_file ? mediaUrl(`/ai/media/videos/${encodeURIComponent(videoId)}/file`) : v?.source_url || null;
-  const seek = (t: number) => { const el = videoRef.current; if (el) { el.currentTime = t; el.play().catch(() => {}); } };
-  const currentCaption = tr.data?.segments.find((s) => now >= s.start_time && now <= s.end_time + 0.3);
+  const seek = (t: number) => { const el = videoRef.current; if (el) { el.currentTime = t; setNow(t); el.play().catch(() => {}); } };
+  const currentCaption = activeCaption(tr.data?.segments || [], now);
+  const fullscreen = () => {
+    const action = document.fullscreenElement ? document.exitFullscreen() : playerRef.current?.requestFullscreen();
+    action?.catch(() => toast('Trình duyệt không cho bật toàn màn hình', 'error'));
+  };
+  useEffect(() => {
+    const onChange = () => setIsFullscreen(document.fullscreenElement === playerRef.current);
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  useEffect(() => { setNow(0); setCaptionMenu(false); }, [videoId]);
 
   useEffect(() => {
     const j = transcriptionJob.data;
@@ -168,7 +216,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
   const generateAt = async () => {
     setGen(true);
     try {
-      await api(`/ai/videos/${encodeURIComponent(videoId)}/generate-question`, { json: { timestamp: Math.floor(now) } });
+      await api(`/ai/videos/${encodeURIComponent(videoId)}/generate-question`, { json: { timestamp: Math.floor(now), use_lesson_context: false } });
       toast(`AI đã soạn câu hỏi nháp tại ${fmtTime(now)}`, 'success'); qs.reload();
     } catch (e) { toast(errorText(e), 'error'); } finally { setGen(false); }
   };
@@ -196,10 +244,31 @@ export function VideoDetail({ videoId }: { videoId: string }) {
       <div className="split">
         <div className="main">
           {src ? (
-            <div style={{ position: 'relative' }}>
-              <video ref={videoRef} src={src} controls style={{ display: 'block', width: '100%', borderRadius: 16, background: '#000', aspectRatio: '16/9' }}
-                onTimeUpdate={(e) => setNow(e.currentTarget.currentTime)} />
-              {currentCaption && <div className="player-caption" style={{ bottom: 70, pointerEvents: 'none' }}>{currentCaption.text}</div>}
+            <div className="teacher-player" ref={playerRef} onKeyDown={(e) => {
+              if ((e.target as HTMLElement).closest('button, input, select')) return;
+              if ((e.key === 'c' || e.key === 'C') && tr.data?.segments.length) { e.preventDefault(); captionPreferences.setEnabled(!captionPreferences.enabled); }
+              if (e.key === 'Escape') setCaptionMenu(false);
+            }}>
+              <div className="teacher-video-stage">
+                <video ref={videoRef} src={src} controls controlsList="nofullscreen" playsInline
+                  onTimeUpdate={(e) => setNow(e.currentTarget.currentTime)} onSeeked={(e) => setNow(e.currentTarget.currentTime)} />
+                <VideoCaption text={currentCaption?.text} preferences={captionPreferences} />
+              </div>
+              <div className="teacher-player-tools">
+                <span>{tr.data?.segments.length ? 'Phụ đề từ bản phiên âm' : 'Video chưa có phụ đề'}</span>
+                <button type="button" className={`ctl ${captionPreferences.enabled && tr.data?.segments.length ? 'ctl-on' : ''}`}
+                  aria-label="Bật/tắt phụ đề (C)" title="Bật/tắt phụ đề (C)" aria-pressed={captionPreferences.enabled}
+                  disabled={!tr.data?.segments.length} onClick={() => captionPreferences.setEnabled(!captionPreferences.enabled)}><Icon name="captions" size={24} /></button>
+                <button type="button" className="ctl" aria-label="Cài đặt phụ đề" title="Cài đặt phụ đề" aria-expanded={captionMenu}
+                  onClick={() => setCaptionMenu(!captionMenu)}><Icon name="settings" size={22} /></button>
+                <button type="button" className="ctl" aria-label={isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'} title="Toàn màn hình" onClick={fullscreen}>
+                  <Icon name={isFullscreen ? 'fullscreenExit' : 'fullscreen'} size={22} /></button>
+              </div>
+              {captionMenu && <div className="menu video-settings" role="group" aria-label="Cài đặt phụ đề"
+                onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') setCaptionMenu(false); }}>
+                <div className="menu-row"><strong>Cài đặt phụ đề</strong><button type="button" className="pill" aria-label="Đóng cài đặt phụ đề" onClick={() => setCaptionMenu(false)}>Đóng</button></div>
+                <CaptionSettings preferences={captionPreferences} available={!!tr.data?.segments.length} />
+              </div>}
             </div>
           ) : info.loading ? <Spinner /> : <Empty title="Video chưa có file">Tải file lên ở trang danh sách (cùng mã video).</Empty>}
           <div className="card col" style={{ gap: 10 }}>
@@ -211,7 +280,10 @@ export function VideoDetail({ videoId }: { videoId: string }) {
                 <Button size="sm" variant="ghost" icon="sparkle" loading={gen} disabled={!tr.data} onClick={suggest}>AI đề xuất mốc</Button>
               </div>
             </div>
-            {!tr.data && !tr.loading && <p className="muted small" style={{ fontWeight: 700 }}>Cần có phụ đề trước khi AI soạn câu hỏi.</p>}
+            <p className="muted small" style={{ fontWeight: 700 }}>
+              {tr.data ? 'AI soạn câu hỏi tại đây chỉ dùng lời giảng của video đang xem. Muốn kết hợp slide hoặc bài đọc, chọn nguồn ở mục Câu hỏi.'
+                : !tr.loading ? 'Cần có phụ đề trước khi AI soạn câu hỏi.' : 'Đang tải phụ đề…'}
+            </p>
             {tr.error && <ErrorBox message={tr.error} onRetry={tr.reload} />}
           </div>
         </div>

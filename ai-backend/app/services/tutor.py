@@ -4,7 +4,7 @@ import re
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -18,7 +18,7 @@ from app.models.documents import AIChunk, AIDocument
 from app.models.video_question import VideoQuestion
 from app.services import llm, workflow
 from app.services.grading import correct_answer_text
-from app.services.retrieval import (RetrievalScope, _row_to_dict, build_context, expand_neighbors, format_segments, retrieve,
+from app.services.retrieval import (RetrievalScope, _apply_scope, _row_to_dict, build_context, expand_neighbors, format_segments, retrieve,
                                     transcript_window)
 
 log = logging.getLogger("app.tutor")
@@ -161,7 +161,7 @@ def ask(db: Session, user: Principal, *, question: str, conversation_id=None, co
 
     # Slide / tài liệu đang mở: ưu tiên nội dung đúng trang học sinh đang xem
     if focus_document_id is not None:
-        doc = db.get(AIDocument, focus_document_id)
+        doc = db.execute(_apply_scope(select(AIDocument), scope).where(AIDocument.id == focus_document_id)).scalar_one_or_none()
         if doc and user.can_access_class(doc.class_id):
             q = db.query(AIChunk).filter(AIChunk.document_id == doc.id)
             if focus_page is not None:
