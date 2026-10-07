@@ -8,6 +8,7 @@ from app.config import settings
 from app.core.security import Principal
 from app.core.utils import fmt_ts
 from app.models.documents import AIChunk, AIDocument
+from app.models.learning import Lesson, LessonItem
 from app.models.transcript import TranscriptSegment, VideoTranscript
 from app.services.embedding import embed_query
 
@@ -30,6 +31,16 @@ class RetrievalScope:
 
 def _apply_scope(stmt, scope: RetrievalScope):
     stmt = stmt.where(AIDocument.status == "ready", AIDocument.is_active.is_not(False))
+    # Các nguồn của bài LMS phải còn được gắn trong mục học. File giữ trong thư viện
+    # để tái sử dụng, nhưng bỏ/thay slide hoặc bài đọc sẽ loại nguồn cũ ngay khỏi RAG.
+    managed_lesson = select(Lesson.id).where(Lesson.code == AIDocument.lesson_id).exists()
+    attached_source = (select(LessonItem.id).join(Lesson, LessonItem.lesson_id == Lesson.id)
+                       .where(Lesson.code == AIDocument.lesson_id,
+                              or_(LessonItem.document_id == AIDocument.id,
+                                  and_(AIDocument.source_type == "video", LessonItem.type == "video",
+                                       LessonItem.video_id == AIDocument.source_id))).exists())
+    stmt = stmt.where(or_(~managed_lesson, ~AIDocument.source_type.in_(["pdf", "pptx", "lesson", "video"]),
+                          attached_source))
     if scope.allowed_class_ids is not None:
         stmt = stmt.where(or_(AIDocument.class_id.is_(None), AIDocument.class_id.in_(scope.allowed_class_ids or [""])))
     if scope.course_id:
@@ -38,7 +49,7 @@ def _apply_scope(stmt, scope: RetrievalScope):
         stmt = stmt.where(AIDocument.class_id == scope.class_id)
     if scope.lesson_id:
         stmt = stmt.where(AIDocument.lesson_id == scope.lesson_id)
-    if scope.document_ids:
+    if scope.document_ids is not None:
         stmt = stmt.where(AIDocument.id.in_(scope.document_ids))
     if scope.source_types:
         stmt = stmt.where(AIDocument.source_type.in_(scope.source_types))

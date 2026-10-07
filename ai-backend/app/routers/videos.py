@@ -10,6 +10,7 @@ from app.core.security import Principal, ensure_class_access, get_current_user, 
 from app.core.utils import clean_id, parse_uuid
 from app.database import get_db
 from app.models.transcript import TranscriptSegment, VideoTranscript
+from app.models.learning import MediaVideo
 from app.services import jobs, video_learning, workflow
 from app.services.retrieval import active_transcript
 from app.services.storage import safe_extension, save_upload
@@ -32,6 +33,12 @@ def _check_transcript_access(user: Principal, tr: VideoTranscript | None) -> Non
         raise AppError(404, "NOT_FOUND", "Không tìm thấy video.")
 
 
+def _check_media_access(db: Session, user: Principal, video_id: str) -> None:
+    media = db.get(MediaVideo, video_id)
+    if media:
+        ensure_class_access(user, media.class_id)
+
+
 # ----------------------------------------------------------------------------
 # Transcript
 # ----------------------------------------------------------------------------
@@ -44,6 +51,7 @@ async def import_transcript(
 ):
     """Nạp phụ đề .srt / .vtt / .json -> tạo phiên bản transcript mới + index Knowledge Base."""
     video_id, class_id = _video_id(video_id), clean_id(class_id)
+    _check_media_access(db, user, video_id)
     ensure_class_access(user, class_id)
     safe_extension(file.filename, ("srt", "vtt", "json", "txt"))
     raw = await file.read()
@@ -78,6 +86,7 @@ def transcribe_video(
 ):
     """Phiên âm video/audio bằng Whisper (chạy nền). Theo dõi tiến độ qua /ai/jobs/{job_id}."""
     video_id, class_id = _video_id(video_id), clean_id(class_id)
+    _check_media_access(db, user, video_id)
     ensure_class_access(user, class_id)
     ext = safe_extension(file.filename, MEDIA_TYPES)
     path, _, size = save_upload(file, "media", ext, settings.max_media_mb)
@@ -128,6 +137,7 @@ class UpdateTranscriptRequest(BaseModel):
 def update_video_transcript(video_id: str, req: UpdateTranscriptRequest, user: Principal = Depends(require_teacher),
                             db: Session = Depends(get_db)):
     """Giáo viên sửa transcript -> tạo phiên bản mới (bản cũ được giữ lại để rollback)."""
+    _check_media_access(db, user, video_id)
     prev = active_transcript(db, video_id)
     _check_transcript_access(user, prev)
     tr, kb = save_transcript_version(db, video_id, [s.model_dump() for s in req.segments], source="manual",

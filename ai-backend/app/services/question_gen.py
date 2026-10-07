@@ -8,6 +8,7 @@ from app.core.prompts import TEACHER_QUIZ, wrap_documents
 from app.core.security import Principal
 from app.core.utils import utcnow
 from app.models.documents import AIChunk, AIDocument
+from app.models.learning import Lesson
 from app.models.video_question import AIGeneration, QuestionBankItem, VideoQuestion
 from app.services import llm
 from app.services.retrieval import RetrievalScope, _apply_scope, _row_to_dict, build_context, retrieve
@@ -27,9 +28,14 @@ def sample_scope_chunks(db: Session, scope: RetrievalScope, limit: int = 14) -> 
 
 
 def build_teacher_context(db: Session, user: Principal, *, lesson_id=None, course_id=None, document_id=None,
+                          document_ids: list[str] | None = None,
                           context_query: str | None = None) -> tuple[str, list[dict]]:
-    scope = RetrievalScope.for_user(user, course_id=course_id, lesson_id=lesson_id,
-                                    document_ids=[document_id] if document_id else None)
+    selected_ids = document_ids if document_ids is not None else ([document_id] if document_id else None)
+    scope = RetrievalScope.for_user(user, course_id=course_id, lesson_id=lesson_id, document_ids=selected_ids)
+    if selected_ids is not None:
+        valid_ids = {str(d.id) for d in db.execute(_apply_scope(select(AIDocument), scope)).scalars()}
+        if not selected_ids or set(selected_ids) != valid_ids:
+            raise AppError(400, "INVALID_SOURCE", "Nguồn đã chọn không còn thuộc bài, chưa sẵn sàng hoặc không có quyền truy cập. Hãy chọn lại nguồn.")
     if context_query:
         chunks = retrieve(db, context_query, scope, top_k=10, min_score=0.15)
     else:
@@ -37,6 +43,26 @@ def build_teacher_context(db: Session, user: Principal, *, lesson_id=None, cours
     if not chunks:
         raise AppError(400, "NO_CONTEXT", "Không tìm thấy học liệu trong phạm vi đã chọn. Hãy nạp tài liệu cho bài học trước.")
     return build_context(chunks, max_chars=12000)
+
+
+def teaching_sources(db: Session, user: Principal, lesson_id: str) -> list[dict]:
+    lesson = db.query(Lesson).filter(Lesson.code == lesson_id).first()
+    if lesson and not user.can_access_class(lesson.chapter.course.class_id):
+        raise AppError(404, "NOT_FOUND", "Không tìm thấy bài học.")
+    scope = RetrievalScope.for_user(user, lesson_id=lesson_id)
+    docs = db.execute(_apply_scope(select(AIDocument), scope).order_by(AIDocument.created_at)).scalars().all()
+    names = {}
+    if lesson:
+        for item in lesson.items:
+            if item.document_id:
+                names[str(item.document_id)] = item.title
+            if item.video_id:
+                names[item.video_id] = item.title
+    return [{"document_id": str(doc.id), "title": names.get(str(doc.id), names.get(doc.source_id, doc.title)),
+             "kind": "video" if doc.source_type == "video" else "reading" if doc.source_type == "lesson"
+                     else "slide" if doc.source_type in ("pdf", "pptx") else "document",
+             "source_type": doc.source_type, "video_id": doc.source_id if doc.source_type == "video" else None}
+            for doc in docs]
 
 
 def _bank_to_dict(item: QuestionBankItem) -> dict:
@@ -47,9 +73,10 @@ def _bank_to_dict(item: QuestionBankItem) -> dict:
 
 def generate_quiz(db: Session, user: Principal, *, count: int, question_types: list[str] | None,
                   difficulties: list[str] | None, lesson_id=None, course_id=None, class_id=None, document_id=None,
+                  document_ids: list[str] | None = None,
                   context_query=None, language: str = "vi", generation_type: str = "quiz") -> dict:
     context, sources = build_teacher_context(db, user, lesson_id=lesson_id, course_id=course_id,
-                                             document_id=document_id, context_query=context_query)
+                                             document_id=document_id, document_ids=document_ids, context_query=context_query)
     type_hint = ", ".join(question_types) if question_types else "kết hợp multiple_choice, true_false, short_answer"
     diff_hint = ", ".join(difficulties) if difficulties else "phân bổ easy / medium / hard"
     base_prompt = (f"{wrap_documents(context)}\n\nYêu cầu: sinh {{n}} câu hỏi.\n- Loại câu hỏi: {type_hint}\n"
@@ -74,6 +101,7 @@ def generate_quiz(db: Session, user: Principal, *, count: int, question_types: l
     gen = AIGeneration(teacher_id=user.user_id, lesson_id=lesson_id, generation_type=generation_type,
                        request={"count": count, "question_types": question_types, "difficulties": difficulties,
                                 "lesson_id": lesson_id, "course_id": course_id, "document_id": document_id,
+                                "document_ids": document_ids,
                                 "context_query": context_query},
                        prompt=f"{res.prompt_id}:{res.prompt_version}",
                        result={"sources": sources, "llm_call_ids": res.call_ids}, status="draft")

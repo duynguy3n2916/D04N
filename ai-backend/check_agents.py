@@ -96,7 +96,7 @@ def check_data() -> str | None:
 
 
 def check_llm(video_id: str | None) -> None:
-    from app.core.llm_schemas import QuestionItem
+    from app.core.llm_schemas import AgentQuestionItem
     from app.core.prompts import QUESTION_AGENT, TUTOR_EXPLAIN, wrap_documents
     from app.services import llm
 
@@ -117,7 +117,7 @@ def check_llm(video_id: str | None) -> None:
     q = None
     try:
         q, res = llm.complete_json("agent_question", QUESTION_AGENT,
-                                   f"{wrap_documents(context)}\n\nHãy sinh 1 câu hỏi mở rộng.", QuestionItem,
+                                   f"{wrap_documents(context)}\n\nHãy sinh 1 câu hỏi mở rộng.", AgentQuestionItem,
                                    max_tokens=1200)
         print(OK + f"{res.latency_ms:.0f} ms · {q.question}")
         for o in q.options or []:

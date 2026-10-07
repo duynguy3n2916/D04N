@@ -11,10 +11,10 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.errors import AppError
 from app.core.security import Principal, ensure_class_access, get_user_for_media, require_teacher
-from app.core.utils import clean_id, parse_uuid
+from app.core.utils import clean_id, generate_code, parse_uuid
 from app.database import get_db
 from app.models.documents import AIDocument
-from app.models.learning import MediaVideo
+from app.models.learning import Lesson, LessonItem, MediaVideo
 from app.models.observability import AIJob
 from app.models.transcript import VideoTranscript
 from app.models.video_question import VideoQuestion
@@ -24,6 +24,28 @@ from app.services.storage import safe_extension, save_upload
 
 router = APIRouter(prefix="/ai", tags=["media"])
 VIDEO_TYPES = ("mp4", "webm", "mov", "m4v", "mkv", "mp3", "m4a", "wav", "ogg")
+
+
+def _target_lesson(db: Session, user: Principal, target_lesson_id: str | None) -> Lesson | None:
+    if not target_lesson_id:
+        return None
+    lesson = (db.query(Lesson).filter(Lesson.id == parse_uuid(target_lesson_id, "target_lesson_id"))
+              .with_for_update().first())
+    if not lesson or not user.can_access_class(lesson.chapter.course.class_id):
+        raise AppError(404, "NOT_FOUND", "Không tìm thấy bài học để gắn video.")
+    return lesson
+
+
+def _attach_video(db: Session, video: MediaVideo, lesson: Lesson | None) -> None:
+    if lesson is None:
+        return
+    exists = db.query(LessonItem.id).filter(LessonItem.lesson_id == lesson.id,
+                                           LessonItem.video_id == video.video_id).first()
+    if not exists:
+        position = db.query(func.max(LessonItem.position)).filter(LessonItem.lesson_id == lesson.id).scalar()
+        db.add(LessonItem(lesson_id=lesson.id, type="video", title=video.title or "Video bài giảng",
+                          video_id=video.video_id, duration_seconds=video.duration_seconds,
+                          position=(position if position is not None else -1) + 1))
 
 
 def _duration(path: str) -> float | None:
@@ -59,17 +81,22 @@ def list_videos(user: Principal = Depends(require_teacher), db: Session = Depend
 
 
 @router.post("/media/videos", status_code=201)
-def upload_video(video_id: str = Form(...), title: str | None = Form(None), file: UploadFile = File(...),
+def upload_video(video_id: str | None = Form(None), title: str | None = Form(None), file: UploadFile = File(...),
                  class_id: str | None = Form(None), lesson_id: str | None = Form(None),
+                 target_lesson_id: str | None = Form(None),
                  transcribe: bool = Form(False), language: str = Form("vi"),
                  user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
-    video_id, class_id = clean_id(video_id), clean_id(class_id)
-    if not video_id:
-        raise AppError(400, "INVALID_VIDEO_ID", "Thiếu video_id.")
+    video_id, class_id = clean_id(video_id) or generate_code("VD"), clean_id(class_id)
+    lesson = _target_lesson(db, user, target_lesson_id)
+    if lesson:
+        class_id = lesson.chapter.course.class_id
+        lesson_id = lesson.code
     ensure_class_access(user, class_id)
+    v = db.get(MediaVideo, video_id)
+    if v:
+        ensure_class_access(user, v.class_id)
     ext = safe_extension(file.filename, VIDEO_TYPES)
     path, _, size = save_upload(file, "media", ext, settings.max_media_mb)
-    v = db.get(MediaVideo, video_id)
     if v is None:
         v = MediaVideo(video_id=video_id, created_by=user.user_id)
         db.add(v)
@@ -79,11 +106,15 @@ def upload_video(video_id: str = Form(...), title: str | None = Form(None), file
     v.file_path, v.size_bytes, v.class_id = str(path), size, class_id or v.class_id
     v.mime = mimetypes.guess_type(f"x.{ext}")[0] or "video/mp4"
     v.duration_seconds = _duration(str(path))
+    if lesson:
+        v.class_id = class_id
+    _attach_video(db, v, lesson)
     db.commit()
     out = _video_dict(db, v, video_id)
     if transcribe:
         job = jobs.submit(db, "transcribe_video", {"video_id": video_id, "file_path": str(path), "language": language,
-                                                   "lesson_id": clean_id(lesson_id), "class_id": class_id,
+                                                   "lesson_id": clean_id(lesson_id), "class_id": v.class_id,
+                                                   "course_id": lesson.chapter.course.code if lesson else None,
                                                    "created_by": user.user_id, "delete_file": False},
                           created_by=user.user_id)
         out["job_id"] = str(job.id)
@@ -91,19 +122,28 @@ def upload_video(video_id: str = Form(...), title: str | None = Form(None), file
 
 
 class VideoUrlIn(BaseModel):
-    video_id: str = Field(min_length=1, max_length=128)
+    video_id: str | None = Field(default=None, max_length=128)
     title: str | None = None
     source_url: str = Field(pattern=r"^https?://")
     duration_seconds: float | None = None
+    class_id: str | None = None
+    target_lesson_id: str | None = None
 
 
 @router.post("/media/videos/url")
 def register_video_url(req: VideoUrlIn, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
     """Video đặt ở nơi khác (link .mp4 trực tiếp)."""
-    vid = clean_id(req.video_id)
+    vid = clean_id(req.video_id) or generate_code("VD")
+    lesson = _target_lesson(db, user, req.target_lesson_id)
+    class_id = lesson.chapter.course.class_id if lesson else clean_id(req.class_id)
+    ensure_class_access(user, class_id)
     v = db.get(MediaVideo, vid) or MediaVideo(video_id=vid, created_by=user.user_id)
+    ensure_class_access(user, v.class_id)
     v.title, v.source_url, v.duration_seconds = req.title or v.title or vid, req.source_url, req.duration_seconds
     db.add(v)
+    if lesson or class_id:
+        v.class_id = class_id
+    _attach_video(db, v, lesson)
     db.commit()
     return _video_dict(db, v, vid)
 
@@ -114,8 +154,14 @@ def transcribe_stored(video_id: str, language: str = "vi", user: Principal = Dep
     v = db.get(MediaVideo, video_id)
     if not v or not v.file_path or not Path(v.file_path).exists():
         raise AppError(404, "NO_FILE", "Video chưa có file trên server.")
+    ensure_class_access(user, v.class_id)
+    linked = (db.query(LessonItem).filter(LessonItem.video_id == video_id, LessonItem.type == "video")
+              .order_by(LessonItem.created_at, LessonItem.id).first())
+    lesson = linked.lesson if linked else None
     job = jobs.submit(db, "transcribe_video", {"video_id": video_id, "file_path": v.file_path, "language": language,
                                                "class_id": v.class_id, "created_by": user.user_id,
+                                               "lesson_id": lesson.code if lesson else None,
+                                               "course_id": lesson.chapter.course.code if lesson else None,
                                                "delete_file": False}, created_by=user.user_id)
     return JSONResponse(status_code=202, content=jobs.job_to_dict(job))
 

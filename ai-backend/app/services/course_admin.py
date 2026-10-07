@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.core.security import Principal, ensure_class_access
+from app.core.utils import generate_code
 from app.models.documents import AIDocument
 from app.models.learning import Chapter, Course, Lesson, LessonItem, MediaVideo
 from app.models.transcript import VideoTranscript
@@ -45,10 +46,10 @@ def admin_tree(course: Course) -> dict:
     }
 
 
-def create_course(db: Session, user: Principal, code: str, title: str, description: str | None,
+def create_course(db: Session, user: Principal, code: str | None, title: str, description: str | None,
                   class_id: str | None) -> Course:
     ensure_class_access(user, class_id)
-    code = _check_code(code)
+    code = _check_code(code) if code and code.strip() else generate_code("KH")
     if db.query(Course).filter(Course.code == code).first():
         raise AppError(409, "DUPLICATE_CODE", f"Mã khóa học {code} đã tồn tại.")
     c = Course(code=code, title=title.strip(), description=description, class_id=class_id, created_by=user.user_id)
@@ -75,8 +76,8 @@ def add_chapter(db: Session, course: Course, title: str) -> Chapter:
     return ch
 
 
-def add_lesson(db: Session, chapter: Chapter, code: str, title: str, description: str | None) -> Lesson:
-    code = _check_code(code)
+def add_lesson(db: Session, chapter: Chapter, code: str | None, title: str, description: str | None) -> Lesson:
+    code = _check_code(code) if code and code.strip() else generate_code("BH")
     if db.query(Lesson).filter(Lesson.code == code).first():
         raise AppError(409, "DUPLICATE_CODE", f"Mã bài học {code} đã tồn tại.")
     ls = Lesson(chapter_id=chapter.id, code=code, title=title.strip(), description=description,

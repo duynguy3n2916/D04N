@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { Icon } from '../../components/Icon';
+import { activeCaption, CaptionSettings, useVideoCaptions, VideoCaption } from '../../components/VideoCaptions';
 import { Button, Empty, useToast } from '../../components/ui';
 import { api, ApiError, errorText, fmtTime, mediaUrl, storage, type AnswerResult, type PublicQuestion, type SessionStatus,
   type TranscriptSegment } from '../../lib/api';
@@ -29,10 +30,14 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
   const [duration, setDuration] = useState(v.duration_seconds || 0);
   const [buffered, setBuffered] = useState(0);
   const [playing, setPlaying] = useState(false);
-  const [captions, setCaptions] = useState(storage.get('mam.captions') !== '0');
+  const captionPreferences = useVideoCaptions();
   const [speed, setSpeed] = useState(1);
   const [menu, setMenu] = useState(false);
   const [advanced, setAdvanced] = useState(storage.get('mam.advanced') === '1');
+  const [agentBusy, setAgentBusy] = useState(false);
+  const [agentMessage, setAgentMessage] = useState('AI sẽ kiểm tra nội dung sau mỗi 45 giây phát video.');
+  const [cooldownUntil, setCooldownUntil] = useState(0);
+  const [cooldownLeft, setCooldownLeft] = useState(0);
   const [tab, setTab] = useState<'subs' | 'notes' | 'questions'>('subs');
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
   const [questions, setQuestions] = useState<PublicQuestion[]>([]);
@@ -57,6 +62,7 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
   // khôi phục phiên: đang dở câu hỏi / đang xem phản hồi
   useEffect(() => {
     api<SessionStatus>(`/ai/workflow/session?video_id=${encodeURIComponent(vid)}`).then((s) => {
+      setCooldownUntil(s.in_cooldown ? Date.now() + s.remaining_cooldown_seconds * 1000 : 0);
       if (s.state === 'WAITING_FOR_STUDENT' && s.active_question) {
         const el = videoRef.current;
         if (el) el.currentTime = s.current_video_time || s.active_question.timestamp;
@@ -66,6 +72,14 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
       }
     }).catch(() => {});
   }, [vid]);
+
+  useEffect(() => {
+    const update = () => setCooldownLeft(Math.max(0, Math.ceil((cooldownUntil - Date.now()) / 1000)));
+    update();
+    if (!cooldownUntil) return;
+    const timer = window.setInterval(update, 1000);
+    return () => window.clearInterval(timer);
+  }, [cooldownUntil]);
 
   // vị trí bắt đầu
   const onLoaded = () => {
@@ -131,23 +145,44 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
   const heartbeat = async () => {
     if (busyRef.current || !advanced) return;
     busyRef.current = true;
+    setAgentBusy(true);
+    setAgentMessage('AI đang kiểm tra đoạn vừa xem và soạn câu hỏi…');
     try {
       const el = videoRef.current;
       const r = await api<SessionStatus & { triggered: boolean; reason?: string; error?: string; question?: PublicQuestion }>('/ai/question-agent/trigger',
         { json: { video_id: vid, current_time: el?.currentTime || 0, advanced_mode: true } });
       console.info('[Question Agent]', r.triggered ? 'đã hỏi' : r.reason, r.error || '');
+      setCooldownUntil(r.in_cooldown ? Date.now() + r.remaining_cooldown_seconds * 1000 : 0);
       if (r.triggered && r.question) {
+        setAgentMessage('AI đã đặt câu hỏi. Trả lời trong khung hiện trên video.');
         el?.pause();
         setPopup({ question: r.question, deadlineAt: Date.now() + (r.deadline_remaining_seconds ?? 120) * 1000, result: null });
       } else if (r.reason === 'generation_failed') {
+        setAgentMessage(`AI chưa soạn được câu hỏi: ${r.error || 'lỗi gọi mô hình AI'}. Bạn có thể thử lại.`);
         agentNotice('generation_failed', `AI chưa đặt được câu hỏi mở rộng: ${r.error || 'lỗi gọi mô hình AI'}`);
       } else if (r.reason === 'no_transcript') {
+        setAgentMessage('Video chưa có phụ đề. Cần phiên âm hoặc nhập phụ đề để AI đặt câu hỏi.');
         agentNotice('no_transcript', 'Video chưa có phụ đề nên AI chưa thể đặt câu hỏi mở rộng.');
+      } else if (r.reason === 'near_scheduled_question') {
+        setAgentMessage('Sắp tới hoặc vừa qua câu hỏi của giáo viên; AI sẽ hỏi ở đoạn tiếp theo.');
+      } else if (r.reason === 'insufficient_recent_transcript') {
+        setAgentMessage('Đoạn vừa xem chưa có đủ lời giảng để AI đặt câu hỏi. Hãy xem tiếp.');
+      } else if (r.reason === 'in_cooldown') {
+        setAgentMessage('Hết thời gian nghỉ, AI sẽ tiếp tục kiểm tra nội dung khi video phát.');
+      } else if (r.reason === 'interaction_in_progress') {
+        setAgentMessage('Đang có một lượt hỏi hoặc soạn câu hỏi; hãy hoàn thành trước khi AI hỏi tiếp.');
+        if (r.active_question && r.state === 'WAITING_FOR_STUDENT') {
+          el?.pause();
+          setPopup({ question: r.active_question, deadlineAt: Date.now() + (r.deadline_remaining_seconds ?? 120) * 1000, result: null });
+        }
+      } else {
+        setAgentMessage('AI chưa đặt câu hỏi ở đoạn này. Hãy xem tiếp hoặc thử lại.');
       }
     } catch (e) {
       console.warn('[Question Agent] lỗi', e);
+      setAgentMessage(`Không gọi được AI: ${errorText(e)}`);
       agentNotice('request_failed', `Không gọi được Question Agent: ${errorText(e)}`);
-    } finally { busyRef.current = false; }
+    } finally { busyRef.current = false; setAgentBusy(false); }
   };
 
   const nextUndone = (from: number, to: number) => questions.find((q) => !doneSet.current.has(q.question_id) && q.timestamp > from && q.timestamp <= to);
@@ -162,8 +197,10 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
     if (!popup && !el.paused && cur > prev && cur - prev < 3) {
       const q = nextUndone(prev, cur);
       if (q) { openScheduled(q); return; }
-      playedSinceBeat.current += cur - prev;
-      if (playedSinceBeat.current >= HEARTBEAT_EVERY) { playedSinceBeat.current = 0; heartbeat(); }
+      if (advanced) {
+        playedSinceBeat.current += cur - prev;
+        if (playedSinceBeat.current >= HEARTBEAT_EVERY && !busyRef.current) { playedSinceBeat.current = 0; heartbeat(); }
+      }
     }
     if (!completedRef.current && el.duration && cur >= el.duration * 0.9) complete();
   };
@@ -249,7 +286,11 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vid]);
   const resume = async () => {
-    try { await api('/ai/workflow/resume', { json: { video_id: vid, current_time: videoRef.current?.currentTime } }); }
+    try {
+      const s = await api<SessionStatus>('/ai/workflow/resume', { json: { video_id: vid, current_time: videoRef.current?.currentTime } });
+      setCooldownUntil(s.in_cooldown ? Date.now() + s.remaining_cooldown_seconds * 1000 : 0);
+      setAgentMessage('Hết thời gian nghỉ, AI sẽ tiếp tục kiểm tra nội dung khi video phát.');
+    }
     catch (e) { if (!(e instanceof ApiError && e.code === 'ANSWER_REQUIRED')) toast(errorText(e), 'error'); else return; }
     setPopup(null);
     videoRef.current?.play().catch(() => {});
@@ -262,12 +303,14 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
     if (el.paused) el.play().catch(() => {}); else el.pause();
   };
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (popup || (e.target as HTMLElement).tagName === 'INPUT') return;
+    if (popup || (e.target as HTMLElement).closest('button, input, select, textarea')) return;
     if (e.key === ' ' || e.key === 'k') { e.preventDefault(); toggle(); }
     else if (e.key === 'ArrowRight') { e.preventDefault(); seek(t + 5); }
     else if (e.key === 'ArrowLeft') { e.preventDefault(); seek(t - 5); }
     else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); fullscreen(); }
     else if (e.key === 't' || e.key === 'T') { e.preventDefault(); toggleWide(); }
+    else if ((e.key === 'c' || e.key === 'C') && segments.length) { e.preventDefault(); captionPreferences.setEnabled(!captionPreferences.enabled); }
+    else if (e.key === 'Escape') setMenu(false);
   };
   const onTimelineClick = (e: MouseEvent<HTMLDivElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -290,7 +333,7 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
     setTimeout(() => boxRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 50);
   };
 
-  const curSeg = useMemo(() => segments.find((s) => t >= s.start_time && t <= s.end_time + 0.3), [segments, t]);
+  const curSeg = useMemo(() => activeCaption(segments, t), [segments, t]);
   const curIdx = curSeg ? segments.indexOf(curSeg) : -1;
   const transcriptRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -311,7 +354,7 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
         <video ref={videoRef} src={src} preload="metadata" playsInline onClick={toggle} onDoubleClick={fullscreen}
           onLoadedMetadata={onLoaded} onTimeUpdate={onTime} onSeeked={onSeeked}
           onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onEnded={() => { setPlaying(false); complete(); }} />
-        {captions && curSeg && <div className="player-caption">{curSeg.text}</div>}
+        <VideoCaption text={curSeg?.text} preferences={captionPreferences} />
         {!playing && !popup && (
           <button className="player-bigplay" onClick={toggle} aria-label="Phát video"><span><Icon name="play" size={40} /></span></button>
         )}
@@ -338,9 +381,10 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
               onClick={() => { const on = !advanced; setAdvanced(on); storage.set('mam.advanced', on ? '1' : '0'); playedSinceBeat.current = 0; }}>
               AI hỏi mở rộng: {advanced ? 'Bật' : 'Tắt'}
             </button>
-            <button className={`ctl ${captions ? 'ctl-on' : ''}`} aria-pressed={captions} aria-label="Phụ đề"
-              onClick={() => { setCaptions(!captions); storage.set('mam.captions', captions ? '0' : '1'); }}><Icon name="captions" size={24} /></button>
-            <button className="ctl ctl-text" onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Cài đặt phát">{speed}x</button>
+            <button className={`ctl ${captionPreferences.enabled && segments.length ? 'ctl-on' : ''}`} aria-pressed={captionPreferences.enabled}
+              aria-label="Bật/tắt phụ đề (C)" disabled={!segments.length} title={segments.length ? 'Bật/tắt phụ đề (C)' : 'Video chưa có phụ đề'}
+              onClick={() => captionPreferences.setEnabled(!captionPreferences.enabled)}><Icon name="captions" size={24} /></button>
+            <button className="ctl" onClick={() => setMenu(!menu)} aria-expanded={menu} aria-label="Cài đặt video" title="Cài đặt video và phụ đề"><Icon name="settings" size={22} /></button>
             <button className={`ctl ${wide ? 'ctl-on' : ''}`} onClick={toggleWide} aria-pressed={wide}
               aria-label={wide ? 'Thoát chế độ rộng (T)' : 'Chế độ rộng (T)'} title={wide ? 'Thoát chế độ rộng (T)' : 'Chế độ rộng (T)'}><Icon name="theater" size={24} /></button>
             <button className="ctl" onClick={fullscreen} aria-label={isFs ? 'Thoát toàn màn hình (F)' : 'Toàn màn hình (F)'}
@@ -348,7 +392,7 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
           </div>
         </div>
         {menu && (
-          <div className="menu" role="menu">
+          <div className="menu video-settings" role="group" aria-label="Cài đặt video" onKeyDown={(e) => { e.stopPropagation(); if (e.key === 'Escape') setMenu(false); }}>
             <div className="menu-row"><span>Tốc độ</span>
               <span className="row" style={{ gap: 4 }}>{SPEEDS.map((s) => (
                 <button key={s} className={`pill ${s === speed ? 'pill-on' : ''}`} style={{ padding: '4px 8px', minHeight: 32 }}
@@ -365,6 +409,7 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
                   onClick={() => { setMenu(false); if (!isFs) fullscreen(); }}>Toàn màn hình</button>
               </span>
             </div>
+            <CaptionSettings preferences={captionPreferences} available={segments.length > 0} />
             <label className="menu-row check"><span>Câu hỏi mở rộng của AI</span>
               <input type="checkbox" checked={advanced} onChange={(e) => { setAdvanced(e.target.checked); storage.set('mam.advanced', e.target.checked ? '1' : '0'); }} />
             </label>
@@ -379,6 +424,18 @@ export function VideoItem({ item, onCompleted, setContext, registerNav, askTutor
           <span className="muted">{fmtTime(duration)} · {questions.length} câu hỏi trong video · video tự dừng khi tới câu hỏi</span>
         </div>
         {goNext && <Button onClick={goNext} icon="chevronRight">Mục tiếp theo</Button>}
+      </div>
+
+      <div className="card row" style={{ justifyContent: 'space-between', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 180 }}>
+          <strong>AI hỏi mở rộng: {advanced ? 'Bật' : 'Tắt'}</strong>
+          <p className="small muted" role="status" style={{ margin: '6px 0 0' }}>
+            {!advanced ? 'Bật AI hỏi mở rộng trên thanh điều khiển để AI tự đặt câu hỏi.'
+              : cooldownLeft > 0 ? `AI đang nghỉ · còn ${fmtTime(cooldownLeft)}. ${agentMessage}` : agentMessage}
+          </p>
+        </div>
+        {advanced && <Button size="sm" variant="ghost" icon="question" loading={agentBusy} disabled={!!popup || cooldownLeft > 0}
+          onClick={() => { playedSinceBeat.current = 0; heartbeat(); }}>Yêu cầu AI hỏi</Button>}
       </div>
 
       <div className="tabs" role="tablist">

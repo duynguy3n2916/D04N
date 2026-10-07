@@ -16,6 +16,7 @@ class GenerateQuizRequest(BaseModel):
     course_id: str | None = None
     class_id: str | None = None
     document_id: str | None = None
+    document_ids: list[str] | None = Field(default=None, min_length=1, max_length=50)
     context_query: str | None = None
     count: int = Field(default=5, ge=1, le=20)
     question_types: list[QuestionType] | None = None
@@ -29,6 +30,7 @@ class GenerateQuestionRequest(BaseModel):
     lesson_id: str | None = None
     course_id: str | None = None
     document_id: str | None = None
+    document_ids: list[str] | None = Field(default=None, min_length=1, max_length=50)
     type: QuestionType = "multiple_choice"
     difficulty: Difficulty = "medium"
     teacher_id: str | None = None
@@ -36,7 +38,14 @@ class GenerateQuestionRequest(BaseModel):
 
 def _ids(req) -> dict:
     return {"lesson_id": clean_id(req.lesson_id), "course_id": clean_id(req.course_id),
+            "document_ids": [str(parse_uuid(d, "document_ids")) for d in req.document_ids] if req.document_ids is not None else None,
             "document_id": str(parse_uuid(req.document_id, "document_id")) if req.document_id else None}
+
+
+@router.get("/teacher/sources")
+def list_sources(lesson_id: str = Query(min_length=1), user: Principal = Depends(require_teacher),
+                 db: Session = Depends(get_db)):
+    return question_gen.teaching_sources(db, user, clean_id(lesson_id))
 
 
 @router.post("/teacher/generate-quiz")

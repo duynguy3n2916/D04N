@@ -1,7 +1,9 @@
 """Evaluation + các hàm thuần."""
+import json
+
 import pytest
 
-from app.core.llm_schemas import QuestionItem
+from app.core.llm_schemas import AgentQuestionItem, QuestionItem, schema_hint
 from app.core.utils import resolve_option_index
 from app.services.chunking import chunk_text
 from app.services.evaluation import chunk_matches, word_error_rate
@@ -27,6 +29,13 @@ def test_question_schema():
         QuestionItem(type="multiple_choice", question="Câu hỏi?", options=["A. x", "B. y", "C. z", "D. t"],
                      correct_answer="E")
     assert QuestionItem(type="essay", question="Trình bày OOP", options=["x"], correct_answer="...").options is None
+
+
+def test_agent_schema_hint_has_valid_choices():
+    example = json.loads(schema_hint(AgentQuestionItem).split("\n", 1)[1])
+    example["question"] = "Câu hỏi về đoạn vừa xem?"
+    question = AgentQuestionItem.model_validate(example)
+    assert len(question.options) == 4 and question.correct_index == 1
 
 
 def test_chunking_overlap_and_long_paragraph():

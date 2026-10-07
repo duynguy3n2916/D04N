@@ -159,8 +159,8 @@ def list_courses_admin(user: Principal = Depends(require_teacher), db: Session =
 
 @router.post("/courses")
 def create_course(req: CourseIn, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
-    if not req.code or not req.title:
-        raise AppError(400, "BAD_REQUEST", "Cần mã và tên khóa học.")
+    if not req.title or not req.title.strip():
+        raise AppError(400, "BAD_REQUEST", "Cần tên khóa học.")
     c = course_admin.create_course(db, user, req.code, req.title, req.description, clean_id(req.class_id))
     return _tree(db, c)
 
@@ -239,8 +239,8 @@ class LessonIn(BaseModel):
 @router.post("/chapters/{chapter_id}/lessons")
 def add_lesson(chapter_id: str, req: LessonIn, user: Principal = Depends(require_teacher),
                db: Session = Depends(get_db)):
-    if not req.code or not req.title:
-        raise AppError(400, "BAD_REQUEST", "Cần mã bài học và tên bài.")
+    if not req.title or not req.title.strip():
+        raise AppError(400, "BAD_REQUEST", "Cần tên bài học.")
     ch = _chapter(db, user, chapter_id)
     course_admin.add_lesson(db, ch, req.code, req.title, req.description)
     db.refresh(ch.course)
