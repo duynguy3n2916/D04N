@@ -1,0 +1,21 @@
+Create a polished, technically accurate software architecture infographic for the Vietnamese university project D04N, an AI learning support LMS called “mầm”. Landscape wide 16:9 composition, very high resolution, white background, crisp flat vector aesthetic, professional academic report quality. Use large legible Vietnamese text with correct accents, generous whitespace, rounded rectangles, restrained navy/teal/green palette and orange for external AI. No decorative clutter, no photographic elements. Title exactly “KIẾN TRÚC TỔNG THỂ — D04N”. Subtitle exactly “Hệ thống AI hỗ trợ học tập · mầm”.
+
+Draw a clear LEFT-TO-RIGHT architecture with four regions and precise arrow connections:
+1. Far left compact region heading “NGƯỜI DÙNG”, three simple person icons labelled “Học sinh”, “Giáo viên”, “Quản trị viên”, all connecting to frontend.
+2. Next region heading “GIAO DIỆN WEB”: one large box “React 19 + TypeScript + Vite”, inside three concise lines “Khóa học & bài học”, “Video, phụ đề & câu hỏi”, “Chat Tutor & quản trị”. A bidirectional arrow from this box to the backend boundary labelled “REST API · JWT”.
+3. Largest central region outlined boundary labelled “BACKEND — FastAPI”, subtitle “Modular monolith”. Inside this boundary show:
+- top slim shared bar “Xác thực JWT · Phân quyền theo vai trò / lớp”
+- upper row of three distinct feature modules: “LMS” with smaller “Khóa học · tiến độ”; “Tutor AI” with smaller “Hỏi đáp · trích nguồn”; “Teacher AI” with smaller “Sinh & duyệt câu hỏi”.
+- a separate feature box “Video Learning” with smaller “Question Agent · state machine”.
+- middle shared AI block clearly labelled “RAG dùng chung” with smaller “Lọc nguồn & quyền → tìm kiếm vector → ngữ cảnh”, feature modules Tutor, Teacher and Video connect to this RAG block.
+- lower left ingestion box “Xử lý học liệu” with smaller “PDF / DOCX / PPTX / video” and “Trích xuất → chia đoạn → embedding”.
+- a small adjacent box “Embedding” with smaller “sentence-transformers · chạy cục bộ”, ingestion feeds embedding, embedding writes vector data to PostgreSQL.
+- lower right shared block “LLM Gateway” with smaller “Kiểm tra JSON · retry · ghi log”, RAG feeds this gateway; gateway connects to external LLM providers.
+- bottom strip within backend labelled “Job nền trong tiến trình · Theo dõi log & đánh giá”.
+4. Rightmost region split clearly into two categories:
+heading “DỮ LIỆU”, cylinder “PostgreSQL + pgvector” with smaller “Tài khoản · khóa học · tiến độ” and “Chunks · vectors · câu hỏi · logs”; below a file storage box “Kho tệp cục bộ” with smaller “Video · tài liệu · phụ đề”.
+heading below “DỊCH VỤ AI NGOÀI”, orange box “LLM: OpenAI / Claude”; another orange box “Whisper: Groq / OpenAI”.
+
+Connections must be readable with elbows and minimal crossings: backend LMS/auth to PostgreSQL, shared RAG bidirectional to PostgreSQL labelled “Vector search”, embedding to PostgreSQL labelled “Lưu vectors”, ingestion to local file storage, LLM Gateway bidirectional to external OpenAI/Claude, ingestion to Whisper labelled “Phiên âm video”. Use lines routed along clear gutters; do not connect Whisper to LLM Gateway. Local embedding remains INSIDE backend. Database and local storage remain outside backend boundary. All backend modules are modules in ONE process, not separate microservices. No Redis, Celery, Kubernetes, GCP deployment, external LMS, cloud buckets or imagined infrastructure. Do not add any systems not listed.
+
+Small footer in subdued gray exactly “Hiện trạng: 1 backend FastAPI · Job nền trong tiến trình · PostgreSQL + pgvector”. Arrows represent logical data/API flows, not deployment topology. Prioritize clarity, accurate placement and short readable labels.

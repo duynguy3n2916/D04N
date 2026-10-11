@@ -46,19 +46,24 @@ export function Documents() {
   return (
     <>
       <PageHeader title="Học liệu" sub="Những gì Tutor AI được phép dùng để trả lời: tài liệu, bài đọc và phụ đề video của từng bài." />
-      <div className="card row" style={{ marginBottom: 16, alignItems: 'flex-end' }}>
-        <Field label="Tải tài liệu cho bài"><LessonSelect value={uploadLesson} onChange={setUploadLesson} /></Field>
-        <input ref={fileRef} type="file" hidden accept=".pdf,.docx,.pptx,.txt,.md" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
-        <Button icon="upload" disabled={!uploadLesson || !!progress} onClick={() => fileRef.current?.click()}>Chọn file (PDF, DOCX, PPTX, TXT, MD)</Button>
+      <div className="card toolbar-card">
+        <div className="row" style={{ alignItems: 'flex-end' }}>
+          <Field label="Tải tài liệu cho bài"><LessonSelect value={uploadLesson} onChange={setUploadLesson} /></Field>
+          <input ref={fileRef} type="file" hidden accept=".pdf,.docx,.pptx,.txt,.md" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload(f); }} />
+          <Button icon="upload" disabled={!uploadLesson || !!progress} onClick={() => fileRef.current?.click()}>Chọn file (PDF, DOCX, PPTX, TXT, MD)</Button>
+        </div>
         {progress && <span className="small" style={{ fontWeight: 800 }} aria-live="polite">{progress}</span>}
       </div>
-      <div className="row" style={{ marginBottom: 12 }}><Field label="Lọc theo bài"><LessonSelect value={lesson} onChange={setLesson} allowAll /></Field></div>
       {docs.loading && !docs.data && <Spinner />}
       {docs.error && <ErrorBox message={docs.error} onRetry={docs.reload} />}
-      {docs.data && !docs.data.length && <Empty title="Chưa có học liệu" />}
-      {!!docs.data?.length && (
+      {docs.data && (
         <div className="table-wrap">
-          <table className="table">
+          <div className="table-head">
+            <Field label="Lọc theo bài"><LessonSelect value={lesson} onChange={setLesson} allowAll /></Field>
+            <span className="muted small" style={{ fontWeight: 800 }}>{docs.data.length} học liệu</span>
+          </div>
+          {!docs.data.length && <Empty title={lesson ? 'Bài này chưa có học liệu' : 'Chưa có học liệu'} />}
+          {!!docs.data.length && <table className="table">
             <thead><tr><th>Tên</th><th>Loại</th><th>Bài</th><th>Trạng thái</th><th>Số đoạn</th><th /></tr></thead>
             <tbody>
               {docs.data.map((d) => (
@@ -76,7 +81,7 @@ export function Documents() {
                 </tr>
               ))}
             </tbody>
-          </table>
+          </table>}
         </div>
       )}
       {view && <ChunksDialog doc={view} onClose={() => setView(null)} />}

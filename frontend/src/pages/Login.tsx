@@ -43,7 +43,7 @@ export function Login() {
       <main className="login-main">
         <div className="login-hero">
           <Mascot size={240} mood="wave" label="Linh vật Mầm vẫy tay" />
-          <h1>Học mỗi ngày, có AI kèm cặp từng bước</h1>
+          <h1>Học mỗi ngày, có <span className="grad-word">AI</span> kèm cặp từng bước</h1>
           <p>Xem bài giảng, trả lời câu hỏi ngay trong video và hỏi Tutor bất cứ lúc nào.</p>
         </div>
 

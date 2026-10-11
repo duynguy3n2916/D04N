@@ -20,6 +20,7 @@ from app.models.documents import AIChunk, AIDocument
 from app.models.transcript import TranscriptSegment, VideoTranscript
 from app.services import jobs
 from app.services.embedding import embed_batched
+from app.services.object_store import get_store
 
 log = logging.getLogger("app.transcription")
 
@@ -320,8 +321,10 @@ def index_transcript(db: Session, tr: VideoTranscript, segments: list[dict]) -> 
 def transcribe_video_job(ctx: "jobs.JobContext", video_id: str, file_path: str, language: str = "vi",
                          lesson_id=None, course_id=None, class_id=None, created_by=None,
                          delete_file: bool = True) -> dict:
+    store = get_store()
     try:
-        segments = transcribe_media(file_path, language, ctx)
+        with store.local_path(file_path) as local:
+            segments = transcribe_media(local, language, ctx)
         if not segments:
             raise AppError(422, "NO_SPEECH", "Không nhận diện được lời nói nào trong file.")
         ctx.progress(0.85, "Đang lưu transcript và index Knowledge Base…")
@@ -331,7 +334,7 @@ def transcribe_video_job(ctx: "jobs.JobContext", video_id: str, file_path: str, 
             created_by=created_by, lesson_id=lesson_id, course_id=course_id, class_id=class_id)
     finally:
         if delete_file:
-            Path(file_path).unlink(missing_ok=True)
+            store.delete(file_path)
     return {"video_id": video_id, "transcript_id": str(tr.id), "version": tr.version,
             "total_segments": len(segments), "knowledge_base": kb}
 

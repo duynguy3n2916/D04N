@@ -9,6 +9,7 @@ from app.models.documents import AIChunk, AIDocument
 from app.services import jobs
 from app.services.chunking import chunk_text
 from app.services.embedding import embed_batched
+from app.services.object_store import get_store
 from app.services.parsers import extract, extract_plain_text
 
 log = logging.getLogger("app.ingestion")
@@ -78,7 +79,11 @@ def ingest_document_job(ctx: "jobs.JobContext", document_id: str, text: str | No
         raise AppError(404, "NOT_FOUND", "Tài liệu không tồn tại.")
     try:
         ctx.progress(0.05, "Đang trích xuất văn bản…")
-        sections = extract_plain_text(text) if text is not None else extract(doc.file_path, doc.source_type)
+        if text is not None:
+            sections = extract_plain_text(text)
+        else:
+            with get_store().local_path(doc.file_path) as local:
+                sections = extract(local, doc.source_type)
         n = index_document(db, doc, sections, ctx)
     except Exception as e:
         db.rollback()

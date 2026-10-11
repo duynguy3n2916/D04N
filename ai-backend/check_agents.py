@@ -21,14 +21,9 @@ def section(title: str) -> None:
 
 def check_config() -> bool:
     section("Cấu hình LLM")
-    provider = settings.llm_provider.lower()
-    print(f"  LLM_PROVIDER = {provider}, model = {settings.current_llm_model()}")
-    key = settings.claude_api_key if provider == "claude" else settings.openai_api_key
-    if provider not in ("claude", "openai"):
-        print(BAD + "LLM_PROVIDER phải là 'claude' hoặc 'openai'.")
-        return False
-    if not key:
-        print(BAD + f"Chưa có khóa API cho provider '{provider}' trong .env -> cả 2 AI đều không chạy được.")
+    print(f"  LLM = openai, model = {settings.current_llm_model()}")
+    if not settings.openai_api_key:
+        print(BAD + "Chưa có OPENAI_API_KEY trong .env -> cả 2 AI đều không chạy được.")
         return False
     print(OK + "Đã có khóa API (không hiển thị).")
     print(f"  Cooldown giữa 2 lần AI hỏi: {settings.agent_cooldown_seconds}s · không hỏi trong ±"

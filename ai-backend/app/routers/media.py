@@ -1,9 +1,8 @@
 """File video bài giảng (tải lên, phát với Range) và file gốc tài liệu (PDF/PPTX cho trình xem slide)."""
 import mimetypes
-from pathlib import Path
 
-from fastapi import APIRouter, Depends, File, Form, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -19,7 +18,9 @@ from app.models.observability import AIJob
 from app.models.transcript import VideoTranscript
 from app.models.video_question import VideoQuestion
 from app.services import jobs
+from app.services.course_admin import link_video_sources
 from app.services.jobs import job_to_dict
+from app.services.object_store import get_store
 from app.services.storage import safe_extension, save_upload
 
 router = APIRouter(prefix="/ai", tags=["media"])
@@ -46,6 +47,7 @@ def _attach_video(db: Session, video: MediaVideo, lesson: Lesson | None) -> None
         db.add(LessonItem(lesson_id=lesson.id, type="video", title=video.title or "Video bài giảng",
                           video_id=video.video_id, duration_seconds=video.duration_seconds,
                           position=(position if position is not None else -1) + 1))
+    link_video_sources(db, video.video_id, lesson)
 
 
 def _duration(path: str) -> float | None:
@@ -96,23 +98,25 @@ def upload_video(video_id: str | None = Form(None), title: str | None = Form(Non
     if v:
         ensure_class_access(user, v.class_id)
     ext = safe_extension(file.filename, VIDEO_TYPES)
-    path, _, size = save_upload(file, "media", ext, settings.max_media_mb)
+    store = get_store()
+    key, _, size = save_upload(file, "media", ext, settings.max_media_mb)
     if v is None:
         v = MediaVideo(video_id=video_id, created_by=user.user_id)
         db.add(v)
-    elif v.file_path and Path(v.file_path).exists() and v.file_path != str(path):
-        Path(v.file_path).unlink(missing_ok=True)
+    elif v.file_path and store.exists(v.file_path) and v.file_path != key:
+        store.delete(v.file_path)
     v.title = title or v.title or (file.filename or video_id)
-    v.file_path, v.size_bytes, v.class_id = str(path), size, class_id or v.class_id
+    v.file_path, v.size_bytes, v.class_id = key, size, class_id or v.class_id
     v.mime = mimetypes.guess_type(f"x.{ext}")[0] or "video/mp4"
-    v.duration_seconds = _duration(str(path))
+    with store.local_path(key) as local:
+        v.duration_seconds = _duration(local)
     if lesson:
         v.class_id = class_id
     _attach_video(db, v, lesson)
     db.commit()
     out = _video_dict(db, v, video_id)
     if transcribe:
-        job = jobs.submit(db, "transcribe_video", {"video_id": video_id, "file_path": str(path), "language": language,
+        job = jobs.submit(db, "transcribe_video", {"video_id": video_id, "file_path": key, "language": language,
                                                    "lesson_id": clean_id(lesson_id), "class_id": v.class_id,
                                                    "course_id": lesson.chapter.course.code if lesson else None,
                                                    "created_by": user.user_id, "delete_file": False},
@@ -152,7 +156,7 @@ def register_video_url(req: VideoUrlIn, user: Principal = Depends(require_teache
 def transcribe_stored(video_id: str, language: str = "vi", user: Principal = Depends(require_teacher),
                       db: Session = Depends(get_db)):
     v = db.get(MediaVideo, video_id)
-    if not v or not v.file_path or not Path(v.file_path).exists():
+    if not v or not v.file_path or not get_store().exists(v.file_path):
         raise AppError(404, "NO_FILE", "Video chưa có file trên server.")
     ensure_class_access(user, v.class_id)
     linked = (db.query(LessonItem).filter(LessonItem.video_id == video_id, LessonItem.type == "video")
@@ -181,23 +185,27 @@ def latest_transcription_job(video_id: str, user: Principal = Depends(require_te
 
 
 @router.get("/media/videos/{video_id}/file")
-def stream_video(video_id: str, user: Principal = Depends(get_user_for_media), db: Session = Depends(get_db)):
+def stream_video(video_id: str, request: Request, user: Principal = Depends(get_user_for_media),
+                 db: Session = Depends(get_db)):
     v = db.get(MediaVideo, video_id)
-    if not v or not v.file_path or not Path(v.file_path).exists() or not user.can_access_class(v.class_id):
+    store = get_store()
+    if not v or not v.file_path or not store.exists(v.file_path) or not user.can_access_class(v.class_id):
         raise AppError(404, "NOT_FOUND", "Không có file video.")
-    return FileResponse(v.file_path, media_type=v.mime or "video/mp4")
+    return store.response(v.file_path, request, media_type=v.mime or "video/mp4")
 
 
 @router.get("/documents/{document_id}/file")
-def document_file(document_id: str, user: Principal = Depends(get_user_for_media), db: Session = Depends(get_db)):
+def document_file(document_id: str, request: Request, user: Principal = Depends(get_user_for_media),
+                  db: Session = Depends(get_db)):
     doc = db.get(AIDocument, parse_uuid(document_id, "document_id"))
-    if not doc or not doc.file_path or not Path(doc.file_path).exists() or not user.can_access_class(doc.class_id):
+    store = get_store()
+    if not doc or not doc.file_path or not store.exists(doc.file_path) or not user.can_access_class(doc.class_id):
         raise AppError(404, "NOT_FOUND", "Không có file gốc của tài liệu.")
     media = {"pdf": "application/pdf",
              "pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
              "docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document"}.get(doc.source_type,
                                                                                                     "application/octet-stream")
-    return FileResponse(doc.file_path, media_type=media, filename=doc.title, content_disposition_type="inline")
+    return store.response(doc.file_path, request, media_type=media, filename=doc.title, inline=True)
 
 
 @router.get("/documents/{document_id}/slides")
@@ -207,11 +215,9 @@ def document_slides(document_id: str, user: Principal = Depends(get_user_for_med
     if not doc or not doc.file_path or not user.can_access_class(doc.class_id):
         raise AppError(404, "NOT_FOUND", "Không tìm thấy tài liệu.")
     from app.services.parsers import extract_pdf, extract_pptx
-    if doc.source_type == "pptx":
-        pages = extract_pptx(doc.file_path)
-    elif doc.source_type == "pdf":
-        pages = extract_pdf(doc.file_path)
-    else:
+    if doc.source_type not in ("pptx", "pdf"):
         raise AppError(400, "NOT_SLIDES", "Chỉ hỗ trợ PDF / PPTX.")
+    with get_store().local_path(doc.file_path) as local:
+        pages = extract_pptx(local) if doc.source_type == "pptx" else extract_pdf(local)
     return {"document_id": str(doc.id), "source_type": doc.source_type, "title": doc.title,
             "slides": [{"page": p.get("page"), "title": p.get("section"), "text": p["text"]} for p in pages]}

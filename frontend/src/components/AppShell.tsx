@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react';
 import { isTeacher, useAuth } from '../lib/auth';
 import { Link } from '../lib/router';
+import { useState } from 'react';
 import { Icon, type IconName } from './Icon';
 import { Logo } from './Mascot';
+import { IconButton, setReduceFx } from './ui';
 
 type NavItem = { to: string; label: string; icon: IconName; match: string; admin?: boolean };
 
@@ -23,6 +25,8 @@ const TEACHER: NavItem[] = [
 export function AppShell({ path, children, aside }: { path: string; children: ReactNode; aside?: ReactNode }) {
   const { user, logout } = useAuth();
   const teacher = isTeacher(user);
+  const [reduceFx, setReduce] = useState(() => document.documentElement.classList.contains('reduce-fx'));
+  const toggleFx = () => { setReduce(!reduceFx); setReduceFx(!reduceFx); };
   const nav = (items: NavItem[]) => items
     .filter((n) => !n.admin || user?.role === 'admin')
     .map((n) => (
@@ -35,7 +39,7 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
   return (
     <div className="shell">
       <nav className="sidenav" aria-label="Điều hướng chính">
-        <Link to={teacher && !path.startsWith('/learn') && !path.startsWith('/profile') ? '/teach/courses' : '/learn'} className="sidenav-logo" aria-label="Trang chủ"><Logo /></Link>
+        <Link to={teacher && !path.startsWith('/learn') && !path.startsWith('/profile') ? '/teach/courses' : '/learn'} className="sidenav-logo" aria-label="Trang chủ"><Logo size={48} /></Link>
         <div className="sidenav-group">
           {teacher && <span className="sidenav-title">Học sinh</span>}
           {nav(STUDENT)}
@@ -52,6 +56,7 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
             <strong>{user?.name || user?.user_id}</strong>
             <span>{user?.role === 'student' ? 'Học sinh' : user?.role === 'teacher' ? 'Giáo viên' : 'Quản trị'}{user?.class_ids?.length ? ` · ${user.class_ids.join(', ')}` : ''}</span>
           </span>
+          <IconButton icon="sparkle" label={reduceFx ? 'Bật hiệu ứng' : 'Giảm hiệu ứng'} active={reduceFx} onClick={toggleFx} />
           <button className="iconbtn" onClick={() => logout()} aria-label="Đăng xuất" title="Đăng xuất"><Icon name="logout" size={20} /></button>
         </div>
       </nav>

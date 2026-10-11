@@ -22,6 +22,7 @@ class Course(Base):
     title = Column(String(300), nullable=False)
     description = Column(Text, nullable=True)
     class_id = Column(String(128), nullable=True, index=True)
+    cover_path = Column(String(512), nullable=True)  # ảnh bìa khóa học, lưu trong storage
     created_by = Column(String(128), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

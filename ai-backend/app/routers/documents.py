@@ -13,6 +13,7 @@ from app.models.documents import AIChunk, AIDocument
 from app.services import jobs
 from app.services.ingestion import create_document, find_duplicate
 from app.services.parsers import SUPPORTED_DOC_TYPES
+from app.services.object_store import get_store
 from app.services.storage import safe_extension, save_upload, sha256_text
 
 router = APIRouter(prefix="/ai", tags=["documents"])
@@ -51,13 +52,13 @@ def index_document(
     ensure_class_access(user, class_id)
     ext = safe_extension(file.filename, SUPPORTED_DOC_TYPES)
     replaces = _get_doc(db, user, replace_document_id) if replace_document_id else None
-    path, digest, _ = save_upload(file, "documents", ext, settings.max_document_mb)
+    key, digest, _ = save_upload(file, "documents", ext, settings.max_document_mb)
     dup = find_duplicate(db, digest, lesson_id, class_id)
     if dup and not replaces:
-        path.unlink(missing_ok=True)
+        get_store().delete(key)
         return JSONResponse(status_code=200, content={**doc_to_dict(dup), "duplicate": True,
                                                       "message": "Tài liệu giống hệt đã được nạp trước đó."})
-    doc = create_document(db, title=file.filename or f"document.{ext}", source_type=ext, file_path=str(path),
+    doc = create_document(db, title=file.filename or f"document.{ext}", source_type=ext, file_path=key,
                           content_hash=digest, course_id=course_id, class_id=class_id, lesson_id=lesson_id,
                           uploaded_by=user.user_id, replaces=replaces)
     job = jobs.submit(db, "ingest_document", {"document_id": str(doc.id)}, created_by=user.user_id)

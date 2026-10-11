@@ -1,6 +1,7 @@
 """Học tập: cây khóa học + trạng thái mở khóa, tiến độ từng mục, XP / chuỗi ngày / bảng xếp hạng, bài kiểm tra cuối bài."""
 import random
 from datetime import datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
@@ -211,12 +212,19 @@ def ensure_unlocked(db: Session, user: Principal, item: LessonItem) -> str:
     return st
 
 
+def cover_url(course: Course) -> str | None:
+    """URL ảnh bìa. Tên file có uuid nên đổi ảnh là đổi URL, trình duyệt không dùng bản cache cũ."""
+    if not course.cover_path:
+        return None
+    return f"/ai/courses/{course.id}/cover?v={Path(course.cover_path).stem}"
+
+
 def course_tree(db: Session, user: Principal, course: Course) -> dict:
     items, progress, status_of, current_id = _status_map(db, user, course)
     done_count = sum(1 for s in status_of.values() if s == "done")
     return {
         "course_id": str(course.id), "code": course.code, "title": course.title, "description": course.description,
-        "class_id": course.class_id, "items_total": len(items), "items_done": done_count,
+        "class_id": course.class_id, "cover_url": cover_url(course), "items_total": len(items), "items_done": done_count,
         "current_item_id": str(current_id) if current_id else None,
         "chapters": [{
             "chapter_id": str(ch.id), "title": ch.title, "position": ch.position,

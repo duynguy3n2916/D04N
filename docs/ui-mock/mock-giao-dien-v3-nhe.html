@@ -1,0 +1,925 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Mầm · Mock v3 (giữ bố cục cũ)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&family=Patrick+Hand&display=swap" rel="stylesheet" />
+<style>
+/* ===== Token: lấy đúng từ frontend/src/styles.css, chỉ thêm vài màu nhấn đã có sẵn ===== */
+:root {
+  --green: #34A30F; --green-dark: #237008; --green-soft: #E8F8DC; --green-line: #7BD34B; --green-text: #2B7A0B; --green-leaf: #5CC02A;
+  --blue: #1683C9; --blue-dark: #0F5E91; --blue-soft: #DDF4FF; --blue-line: #84D8FF; --blue-bright: #1EA7F0;
+  --red: #D63B44; --red-dark: #9E2730; --red-soft: #FDE3E2; --red-line: #F2A3A0; --red-text: #B3261E;
+  --yellow: #FFC93C; --yellow-soft: #FFF6D6; --yellow-text: #8A5A00;
+  --orange: #FF9F1C; --orange-soft: #FFF1DC; --orange-text: #8A5000;
+  --purple: #6B3FA0; --purple-soft: #F2E6FF;
+  --sky: #1E9BF0; --sky-dark: #0F6CB0; --sky-soft: #DDF2FF; --sky-line: #9DD6FF;
+  --sun: #FFC233; --sun-dark: #C98B00; --sun-soft: #FFF5D1;
+  --coral: #FF6B6B; --coral-dark: #C94545; --coral-soft: #FFE4E1; --coral-line: #FFB3AE;
+  --grape: #8B5CF6; --grape-dark: #5B33C2; --grape-soft: #EFE7FF; --grape-line: #CDB8FF;
+  --tangerine: #FF922B; --tangerine-dark: #C2620C; --tangerine-soft: #FFEBD6; --tangerine-line: #FFC48F;
+  --mint: #20C9A6; --mint-dark: #0E8F75; --mint-soft: #D9F7EF;
+  --ink: #3C3C3C; --ink-strong: #2B2B2B; --muted: #6B6B6B; --line: #E5E5E5; --line-2: #EEF0F2; --bg-soft: #F7F7F7;
+  --paper: #FFFDF7; --surface-glass: rgba(255,255,255,.86);
+  --hand: 'Patrick Hand', 'Comic Sans MS', 'Nunito', cursive;
+  --radius: 16px; --radius-sm: 12px;
+  --font: 'Nunito', 'Segoe UI', system-ui, sans-serif;
+  --mono: ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+  --ease: cubic-bezier(.2,.8,.2,1);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; }
+body { font-family: var(--font); color: var(--ink); font-weight: 600; background: var(--paper); -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+h1, h2, h3 { margin: 0; color: var(--ink-strong); font-weight: 900; }
+p { margin: 0; }
+button, input { font-family: inherit; }
+:focus-visible { outline: 3px solid var(--blue-line); outline-offset: 2px; border-radius: 8px; }
+.muted { color: var(--muted); }
+.small { font-size: 14px; }
+
+/* ===== Thanh mock (không thuộc app) ===== */
+.mockbar { position: sticky; top: 0; z-index: 60; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 9px 20px;
+  background: rgba(255,255,255,.9); backdrop-filter: blur(10px); border-bottom: 2px solid var(--line-2); }
+.mb-brand b { display: block; font-size: 15px; font-weight: 900; }
+.mb-brand small { display: block; font-size: 12px; color: var(--muted); font-weight: 700; }
+.mb-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.mb-tab { border: 2px solid transparent; background: none; padding: 7px 12px; border-radius: 12px; font-weight: 800; font-size: 14px; color: var(--muted); cursor: pointer; transition: background .2s, color .2s; }
+.mb-tab:hover { background: var(--green-soft); color: var(--green-text); }
+.mb-tab.active { background: var(--green); color: #fff; box-shadow: 0 3px 0 var(--green-dark); }
+.mb-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 800; cursor: pointer; padding: 6px 12px; border-radius: 12px; border: 2px solid var(--line); background: #fff; }
+.mb-toggle input { accent-color: var(--green); width: 17px; height: 17px; }
+
+/* ===== Màn hình ===== */
+.screen { display: none; min-height: calc(100vh - 56px); }
+.screen.active { display: block; animation: screenIn .45s var(--ease); }
+@keyframes screenIn { from { opacity: 0; transform: translateY(8px); } }
+
+/* ===== Nút: giữ kiểu 3D cũ, thêm ánh sáng quét nhẹ khi hover ===== */
+.btn { position: relative; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: none; border-radius: 14px; cursor: pointer;
+  font-weight: 800; letter-spacing: .5px; text-transform: uppercase; text-decoration: none; white-space: nowrap; color: #fff;
+  transition: transform .08s, filter .15s, box-shadow .15s; }
+.btn::after { content: ""; position: absolute; top: 0; left: -75%; width: 45%; height: 100%; background: linear-gradient(100deg, transparent, rgba(255,255,255,.45), transparent);
+  transform: skewX(-20deg); pointer-events: none; }
+.btn:hover:not(:disabled)::after { animation: sheen .75s var(--ease); }
+@keyframes sheen { to { left: 130%; } }
+.btn:active:not(:disabled) { transform: translateY(3px); }
+.btn:disabled { cursor: not-allowed; }
+.btn-sm { font-size: 13px; padding: 7px 12px; min-height: 38px; border-radius: 11px; }
+.btn-md { font-size: 15px; padding: 10px 18px; min-height: 46px; }
+.btn-lg { font-size: 18px; padding: 12px 26px; min-height: 54px; border-radius: 16px; }
+.btn-green { background: var(--green); box-shadow: 0 4px 0 var(--green-dark); }
+.btn-blue { background: var(--blue); box-shadow: 0 4px 0 var(--blue-dark); }
+.btn-sun { background: var(--yellow); color: var(--yellow-text); box-shadow: 0 4px 0 var(--sun-dark); }
+.btn-ghost { background: #fff; color: var(--blue); border: 2px solid var(--line); box-shadow: 0 4px 0 var(--line); }
+.btn-soft { background: var(--blue-soft); color: var(--blue-dark); border: 2px solid var(--blue-line); box-shadow: 0 4px 0 var(--blue-line); }
+.btn:disabled { background: var(--line); color: #5A5A5A; box-shadow: 0 4px 0 #CFCFCF; border: 0; }
+.btn-ghost:disabled { background: #fff; color: #AFAFAF; box-shadow: 0 4px 0 var(--line); border: 2px solid var(--line); }
+.btn [data-icon] { display: inline-flex; }
+.iconbtn { width: 40px; height: 40px; border-radius: 10px; border: none; background: none; color: var(--muted); cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+.iconbtn:hover { background: #F2F2F2; color: var(--ink); }
+
+/* ===== Icon & linh vật ===== */
+[data-icon] { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+[data-icon] svg { display: block; }
+.mascot { display: inline-block; animation: bob 3.4s ease-in-out infinite; }
+.mascot svg { width: 100%; height: auto; display: block; overflow: visible; }
+.mascot .eyes { transform-box: fill-box; transform-origin: center; animation: blink 5s infinite; }
+.mascot .leaf { transform-box: fill-box; transform-origin: bottom center; animation: sway 3.6s ease-in-out infinite; }
+.mascot .leaf-2 { animation-delay: -1.8s; }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+@keyframes blink { 0%, 90%, 100% { transform: scaleY(1); } 94% { transform: scaleY(.1); } }
+@keyframes sway { 50% { transform: rotate(-5deg); } }
+
+/* ===== Chữ & thẻ ===== */
+.card { border: 2px solid var(--line); border-radius: var(--radius); padding: 18px 20px; background: #fff; box-shadow: 0 4px 0 var(--line); transition: transform .2s var(--ease), box-shadow .2s var(--ease); }
+.card h2 { font-size: 20px; }
+.card-title { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 12px; }
+.card-title a { font-weight: 800; font-size: 14px; text-transform: uppercase; text-decoration: none; color: var(--blue); }
+.hover-lift:hover { transform: translateY(-2px); box-shadow: 0 6px 0 var(--line), 0 14px 22px -16px rgba(0,0,0,.25); }
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 10px; border-radius: 99px; font-size: 13px; font-weight: 800; background: #F2F2F2; color: #5A5A5A; white-space: nowrap; }
+.badge-green { background: var(--green-soft); color: var(--green-text); }
+.badge-blue { background: var(--blue-soft); color: var(--blue-dark); }
+.badge-orange { background: var(--orange-soft); color: var(--orange-text); }
+.badge-red { background: var(--red-soft); color: var(--red-text); }
+.badge-purple { background: var(--purple-soft); color: var(--purple); }
+.badge-yellow { background: var(--yellow-soft); color: var(--yellow-text); }
+.code-chip { font-family: var(--mono); font-weight: 900; letter-spacing: 2px; background: var(--green-soft); color: var(--green-text); border-radius: 8px; padding: 3px 8px; font-size: 13px; }
+.notice { background: var(--yellow-soft); color: var(--yellow-text); border-radius: 12px; padding: 10px 14px; font-weight: 800; font-size: 14px; }
+.hint-box { background: var(--blue-soft); color: var(--blue-dark); border-radius: 12px; padding: 10px 14px; font-weight: 800; text-align: center; font-size: 14px; }
+.errorbox { background: var(--red-soft); color: var(--red-text); border-radius: var(--radius-sm); padding: 12px 16px; font-weight: 700; }
+
+/* ===== Thanh tiến độ: điền dần khi mở, sọc chạy rất nhẹ ===== */
+.progress { width: 100%; height: 14px; background: var(--line); border-radius: 99px; overflow: hidden; }
+.progress > i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, var(--green), #20C9A6 60%, var(--sky)); transform-origin: left; animation: fill 1.1s var(--ease) both; position: relative; overflow: hidden; }
+.progress > i::after { content: ""; position: absolute; inset: 0; background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.28) 0 8px, transparent 8px 16px); animation: stripes 1.2s linear infinite; }
+.progress.yellow > i { background: var(--yellow); }
+.progress.yellow > i::after { background-image: repeating-linear-gradient(45deg, rgba(255,255,255,.4) 0 8px, transparent 8px 16px); }
+@keyframes fill { from { transform: scaleX(0); } }
+@keyframes stripes { to { background-position: 16px 0; } }
+
+/* ===== Lộ trình: khối 3D cũ, thêm hiệu ứng xuất hiện & vòng sáng cho mục hiện tại ===== */
+.login-page { min-height: 100%; display: flex; flex-direction: column; }
+.login-top { display: flex; justify-content: space-between; align-items: center; padding: 22px 40px; max-width: 1120px; width: 100%; margin: 0 auto; }
+.logo { display: inline-flex; align-items: center; gap: 10px; }
+.logo-text { font-size: 28px; font-weight: 900; color: var(--green); letter-spacing: -.5px; }
+.login-main { flex: 1; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 56px; padding: 20px 40px 60px; max-width: 1120px; width: 100%; margin: 0 auto; }
+.login-hero { flex: 1 1 380px; display: flex; flex-direction: column; align-items: center; gap: 20px; text-align: center; animation: fadeUp .7s var(--ease) both; }
+.login-hero h1 { font-size: 40px; line-height: 1.15; max-width: 460px; }
+.login-hero p { font-size: 18px; color: var(--muted); max-width: 430px; line-height: 1.5; }
+.login-form { flex: 1 1 380px; max-width: 440px; display: flex; flex-direction: column; gap: 14px; animation: fadeUp .7s var(--ease) .12s both; }
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } }
+.field { display: flex; flex-direction: column; gap: 6px; font-weight: 800; font-size: 14px; }
+.field input { font-size: 15px; font-weight: 700; color: var(--ink); background: var(--bg-soft); border: 2px solid var(--line); border-radius: 12px; padding: 10px 12px; min-height: 46px; width: 100%; outline: none; transition: border-color .2s, background .2s, box-shadow .2s; }
+.field input:focus { border-color: var(--blue-line); background: #fff; box-shadow: 0 0 0 4px rgba(132,216,255,.35); }
+.linkbtn { border: none; background: none; padding: 0; color: var(--blue); font-weight: 900; cursor: pointer; font-size: inherit; text-decoration: underline; text-underline-offset: 3px; }
+
+.shell { display: flex; min-height: calc(100vh - 56px); }
+.sidenav { flex: 0 0 248px; border-right: 2px solid var(--line); background: var(--surface-glass); padding: 22px 14px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 0; height: calc(100vh - 56px); overflow-y: auto; }
+.sidenav-logo { padding: 0 10px 8px; text-decoration: none; display: block; }
+.sidenav-logo .logo-text { font-size: 30px; }
+.sidenav-logo .mascot { width: 40px; display: inline-block; vertical-align: middle; margin-right: 6px; }
+.sidenav-group { display: flex; flex-direction: column; gap: 4px; }
+.sidenav-title { padding: 6px 14px 2px; font-size: 12px; font-weight: 900; letter-spacing: 1px; text-transform: uppercase; color: #8A8A8A; }
+.nav-item { display: flex; align-items: center; gap: 14px; padding: 9px 14px; border-radius: 14px; border: 2px solid transparent; font-weight: 800; font-size: 15px; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); text-decoration: none; min-height: 48px; cursor: pointer; transition: background .2s, color .2s, transform .2s var(--ease); }
+.nav-item:hover { background: #F2F2F2; color: var(--ink); transform: translateX(3px); }
+.nav-on, .nav-on:hover { background: var(--sky-soft); border-color: var(--sky-line); color: var(--sky-dark); transform: none; }
+.nav-item .ico { border-radius: 10px; padding: 3px; color: #fff; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; }
+.ico-sky { background: var(--sky); } .ico-grape { background: var(--grape); } .ico-tangerine { background: var(--tangerine); }
+.ico-coral { background: var(--coral); } .ico-mint { background: var(--mint); } .ico-green { background: var(--green); } .ico-sun { background: var(--sun-dark); }
+.sidenav-user { margin-top: auto; display: flex; align-items: center; gap: 10px; padding: 10px; border-top: 2px solid var(--line); }
+.sidenav-user-text { display: flex; flex-direction: column; min-width: 0; flex: 1; font-size: 13px; color: var(--muted); }
+.sidenav-user-text strong { color: var(--ink); font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.avatar { width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, var(--coral), var(--tangerine)); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 900; flex: 0 0 38px; }
+
+.shell-main { flex: 999 1 560px; min-width: 0; padding: 28px 36px 60px; }
+.shell-aside { flex: 0 1 360px; min-width: 280px; padding: 28px 28px 40px 4px; display: flex; flex-direction: column; gap: 20px; }
+.page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+.page-head h1 { font-size: 30px; }
+.page-head p { margin-top: 4px; color: var(--muted); }
+
+.col-center { display: flex; flex-direction: column; align-items: center; gap: 18px; }
+.pill { padding: 7px 14px; border-radius: 99px; border: 2px solid var(--line); background: #fff; font-weight: 800; font-size: 14px; color: var(--muted); cursor: pointer; }
+.pill-on { background: var(--blue-soft); border-color: var(--blue-line); color: var(--blue-dark); }
+.course-banner { width: 100%; max-width: 620px; background: linear-gradient(120deg, var(--green) 0%, #22B07D 55%, var(--sky) 100%); border-radius: var(--radius); box-shadow: 0 5px 0 var(--green-dark); color: #fff;
+  padding: 18px 22px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; position: relative; overflow: hidden; }
+.course-banner::before { content: ""; position: absolute; right: -40px; top: -40px; width: 160px; height: 160px; border-radius: 50%; background: rgba(255,255,255,.1); }
+.course-banner small { display: block; font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: #E9FFD9; position: relative; }
+.course-banner strong { display: block; font-size: 23px; font-weight: 900; position: relative; }
+.course-banner .btn { background: rgba(255,255,255,.2); border: 2px solid rgba(255,255,255,.7); box-shadow: 0 4px 0 rgba(0,0,0,.18); position: relative; }
+
+.path { position: relative; width: 100%; max-width: 620px; display: flex; flex-direction: column; align-items: center; gap: 22px; padding: 40px 0 20px; }
+.path-wrap { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 26px; }
+.lesson-sep { width: 100%; max-width: 620px; display: flex; align-items: center; gap: 14px; color: var(--muted); font-weight: 800; font-size: 14px; letter-spacing: .5px; text-transform: uppercase; text-align: center; }
+.lesson-sep::before, .lesson-sep::after { content: ""; flex: 1; height: 2px; background: var(--line); }
+.node-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; position: relative; animation: pop .5s var(--ease) both; animation-delay: var(--d, 0s); }
+@keyframes pop { from { opacity: 0; transform: translateY(10px) scale(.9); } }
+.node { width: 76px; height: 70px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; cursor: pointer; text-decoration: none; color: #fff; position: relative;
+  transition: transform .12s var(--ease), filter .2s; }
+.node:hover { transform: translateY(-3px); filter: brightness(1.05); }
+.node:active { transform: translateY(4px); }
+.node-done { background: var(--green); box-shadow: 0 7px 0 var(--green-dark); }
+.node-current { background: var(--green); box-shadow: 0 7px 0 var(--green-dark); }
+.node-video { background: var(--sky); box-shadow: 0 7px 0 var(--sky-dark); }
+.node-slide { background: var(--grape); box-shadow: 0 7px 0 var(--grape-dark); }
+.node-reading { background: var(--tangerine); box-shadow: 0 7px 0 var(--tangerine-dark); }
+.node-quiz { background: var(--coral); box-shadow: 0 7px 0 var(--coral-dark); }
+.node-locked { background: var(--line); box-shadow: 0 7px 0 #C4C4C4; color: #AFAFAF; cursor: not-allowed; }
+.node-locked:hover { transform: none; filter: none; }
+.node-done svg { animation: tickIn .5s var(--ease) .2s both; }
+@keyframes tickIn { from { transform: scale(.4); opacity: 0; } }
+.node-ring { padding: 8px; border-radius: 50%; border: 6px solid #DDF4D0; position: relative; }
+.node-ring::before, .node-ring::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 3px solid rgba(52,163,15,.45); animation: ping 2.2s var(--ease) infinite; pointer-events: none; }
+.node-ring::after { animation-delay: 1.1s; }
+@keyframes ping { from { transform: scale(.85); opacity: .9; } to { transform: scale(1.35); opacity: 0; } }
+.node-start { background: #fff; border: 2px solid var(--line); border-radius: 12px; padding: 7px 14px; font-weight: 900; font-size: 15px; color: var(--green); letter-spacing: 1px; box-shadow: 0 3px 0 var(--line); animation: bob 1.6s ease-in-out infinite; }
+.node-label { font-size: 13px; font-weight: 800; color: var(--muted); max-width: 170px; text-align: center; line-height: 1.25; }
+.path-mascot { position: absolute; right: 0; top: 120px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.speech { font-family: var(--hand); font-size: 17px; color: var(--ink-strong); background: #fff; border: 2px solid var(--line); border-radius: 14px; padding: 10px 14px; max-width: 190px; line-height: 1.25; }
+
+.stat-row { display: flex; justify-content: space-around; gap: 10px; align-items: center; }
+.stat { display: flex; align-items: center; gap: 8px; font-weight: 900; font-size: 18px; color: var(--ink); }
+.stat-row .stat { background: #fff; border: 2px solid var(--tangerine-line); color: var(--tangerine-dark); border-radius: 99px; padding: 4px 14px 4px 8px; }
+.stat-row .stat + .stat { border-color: var(--sky-line); color: var(--sky-dark); }
+.flame { display: inline-flex; transform-origin: bottom center; animation: flicker 1.8s ease-in-out infinite; }
+@keyframes flicker { 50% { transform: scale(1.07) rotate(-2deg); } }
+.leader { display: flex; align-items: center; gap: 12px; font-weight: 800; font-size: 15px; padding: 6px 8px; border-radius: 12px; transition: background .2s; }
+.leader:hover { background: #F7F7F7; }
+.leader-me { background: var(--blue-soft); box-shadow: inset 4px 0 0 var(--blue-bright); }
+.leader .avatar { width: 34px; height: 34px; flex-basis: 34px; font-size: 15px; }
+.week-bars { display: flex; align-items: flex-end; gap: 10px; height: 140px; }
+
+/* ===== Bài học ===== */
+.lesson { display: flex; flex-direction: column; min-height: calc(100vh - 56px); }
+.lesson-top { position: sticky; top: 56px; z-index: 20; display: flex; align-items: center; gap: 14px; padding: 10px 18px; background: rgba(255,255,255,.94); backdrop-filter: blur(8px); border-bottom: 2px solid var(--line); }
+.lesson-title { flex: 1; min-width: 0; }
+.lesson-title small { display: block; font-size: 12px; font-weight: 800; color: var(--muted); letter-spacing: .6px; text-transform: uppercase; }
+.lesson-title strong { display: block; font-size: 19px; font-weight: 900; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.lesson-top-stats { display: flex; align-items: center; gap: 12px; }
+.lesson-body { display: grid; grid-template-columns: 250px minmax(0, 1fr) 340px; flex: 1; }
+.outline { padding: 18px 14px; border-right: 2px solid var(--line); background: #fff; display: flex; flex-direction: column; gap: 6px; position: sticky; top: 112px; align-self: start; height: calc(100vh - 112px); overflow-y: auto; }
+.outline-title { font-size: 12px; font-weight: 900; letter-spacing: 1px; color: #8A8A8A; padding: 0 8px 6px; }
+.outline-item { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 14px; border: 2px solid transparent; text-decoration: none; color: var(--ink); transition: background .2s, transform .2s var(--ease); }
+.outline-item:hover { background: #F5F5F5; transform: translateX(3px); }
+.outline-item strong { display: block; font-size: 14px; font-weight: 800; line-height: 1.2; }
+.outline-item .sub { display: block; font-size: 12px; color: var(--muted); font-weight: 700; }
+.outline-on, .outline-on:hover { background: var(--sky-soft); border-color: var(--sky-line); transform: none; }
+.outline-locked { opacity: .5; }
+.type-ico { width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; color: #fff; flex: 0 0 38px; }
+.ti-video { background: var(--sky); } .ti-slide { background: var(--grape); } .ti-reading { background: var(--tangerine); } .ti-quiz { background: var(--coral); } .ti-lock { background: #E5E7EB; color: #9CA3AF; }
+.done-dot { margin-left: auto; width: 22px; height: 22px; border-radius: 50%; background: var(--green); color: #fff; display: grid; place-items: center; flex: 0 0 22px; }
+.lesson-content { min-width: 0; padding: 22px 26px 40px; display: flex; flex-direction: column; gap: 16px; }
+
+.player { position: relative; aspect-ratio: 16 / 9; border-radius: 18px; overflow: hidden; background: linear-gradient(135deg, #1F2A33, #2F3A66); box-shadow: 0 10px 0 rgba(31,42,51,.12); }
+.slide-card { position: absolute; left: 8%; top: 12%; width: 60%; padding: 18px 20px; border-radius: 14px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14);
+  font-family: var(--mono); font-size: clamp(12px, 1.5vw, 16px); line-height: 1.7; color: #E2E8F0; }
+.slide-card .k { color: #FF92B0; } .slide-card .f { color: #7DD3FC; } .slide-card .s { color: #A7F3D0; } .slide-card .c { color: #94A3B8; }
+.player-mascot { position: absolute; right: 4%; top: 8%; width: 96px; opacity: .95; }
+.subs { position: absolute; left: 50%; bottom: 80px; transform: translateX(-50%); max-width: 84%; padding: 6px 14px; border-radius: 10px; background: rgba(0,0,0,.6); color: #fff; font-weight: 700; font-size: clamp(13px, 1.4vw, 16px); white-space: nowrap; text-align: center; }
+.controls { position: absolute; left: 0; right: 0; bottom: 0; padding: 22px 14px 12px; background: linear-gradient(transparent, rgba(0,0,0,.72)); display: flex; align-items: center; gap: 12px; color: #fff; }
+.play-btn { width: 42px; height: 42px; border-radius: 50%; border: none; background: var(--green); box-shadow: 0 3px 0 var(--green-dark); color: #fff; cursor: pointer; display: grid; place-items: center; flex: 0 0 42px; transition: transform .1s; }
+.play-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--green-dark); }
+.time { font-family: var(--mono); font-size: 14px; font-weight: 700; white-space: nowrap; }
+.seek { position: relative; flex: 1; height: 8px; border-radius: 99px; background: rgba(255,255,255,.25); }
+.seek > i { position: absolute; left: 0; top: 0; bottom: 0; width: var(--p); border-radius: 99px; background: var(--green-leaf); transition: width .08s linear; }
+.seek .q-mark { position: absolute; top: 50%; left: 40.6%; width: 14px; height: 14px; transform: translate(-50%, -50%) rotate(45deg); background: var(--yellow); border-radius: 3px; box-shadow: 0 0 0 3px rgba(255,201,60,.3); }
+.quiz-pop { position: absolute; left: 50%; top: 50%; width: min(520px, 92%); padding: 18px 20px; border-radius: 18px; background: #fff; color: var(--ink); box-shadow: 0 24px 40px -18px rgba(0,0,0,.6);
+  opacity: 0; pointer-events: none; transform: translate(-50%, -42%); transition: opacity .25s, transform .35s var(--ease); z-index: 5; }
+.quiz-pop.show { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%); }
+.quiz-head { display: flex; align-items: center; gap: 10px; }
+.quiz-head .mascot { width: 44px; flex: 0 0 44px; }
+.quiz-pop h3 { font-size: 17px; line-height: 1.3; margin-top: 6px; }
+.opt { width: 100%; display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 10px 12px; border-radius: 12px; border: 2px solid var(--line); background: #fff; font: 800 15px var(--font); color: var(--ink); text-align: left; cursor: pointer; transition: border-color .15s, background .15s, transform .15s var(--ease); }
+.opt:hover { border-color: var(--blue-line); transform: translateX(3px); }
+.opt .letter { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; background: var(--bg-soft); color: var(--muted); font-weight: 900; flex: 0 0 28px; }
+.opt.sel { border-color: var(--blue); background: var(--blue-soft); }
+.opt.sel .letter { background: var(--blue); color: #fff; }
+.opt.right { border-color: var(--green); background: var(--green-soft); color: var(--green-text); }
+.opt.right .letter { background: var(--green); color: #fff; }
+.opt.wrong { border-color: var(--red); background: var(--red-soft); color: var(--red-text); animation: shake .4s; }
+.opt.wrong .letter { background: var(--red); color: #fff; }
+@keyframes shake { 20%, 60% { transform: translateX(-5px); } 40%, 80% { transform: translateX(5px); } }
+.qfeed { margin-top: 10px; padding: 10px 12px; border-radius: 12px; font-weight: 700; font-size: 14px; line-height: 1.5; animation: fadeUp .35s var(--ease); }
+.qfeed.ok { background: var(--green-soft); color: var(--green-text); }
+.qfeed.no { background: var(--yellow-soft); color: var(--yellow-text); }
+.qactions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.xp-float { position: absolute; left: 50%; top: 40%; z-index: 6; font-weight: 900; font-size: 28px; color: var(--yellow); text-shadow: 0 3px 0 var(--sun-dark); pointer-events: none; transform: translateX(-50%); animation: floatUp 1.5s ease-out forwards; }
+@keyframes floatUp { 0% { opacity: 0; transform: translate(-50%, 16px); } 15% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -90px); } }
+.confetti { position: fixed; top: -20px; width: 8px; height: 12px; border-radius: 2px; z-index: 400; pointer-events: none; animation: fall 2.4s cubic-bezier(.3,.6,.6,1) forwards; }
+@keyframes fall { to { transform: translate(var(--x), 105vh) rotate(540deg); opacity: .8; } }
+
+.lesson-meta { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.lesson-meta h2 { font-size: 24px; }
+.tags { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+
+.tutor { border-left: 2px solid var(--line); background: #fff; display: flex; flex-direction: column; min-height: calc(100vh - 112px); position: sticky; top: 112px; align-self: start; height: calc(100vh - 112px); }
+.tutor-head { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-bottom: 2px solid var(--line); }
+.tutor-head .mascot { width: 40px; flex: 0 0 40px; }
+.tutor-head strong { display: block; font-size: 16px; font-weight: 900; }
+.tutor-head small { font-size: 12px; color: var(--muted); font-weight: 700; }
+.tutor-msgs { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.bubble { max-width: 90%; padding: 10px 13px; border-radius: 16px; font-size: 15px; line-height: 1.5; font-weight: 600; animation: fadeUp .35s var(--ease) both; }
+.b-ai { background: #F5F7FA; border: 2px solid var(--line); align-self: flex-start; border-bottom-left-radius: 6px; }
+.b-me { background: var(--green-soft); color: var(--green-text); align-self: flex-end; border-bottom-right-radius: 6px; font-weight: 700; }
+.b-ai b { color: var(--blue-dark); }
+.src-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.src { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 99px; background: var(--blue-soft); color: var(--blue-dark); font-size: 12px; font-weight: 800; border: none; cursor: pointer; transition: transform .15s; }
+.src:hover { transform: translateY(-2px); }
+.typing { display: none; align-self: flex-start; gap: 5px; padding: 12px 14px; border-radius: 16px; background: #F5F7FA; border: 2px solid var(--line); }
+.typing.show { display: inline-flex; }
+.typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: dot 1s infinite; }
+.typing i:nth-child(2) { animation-delay: .15s; } .typing i:nth-child(3) { animation-delay: .3s; }
+@keyframes dot { 0%, 60%, 100% { transform: translateY(0); opacity: .4; } 30% { transform: translateY(-5px); opacity: 1; } }
+.tutor-input { display: flex; gap: 8px; padding: 12px; border-top: 2px solid var(--line); }
+.tutor-input input { flex: 1; min-width: 0; font: 700 15px var(--font); padding: 10px 12px; border: 2px solid var(--line); border-radius: 12px; outline: none; background: var(--bg-soft); transition: border-color .2s, background .2s; }
+.tutor-input input:focus { border-color: var(--blue-line); background: #fff; }
+
+/* ===== Giáo viên: danh sách khóa học ===== */
+.course-grid { width: 100%; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.course-card { border: 2px solid var(--line); border-radius: var(--radius); background: #fff; box-shadow: 0 4px 0 var(--line); padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; transition: transform .2s var(--ease), box-shadow .2s var(--ease), border-color .2s; }
+.course-card:hover { transform: translateY(-3px); border-color: var(--green-line); box-shadow: 0 7px 0 var(--green-line); }
+.course-card h3 { font-size: 18px; }
+.course-card .row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 800; color: var(--muted); }
+.kpi-row { display: flex; gap: 12px; flex-wrap: wrap; }
+.kpi { flex: 1 1 160px; border: 2px solid var(--line); border-radius: var(--radius); background: #fff; padding: 14px 16px; box-shadow: 0 4px 0 var(--line); }
+.kpi .num { font-size: 30px; font-weight: 900; color: var(--ink-strong); font-variant-numeric: tabular-nums; }
+.kpi .lbl { font-size: 13px; font-weight: 800; color: var(--muted); }
+.kpi.hl { border-color: var(--green-line); }
+.kpi.hl .num { color: var(--green-text); }
+
+/* ===== Hiệu ứng: bảng duyệt ===== */
+.fx-wrap { max-width: 920px; margin: 0 auto; padding: 32px 28px 60px; display: flex; flex-direction: column; gap: 18px; }
+.fx-wrap h1 { font-size: 30px; }
+.fx-list { display: flex; flex-direction: column; gap: 10px; }
+.fx { display: flex; gap: 14px; align-items: flex-start; padding: 14px 16px; border-radius: var(--radius); border: 2px solid var(--line); background: #fff; cursor: pointer; transition: border-color .2s, background .2s; }
+.fx:hover { border-color: var(--green-line); }
+.fx input { width: 20px; height: 20px; margin-top: 3px; accent-color: var(--green); flex: 0 0 20px; }
+.fx.is-ok { border-color: var(--green); background: #F6FCF1; }
+.fx h3 { font-size: 16px; }
+.fx p { font-size: 14px; color: var(--muted); font-weight: 700; margin-top: 3px; line-height: 1.45; }
+.fx-count { font-weight: 900; color: var(--green-text); background: var(--green-soft); padding: 6px 14px; border-radius: 99px; align-self: flex-start; }
+
+/* Giảm hiệu ứng: tắt chuyển động, giữ nguyên bố cục */
+body.no-fx *, body.no-fx *::before, body.no-fx *::after { animation: none !important; transition: none !important; }
+body.no-fx .confetti, body.no-fx .xp-float { display: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 1000px) {
+  .lesson-body { grid-template-columns: 220px minmax(0, 1fr); }
+  .tutor { grid-column: 1 / -1; position: static; height: auto; min-height: 320px; border-left: 0; border-top: 2px solid var(--line); }
+  .shell-aside { flex-basis: 300px; }
+}
+@media (max-width: 860px) {
+  .mockbar { padding: 8px 12px; }
+  .mb-tabs { margin-left: 0; width: 100%; }
+  .login-main { gap: 28px; padding: 20px 18px 40px; }
+  .login-hero h1 { font-size: 32px; }
+  .shell { flex-direction: column; }
+  .sidenav { position: static; flex: none; width: auto; height: auto; border-right: 0; border-bottom: 2px solid var(--line); }
+  .shell-main { padding: 18px 14px 40px; }
+  .shell-aside { padding: 0 14px 30px; min-width: 0; }
+  .path-mascot { display: none; }
+  .lesson-body { grid-template-columns: 1fr; }
+  .outline { position: static; height: auto; border-right: 0; border-bottom: 2px solid var(--line); }
+  .lesson-top { flex-wrap: wrap; top: 0; }
+  .lesson-top-stats { order: 3; width: 100%; }
+  .lesson-content { padding: 14px; }
+}
+</style>
+</head>
+<body>
+
+<header class="mockbar">
+  <div class="mb-brand">
+    <b>Mầm · Mock v3</b>
+    <small>Giữ bố cục và màu cũ · chỉ thêm hiệu ứng nhẹ và điểm nhấn</small>
+  </div>
+  <nav class="mb-tabs" aria-label="Chọn màn hình">
+    <button class="mb-tab active" data-go="login">1 · Đăng nhập</button>
+    <button class="mb-tab" data-go="learn">2 · Lộ trình</button>
+    <button class="mb-tab" data-go="lesson">3 · Bài học</button>
+    <button class="mb-tab" data-go="teach">4 · Giáo viên</button>
+    <button class="mb-tab" data-go="fx">5 · Danh sách hiệu ứng</button>
+  </nav>
+  <label class="mb-toggle"><input type="checkbox" id="fxToggle" /> Giảm hiệu ứng</label>
+</header>
+
+<!-- ============ 1 · ĐĂNG NHẬP ============ -->
+<section class="screen active" id="login" data-title="Đăng nhập">
+  <div class="login-page">
+    <header class="login-top">
+      <span class="logo"><span data-mascot data-mood="happy" style="width:38px"></span><span class="logo-text">mầm</span></span>
+      <span class="muted" style="font-weight:800;text-transform:uppercase;letter-spacing:.6px;font-size:14px">Trợ lý AI học tập</span>
+    </header>
+    <main class="login-main">
+      <div class="login-hero">
+        <div data-mascot data-mood="wave" style="width:230px"></div>
+        <h1>Học mỗi ngày, có AI kèm cặp từng bước</h1>
+        <p>Xem bài giảng, trả lời câu hỏi ngay trong video và hỏi Tutor bất cứ lúc nào.</p>
+      </div>
+      <form class="login-form" onsubmit="return false" aria-label="Đăng nhập">
+        <h2 style="font-size:28px">Đăng nhập</h2>
+        <label class="field"><span>Tên đăng nhập hoặc email</span><input placeholder="Ví dụ: sv-01" autocomplete="username" /></label>
+        <label class="field"><span>Mật khẩu</span><input type="password" placeholder="Nhập mật khẩu" autocomplete="current-password" /></label>
+        <button class="btn btn-green btn-lg" type="button" style="width:100%">Đăng nhập</button>
+        <p class="muted center" style="font-weight:700">Chưa có tài khoản? <button type="button" class="linkbtn">Tạo tài khoản học sinh</button></p>
+        <p class="muted small center" style="font-weight:700">Quên mật khẩu? Nhờ giáo viên hoặc quản trị viên cấp lại mật khẩu tạm.</p>
+        <p class="hint-box small">Tài khoản demo do giáo viên cung cấp.</p>
+      </form>
+    </main>
+  </div>
+</section>
+
+<!-- ============ 2 · LỘ TRÌNH ============ -->
+<section class="screen" id="learn" data-title="Lộ trình học">
+  <div class="shell">
+    <nav class="sidenav" aria-label="Điều hướng chính">
+      <a class="sidenav-logo" href="#learn" aria-label="Trang chủ"><span data-mascot data-mood="happy"></span><span class="logo-text">mầm</span></a>
+      <div class="sidenav-group">
+        <span class="sidenav-title">Học sinh</span>
+        <a class="nav-item nav-on"><span class="ico ico-sky" data-icon="home" data-size="20"></span>Học</a>
+        <a class="nav-item"><span class="ico ico-grape" data-icon="user" data-size="20"></span>Hồ sơ</a>
+      </div>
+      <div class="sidenav-user">
+        <span class="avatar">A</span>
+        <span class="sidenav-user-text"><strong>Nguyễn Văn An</strong><span>Học sinh · CS101</span></span>
+      </div>
+    </nav>
+
+    <main class="shell-main">
+      <div class="col-center">
+        <div class="row" style="width:100%;max-width:620px;justify-content:flex-start;gap:8px">
+          <button class="pill pill-on">Lập trình hướng đối tượng</button>
+          <button class="pill">Cơ sở dữ liệu</button>
+        </div>
+        <div class="row" style="width:100%;max-width:620px;justify-content:space-between">
+          <div>
+            <h1 style="font-size:26px">Lập trình hướng đối tượng</h1>
+            <span class="muted small">3/8 mục đã hoàn thành</span>
+          </div>
+          <div style="width:200px"><div class="progress"><i style="width:37.5%"></i></div></div>
+        </div>
+
+        <section class="course-banner hover-lift">
+          <div>
+            <small>Chương 1 · Nhập môn</small>
+            <strong>Bài 1: Lớp và đối tượng</strong>
+          </div>
+          <a class="btn btn-md" href="#lesson" data-go-link="lesson">Mở bài</a>
+        </section>
+
+        <div class="path">
+          <div class="path-wrap">
+            <div class="node-wrap" style="margin-left:-90px;--d:.05s">
+              <a class="node node-video node-done" href="#lesson" aria-label="Video: Lớp là gì? — đã xong"><span data-icon="check" data-size="34" data-stroke="3.2"></span></a>
+              <span class="node-label">Lớp là gì?</span>
+            </div>
+            <div class="node-wrap" style="margin-left:-130px;--d:.15s">
+              <a class="node node-slide node-done" href="#lesson" aria-label="Slide: Đối tượng và thuộc tính — đã xong"><span data-icon="check" data-size="34"></span></a>
+              <span class="node-label">Đối tượng &amp; thuộc tính</span>
+            </div>
+            <div class="node-wrap" style="margin-left:-70px;--d:.25s">
+              <span class="node-start">BẮT ĐẦU</span>
+              <div class="node-ring"><a class="node node-current" href="#lesson" aria-label="Video: Lớp và đối tượng — đang học"><span data-icon="play" data-size="32"></span></a></div>
+              <span class="node-label">Lớp và đối tượng</span>
+            </div>
+            <div class="node-wrap" style="margin-left:30px;--d:.35s">
+              <span class="node node-reading node-locked" role="img" aria-label="Bài đọc — chưa mở khóa"><span data-icon="book" data-size="30"></span></span>
+              <span class="node-label">Kế thừa &amp; đa hình</span>
+            </div>
+            <div class="node-wrap" style="margin-left:90px;--d:.45s">
+              <span class="node node-quiz node-locked" role="img" aria-label="Kiểm tra — chưa mở khóa"><span data-icon="lock" data-size="28"></span></span>
+              <span class="node-label">Kiểm tra cuối bài</span>
+            </div>
+          </div>
+          <div class="path-mascot" aria-hidden="true">
+            <div class="speech">Mình học tiếp nhé! Có gì khó cứ bấm “Hỏi Tutor AI”.</div>
+            <div data-mascot data-mood="happy" style="width:110px"></div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="shell-aside">
+      <div class="stat-row">
+        <span class="stat" title="Chuỗi ngày học"><span class="flame" data-icon="flame" data-size="30"></span><span data-count="5">5</span> ngày</span>
+        <span class="stat" title="Tổng điểm kinh nghiệm"><span data-icon="gem" data-size="26"></span><span data-count="1240">1.240</span> XP</span>
+      </div>
+
+      <section class="card col" style="gap:12px">
+        <div class="card-title" style="margin-bottom:0"><h2>Mục tiêu hôm nay</h2><a href="#learn">Sửa</a></div>
+        <div class="row" style="flex-wrap:nowrap">
+          <span data-icon="bolt" data-size="40" style="color:var(--yellow)"></span>
+          <div class="col" style="flex:1;gap:6px">
+            <strong>Học 50 XP</strong>
+            <div class="progress yellow" style="height:16px"><i style="width:72%"></i></div>
+            <span class="muted small">36 / 50 XP</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="card col" style="gap:8px">
+        <h2>Bảng xếp hạng tuần</h2>
+        <div class="leader"><span style="width:22px;color:var(--muted)">1</span><span class="avatar" style="background:#8B5CF6">M</span><span class="grow">Minh Anh</span><span class="muted">412 XP</span></div>
+        <div class="leader"><span style="width:22px;color:var(--muted)">2</span><span class="avatar" style="background:#E8590C">Q</span><span class="grow">Quốc Bảo</span><span class="muted">388 XP</span></div>
+        <div class="leader"><span style="width:22px;color:var(--muted)">3</span><span class="avatar" style="background:#1683C9">T</span><span class="grow">Thu Hà</span><span class="muted">351 XP</span></div>
+        <div class="leader leader-me"><span style="width:22px;color:var(--muted)">4</span><span class="avatar" style="background:#34A30F">A</span><span class="grow">An (bạn)</span><span class="muted">298 XP</span></div>
+      </section>
+    </aside>
+  </div>
+</section>
+
+<!-- ============ 3 · BÀI HỌC + TUTOR ============ -->
+<section class="screen" id="lesson" data-title="Bài học">
+  <div class="lesson">
+    <header class="lesson-top">
+      <button class="iconbtn" aria-label="Về lộ trình học"><span data-icon="chevron" data-size="22"></span></button>
+      <div class="lesson-title">
+        <small>Chương 1 · Nhập môn</small>
+        <strong>Bài 1: Lớp và đối tượng</strong>
+      </div>
+      <div class="lesson-top-stats">
+        <span class="muted" style="font-weight:800;font-size:15px">3/8 mục</span>
+        <div style="width:150px"><div class="progress" style="height:12px"><i style="width:37.5%"></i></div></div>
+        <span class="stat" style="font-size:16px"><span class="flame" data-icon="flame" data-size="22"></span>5</span>
+        <span class="stat" style="font-size:16px"><span data-icon="gem" data-size="20"></span>1.240</span>
+      </div>
+      <button class="btn btn-soft btn-sm" id="tutorBtn" aria-pressed="true"><span data-icon="sparkle" data-size="18"></span> Hỏi Tutor AI</button>
+    </header>
+
+    <div class="lesson-body">
+      <nav class="outline" aria-label="Nội dung bài học">
+        <span class="outline-title">NỘI DUNG BÀI HỌC</span>
+        <a class="outline-item outline-on" href="#lesson"><span class="type-ico ti-video"><span data-icon="play" data-size="18"></span></span><span><strong>Lớp và đối tượng</strong><span class="sub">Video · 05:30</span></span></a>
+        <a class="outline-item" href="#lesson"><span class="type-ico ti-slide"><span data-icon="slide" data-size="18"></span></span><span><strong>Đối tượng &amp; thuộc tính</strong><span class="sub">Slide · 12 trang</span></span><span class="done-dot"><span data-icon="check" data-size="13" data-stroke="3.4"></span></span></a>
+        <a class="outline-item" href="#lesson"><span class="type-ico ti-reading"><span data-icon="book" data-size="18"></span></span><span><strong>Kế thừa &amp; đa hình</strong><span class="sub">Bài đọc · 6 phút</span></span></a>
+        <span class="outline-item outline-locked"><span class="type-ico ti-lock"><span data-icon="lock" data-size="18"></span></span><span><strong>Kiểm tra cuối bài</strong><span class="sub">Hoàn thành mục trước để mở</span></span></span>
+      </nav>
+
+      <main class="lesson-content">
+        <div class="player">
+          <div class="slide-card" aria-hidden="true">
+<span class="c"># Mỗi đối tượng là một thể hiện của lớp</span>
+<span class="k">class</span> <span class="f">Xe</span>:
+    <span class="k">def</span> <span class="f">__init__</span>(self, hang, mau):
+        self.hang = hang
+        self.mau = mau
+
+xe_do = <span class="f">Xe</span>(<span class="s">"Honda"</span>, <span class="s">"đỏ"</span>)
+          </div>
+          <div class="player-mascot"><div data-mascot data-mood="think"></div></div>
+          <div class="subs" id="subs">Hôm nay mình học về lớp và đối tượng.</div>
+
+          <div class="quiz-pop" id="quiz" role="dialog" aria-label="Câu hỏi của bài giảng">
+            <div class="quiz-head">
+              <div data-mascot data-mood="think"></div>
+              <div>
+                <span class="badge badge-purple">Câu hỏi của bài giảng</span>
+                <h3>Cơ chế nào cho phép lớp con tái sử dụng thuộc tính và phương thức của lớp cha?</h3>
+              </div>
+            </div>
+            <div id="opts"></div>
+            <div id="feed"></div>
+            <div class="qactions">
+              <button class="btn btn-ghost btn-sm" id="hintBtn">Gợi ý</button>
+              <button class="btn btn-blue btn-sm" id="checkBtn" disabled>Kiểm tra</button>
+              <button class="btn btn-green btn-sm" id="resumeBtn" style="display:none">Xem tiếp video</button>
+            </div>
+          </div>
+
+          <div class="controls">
+            <button class="play-btn" id="playBtn" aria-label="Phát video"></button>
+            <span class="time" id="time">01:38 / 05:30</span>
+            <div class="seek"><i id="seekFill" style="--p:29.7%"></i><span class="q-mark" title="Câu hỏi tại 02:14"></span></div>
+            <span class="badge" style="background:rgba(255,255,255,.18);color:#fff">1x</span>
+          </div>
+        </div>
+
+        <div class="lesson-meta">
+          <div>
+            <h2>Lớp và đối tượng</h2>
+            <div class="tags">
+              <span class="badge badge-blue">Video · 05:30</span>
+              <span class="badge badge-green">Có phụ đề</span>
+              <span class="badge badge-yellow">Có câu hỏi tự dừng</span>
+            </div>
+          </div>
+          <div class="row">
+            <button class="btn btn-ghost btn-sm">Ghi chú</button>
+            <button class="btn btn-ghost btn-sm">Chế độ rộng</button>
+          </div>
+        </div>
+      </main>
+
+      <aside class="tutor" id="tutor">
+        <div class="tutor-head">
+          <div data-mascot data-mood="happy"></div>
+          <div>
+            <strong>Tutor AI</strong>
+            <small>Đang xem: Video · Lớp và đối tượng</small>
+          </div>
+        </div>
+        <div class="tutor-msgs" id="msgs">
+          <div class="bubble b-ai">Chào bạn! Mình là Tutor của bài <b>Lớp và đối tượng</b>. Hỏi bất cứ điều gì trong bài nhé.</div>
+          <div class="bubble b-me">Lớp và đối tượng khác nhau thế nào?</div>
+          <div class="bubble b-ai">
+            <b>Lớp</b> là bản thiết kế (ví dụ: bản vẽ xe), còn <b>đối tượng</b> là thể hiện cụ thể được tạo từ lớp đó (chiếc xe đỏ).
+            <div class="src-row">
+              <button class="src"><span data-icon="play" data-size="12"></span> Video · tua tới 01:52</button>
+              <button class="src"><span data-icon="slide" data-size="12"></span> Slide · trang 3</button>
+            </div>
+          </div>
+          <div class="typing" id="typing"><i></i><i></i><i></i></div>
+        </div>
+        <form class="tutor-input" id="tutorForm">
+          <input id="tutorIn" placeholder="Hỏi Tutor về bài học…" aria-label="Nhập câu hỏi cho Tutor" />
+          <button class="btn btn-green btn-sm" type="submit" aria-label="Gửi"><span data-icon="send" data-size="18"></span></button>
+        </form>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 4 · GIÁO VIÊN ============ -->
+<section class="screen" id="teach" data-title="Giáo viên">
+  <div class="shell">
+    <nav class="sidenav" aria-label="Điều hướng giáo viên">
+      <a class="sidenav-logo" href="#teach"><span data-mascot data-mood="happy"></span><span class="logo-text">mầm</span></a>
+      <div class="sidenav-group">
+        <span class="sidenav-title">Giáo viên</span>
+        <a class="nav-item nav-on"><span class="ico ico-green" data-icon="list" data-size="20"></span>Khóa học</a>
+        <a class="nav-item"><span class="ico ico-sky" data-icon="video" data-size="20"></span>Video</a>
+        <a class="nav-item"><span class="ico ico-coral" data-icon="question" data-size="20"></span>Câu hỏi</a>
+        <a class="nav-item"><span class="ico ico-tangerine" data-icon="book" data-size="20"></span>Học liệu</a>
+        <a class="nav-item"><span class="ico ico-grape" data-icon="users" data-size="20"></span>Học sinh &amp; lớp</a>
+        <a class="nav-item"><span class="ico ico-mint" data-icon="chart" data-size="20"></span>Đánh giá</a>
+      </div>
+      <div class="sidenav-user">
+        <span class="avatar" style="background:linear-gradient(135deg,#8B5CF6,#1E9BF0)">L</span>
+        <span class="sidenav-user-text"><strong>Cô Lan</strong><span>Giáo viên · CS101</span></span>
+      </div>
+    </nav>
+
+    <main class="shell-main">
+      <div class="page-head">
+        <div>
+          <h1>Khóa học</h1>
+          <p>3 khóa · 48 học sinh · 12 câu hỏi đang chờ duyệt</p>
+        </div>
+        <div class="row">
+          <button class="btn btn-ghost btn-sm">+ Khóa học mới</button>
+          <button class="btn btn-sun btn-sm"><span data-icon="sparkle" data-size="16"></span> Soạn câu hỏi bằng AI</button>
+        </div>
+      </div>
+
+      <div class="kpi-row" style="margin-bottom:20px">
+        <div class="kpi"><div class="num" data-count="48">48</div><div class="lbl">Học sinh</div></div>
+        <div class="kpi"><div class="num" data-count="3">3</div><div class="lbl">Khóa học</div></div>
+        <div class="kpi hl"><div class="num" data-count="12">12</div><div class="lbl">Câu hỏi chờ duyệt</div></div>
+        <div class="kpi"><div class="num" data-count="4.6" data-dec="1">4,6</div><div class="lbl">Điểm Tutor trung bình</div></div>
+      </div>
+
+      <div class="course-grid">
+        <article class="course-card">
+          <h3>Lập trình hướng đối tượng</h3>
+          <div class="row"><span class="code-chip">OOP-01</span><span>24 học sinh</span></div>
+          <div><div class="row" style="margin-bottom:6px"><span>Tiến độ lớp</span><span>62%</span></div><div class="progress"><i style="width:62%"></i></div></div>
+        </article>
+        <article class="course-card">
+          <h3>Cấu trúc dữ liệu</h3>
+          <div class="row"><span class="code-chip">DSA-02</span><span>16 học sinh</span></div>
+          <div><div class="row" style="margin-bottom:6px"><span>Tiến độ lớp</span><span>41%</span></div><div class="progress"><i style="width:41%"></i></div></div>
+        </article>
+        <article class="course-card">
+          <h3>Cơ sở dữ liệu</h3>
+          <div class="row"><span class="code-chip">DB-03</span><span>8 học sinh</span></div>
+          <div><div class="row" style="margin-bottom:6px"><span>Tiến độ lớp</span><span>18%</span></div><div class="progress yellow"><i style="width:18%"></i></div></div>
+        </article>
+      </div>
+    </main>
+  </div>
+</section>
+
+<!-- ============ 5 · DANH SÁCH HIỆU ỨNG ============ -->
+<section class="screen" id="fx" data-title="Danh sách hiệu ứng">
+  <div class="fx-wrap">
+    <h1>Hiệu ứng đề xuất</h1>
+    <p class="muted" style="font-weight:700;line-height:1.5">Bố cục, màu thương hiệu và nội dung giữ như cũ. Tích vào những mục bạn đồng ý, rồi gửi lại danh sách để mình áp dụng vào code.</p>
+    <span class="fx-count" id="fxCount">Đã duyệt 0/10</span>
+    <div class="fx-list" id="fxList"></div>
+  </div>
+</section>
+
+<script>
+/* ---------- Icon: cùng bộ nét với app (stroke 2.2) ---------- */
+const ICON = {
+  home: '<path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z"/>',
+  user: '<circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/>',
+  list: '<path d="M9 6h12M9 12h12M9 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
+  video: '<rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="m15.5 10 6-3.5v11l-6-3.5"/>',
+  play: '<path d="M7 4.5v15l13-7.5z" fill="currentColor"/>',
+  pause: '<rect x="6" y="5" width="4.5" height="14" rx="1.5" fill="currentColor"/><rect x="13.5" y="5" width="4.5" height="14" rx="1.5" fill="currentColor"/>',
+  book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 19V5"/>',
+  slide: '<rect x="3" y="4" width="18" height="13" rx="2.5"/><path d="M8 21h8M12 17v4"/>',
+  star: '<path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1 6.3L12 17.3 6.5 20.4l1-6.3-4.5-4.4 6.2-.9z"/>',
+  lock: '<rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
+  chevron: '<path d="m15 18-6-6 6-6"/>',
+  sparkle: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/>',
+  chart: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>',
+  users: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.5 3.3-5.5 6.5-5.5s5.9 2 6.5 5.5"/><path d="M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14.8c1.7.8 2.8 2.7 3 5.2"/>',
+  question: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.6.3-1 .9-1 1.6V14M12 17.5h.01"/>',
+  flame: '<path d="M12 2c1 3.5 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5.3 1.8 1.2 2.8 2.3 3.2C11 9 11 5 12 2z" fill="currentColor" fill-opacity=".25"/><path d="M12 2c1 3.5 5 6 5 11a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5.3 1.8 1.2 2.8 2.3 3.2C11 9 11 5 12 2z"/>',
+  gem: '<path d="M6 3h12l4 6-10 12L2 9z"/><path d="M2 9h20"/>',
+  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7z" fill="currentColor" fill-opacity=".2"/><path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+  send: '<path d="M21 3 10 14"/><path d="M21 3 14.5 21l-4.5-7-7-4.5z"/>',
+};
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const noFx = () => document.body.classList.contains('no-fx');
+
+function setIcon(el, name, size) {
+  const s = size || el.dataset.size || 20;
+  const sw = el.dataset.stroke || 2.2;
+  el.innerHTML = `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON[name]}</svg>`;
+}
+$$('[data-icon]').forEach((el) => setIcon(el, el.dataset.icon));
+
+/* ---------- Linh vật Mầm: cùng hình với Mascot.tsx ---------- */
+const MASCOT = (mood) => `
+<svg viewBox="0 0 120 120" aria-hidden="true">
+  <g class="leaf"><path d="M60 23C54 8 36 6 30 15c8 10 22 12 30 8z" fill="#7BD34B"/></g>
+  <g class="leaf leaf-2"><path d="M61 22C67 7 85 5 91 14c-8 10-22 12-30 8z" fill="#5CC02A"/></g>
+  <circle cx="60" cy="58" r="30" fill="#34A30F"/>
+  <g class="eyes">
+    <circle cx="49" cy="54" r="7.5" fill="#fff"/><circle cx="71" cy="54" r="7.5" fill="#fff"/>
+    <circle cx="${mood === 'think' ? 51 : 50}" cy="${mood === 'think' ? 52 : 55}" r="4.5" fill="#25313B"/>
+    <circle cx="${mood === 'think' ? 73 : 72}" cy="${mood === 'think' ? 52 : 55}" r="4.5" fill="#25313B"/>
+    <circle cx="51.6" cy="53" r="1.5" fill="#fff"/><circle cx="73.6" cy="53" r="1.5" fill="#fff"/>
+  </g>
+  ${mood === 'think' ? '<path d="M45 42q6-4 12 0" fill="none" stroke="#237008" stroke-width="2.6" stroke-linecap="round"/>' : ''}
+  <path d="M52 66q8 7 16 0" fill="none" stroke="#25313B" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M32 80h56l-7 33H39z" fill="#A47048"/>
+  <rect x="28" y="76" width="64" height="11" rx="5" fill="#9E6A43"/>
+  <rect x="34" y="92" width="52" height="6" rx="3" fill="#FFC93C"/>
+</svg>`;
+$$('[data-mascot]').forEach((el) => { el.innerHTML = MASCOT(el.dataset.mood); el.classList.add('mascot'); });
+
+/* ---------- Chuyển màn hình ---------- */
+function countUp(el) {
+  if (noFx()) return;
+  const to = parseFloat(el.dataset.count), dec = +(el.dataset.dec || 0), t0 = performance.now(), dur = 900;
+  const step = (now) => {
+    const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 3);
+    el.textContent = (to * e).toLocaleString('vi-VN', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+function go(id) {
+  $$('.mb-tab').forEach((b) => b.classList.toggle('active', b.dataset.go === id));
+  $$('.screen').forEach((s) => s.classList.toggle('active', s.id === id));
+  window.scrollTo(0, 0);
+  $$('[data-count]', document.getElementById(id)).forEach(countUp);
+  if (id === 'fx') buildFx();
+}
+$$('.mb-tab').forEach((b) => b.addEventListener('click', () => go(b.dataset.go)));
+$$('[data-go-link]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); go(a.dataset.goLink); }));
+$$('a[href^="#"]').forEach((a) => a.addEventListener('click', (e) => e.preventDefault()));
+$$('[data-count]', document.querySelector('.screen.active')).forEach(countUp);
+$('#fxToggle').addEventListener('change', (e) => document.body.classList.toggle('no-fx', e.target.checked));
+
+/* ---------- Pháo giấy nhẹ + "+10 XP" ---------- */
+function confetti(n = 40) {
+  if (noFx()) return;
+  const cols = ['#34A30F', '#1E9BF0', '#8B5CF6', '#FFC93C', '#FF922B', '#FF6B6B'];
+  for (let i = 0; i < n; i++) {
+    const c = document.createElement('i');
+    c.className = 'confetti';
+    c.style.left = Math.random() * 100 + 'vw';
+    c.style.background = cols[i % cols.length];
+    c.style.setProperty('--x', (Math.random() * 160 - 80) + 'px');
+    c.style.animationDuration = (1.7 + Math.random() * 1) + 's';
+    c.style.animationDelay = Math.random() * 0.2 + 's';
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 3000);
+  }
+}
+function floatXp(parent, text) {
+  if (noFx()) return;
+  const f = document.createElement('div');
+  f.className = 'xp-float';
+  f.textContent = text;
+  parent.appendChild(f);
+  setTimeout(() => f.remove(), 1600);
+}
+
+/* ---------- Bài học: video, câu hỏi tự dừng, Tutor ---------- */
+const TOTAL = 330, QUIZ_AT = 134;
+let t = 98, playing = false, timer = null, quizDone = false, picked = null;
+const fmt = (s) => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+const subsAt = (s) => s < 60 ? 'Hôm nay mình học về lớp và đối tượng.'
+  : s < 120 ? 'Lớp là bản thiết kế, đối tượng là thể hiện cụ thể.'
+  : 'Ví dụ: lớp Xe có hãng và màu, mỗi chiếc xe là một đối tượng.';
+
+function renderTime() {
+  $('#time').textContent = `${fmt(t)} / ${fmt(TOTAL)}`;
+  $('#seekFill').style.setProperty('--p', (t / TOTAL * 100) + '%');
+  $('#subs').textContent = subsAt(t);
+}
+function setPlayIcon() { setIcon($('#playBtn'), playing ? 'pause' : 'play', 18); }
+function setPlaying(v) {
+  playing = v;
+  clearInterval(timer);
+  if (playing) timer = setInterval(tick, 60);
+  setPlayIcon();
+}
+function tick() {
+  t += 1;
+  if (t >= QUIZ_AT && !quizDone) { t = QUIZ_AT; setPlaying(false); showQuiz(); }
+  renderTime();
+}
+$('#playBtn').addEventListener('click', () => setPlaying(!playing));
+
+const OPTS = [['A', 'Đóng gói'], ['B', 'Kế thừa'], ['C', 'Đa hình'], ['D', 'Trừu tượng hóa']];
+const RIGHT = 'B';
+function showQuiz() {
+  picked = null;
+  $('#feed').innerHTML = '';
+  $('#checkBtn').disabled = true;
+  $('#checkBtn').style.display = '';
+  $('#hintBtn').style.display = '';
+  $('#resumeBtn').style.display = 'none';
+  $('#opts').innerHTML = OPTS.map(([l, txt]) => `<button class="opt" data-l="${l}"><span class="letter">${l}</span>${txt}</button>`).join('');
+  $$('#opts .opt').forEach((o) => o.addEventListener('click', () => {
+    if (o.classList.contains('wrong') || o.classList.contains('right')) return;
+    $$('#opts .opt.sel').forEach((x) => x.classList.remove('sel'));
+    o.classList.add('sel');
+    picked = o.dataset.l;
+    $('#checkBtn').disabled = false;
+  }));
+  $('#quiz').classList.add('show');
+}
+$('#checkBtn').addEventListener('click', () => {
+  if (!picked) return;
+  const chosen = $(`#opts .opt[data-l="${picked}"]`);
+  chosen.classList.remove('sel');
+  if (picked === RIGHT) {
+    chosen.classList.add('right');
+    $('#feed').innerHTML = '<div class="qfeed ok"><b>Chính xác!</b> Kế thừa cho phép lớp con dùng lại code của lớp cha và mở rộng thêm.</div>';
+    $('.seek .q-mark').style.background = 'var(--green)';
+    confetti(40);
+    floatXp($('.player'), '+10 XP');
+    quizDone = true;
+    $('#checkBtn').style.display = 'none';
+    $('#hintBtn').style.display = 'none';
+    $('#resumeBtn').style.display = '';
+  } else {
+    chosen.classList.add('wrong');
+    $('#feed').innerHTML = '<div class="qfeed no"><b>Chưa đúng.</b> Gợi ý: đây là cơ chế lớp con “thừa hưởng” từ lớp cha.</div>';
+    picked = null;
+    $('#checkBtn').disabled = true;
+  }
+});
+$('#hintBtn').addEventListener('click', () => {
+  $('#feed').innerHTML = '<div class="qfeed no"><b>Gợi ý:</b> Tìm cơ chế cho phép lớp con “thừa hưởng” thuộc tính và phương thức của lớp cha.</div>';
+});
+$('#resumeBtn').addEventListener('click', () => {
+  $('#quiz').classList.remove('show');
+  t = QUIZ_AT + 1;
+  renderTime();
+  setPlaying(true);
+});
+renderTime();
+setPlayIcon();
+
+/* Tutor AI: trả lời mẫu có trích nguồn */
+const ANSWERS = {
+  'Cho mình ví dụ về kế thừa': { text: 'Ví dụ: lớp <b>XeDien</b> kế thừa lớp <b>Xe</b> và thêm thuộc tính pin. Nhờ vậy XeDien vẫn có hãng và màu mà không cần viết lại.', src: ['play', 'Video · tua tới 04:10'] },
+  'Tóm tắt bài này giúp mình': { text: 'Bài có 3 ý: <b>lớp</b> là bản thiết kế, <b>đối tượng</b> là thể hiện của lớp, và <b>thuộc tính/phương thức</b> mô tả dữ liệu và hành vi.', src: ['slide', 'Slide · trang 2'] },
+};
+function addMsg(html, cls, src) {
+  const box = $('#msgs'), typing = $('#typing');
+  const div = document.createElement('div');
+  div.className = 'bubble ' + cls;
+  div.innerHTML = html + (src ? `<div class="src-row"><button class="src"><span data-icon="${src[0]}"></span>${src[1]}</button></div>` : '');
+  box.insertBefore(div, typing);
+  $$('[data-icon]', div).forEach((el) => setIcon(el, el.dataset.icon, 12));
+  box.scrollTop = box.scrollHeight;
+}
+function askTutor(q) {
+  const a = ANSWERS[q] || { text: 'Mình cần thêm ngữ cảnh. Bạn thử hỏi về <b>lớp</b>, <b>đối tượng</b> hoặc <b>kế thừa</b> trong bài này nhé.', src: null };
+  addMsg(q, 'b-me');
+  $('#typing').style.display = 'inline-flex';
+  setTimeout(() => {
+    $('#typing').style.display = '';
+    addMsg(a.text, 'b-ai', a.src);
+  }, 1100);
+}
+$('#tutorForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const v = $('#tutorIn').value.trim();
+  if (!v) return;
+  $('#tutorIn').value = '';
+  askTutor(v);
+});
+$('#tutorBtn').addEventListener('click', (e) => {
+  const on = e.currentTarget.getAttribute('aria-pressed') !== 'true';
+  e.currentTarget.setAttribute('aria-pressed', on);
+  $('#tutor').style.display = on ? '' : 'none';
+});
+
+/* ---------- Danh sách hiệu ứng để duyệt ---------- */
+const FX = [
+  ['Nút có ánh sáng quét khi di chuột', 'Mọi nút chính. Chỉ chạy một lần mỗi lần hover.', 'Nhẹ'],
+  ['Thanh tiến độ điền dần + sọc chạy rất chậm', 'Thanh tiến độ ở lộ trình, bài học, khóa học.', 'Nhẹ'],
+  ['Các mục lộ trình xuất hiện lần lượt', 'Mỗi mục trượt lên nhẹ theo thứ tự. Mục đã xong có dấu tick xuất hiện.', 'Nhẹ'],
+  ['Vòng sáng nhấp nháy ở mục đang học', 'Làm nổi bật mục hiện tại, kèm nhãn BẮT ĐẦU như cũ.', 'Vừa'],
+  ['Linh vật Mầm chớp mắt và nhấp nhô', 'Chỉ thay đổi chuyển động, không đổi hình hay vị trí.', 'Nhẹ'],
+  ['Số XP và chuỗi ngày đếm lên, ngọn lửa nhấp nháy', 'Chạy một lần khi mở trang.', 'Nhẹ'],
+  ['Popup câu hỏi trong video trượt lên; đáp án đúng xanh, sai rung', 'Chọn đáp án → Kiểm tra. Đúng thì có pháo giấy nhẹ và “+10 XP”.', 'Vừa'],
+  ['Tutor AI: tin nhắn hiện dần + 3 chấm “đang trả lời”', 'Không đổi nội dung, chỉ đổi cách hiện.', 'Nhẹ'],
+  ['Thẻ khóa học và thẻ thống kê nổi lên khi di chuột', 'Bóng đổ dày hơn, nhô lên 2–3px. Không nghiêng 3D.', 'Nhẹ'],
+  ['Nút “Giảm hiệu ứng” và tôn trọng cài đặt hệ thống', 'Tắt toàn bộ chuyển động khi bật. Đây là phần bắt buộc.', 'Bắt buộc'],
+];
+let fxBuilt = false;
+function buildFx() {
+  if (fxBuilt) return;
+  fxBuilt = true;
+  $('#fxList').innerHTML = FX.map(([title, desc, lvl], i) => `
+    <label class="fx">
+      <input type="checkbox" class="fx-ok" aria-label="Duyệt: ${title}" />
+      <div><h3>${i + 1}. ${title} <span class="badge ${lvl === 'Vừa' ? 'badge-yellow' : lvl === 'Bắt buộc' ? 'badge-purple' : 'badge-green'}" style="margin-left:6px">${lvl}</span></h3><p>${desc}</p></div>
+    </label>`).join('');
+  $$('.fx-ok').forEach((cb) => cb.addEventListener('change', () => {
+    cb.closest('.fx').classList.toggle('is-ok', cb.checked);
+    $('#fxCount').textContent = `Đã duyệt ${$$('.fx-ok').filter((c) => c.checked).length}/${FX.length}`;
+  }));
+}
+</script>
+</body>
+</html>

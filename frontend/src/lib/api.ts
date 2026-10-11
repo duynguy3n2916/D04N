@@ -89,11 +89,11 @@ export interface ItemSummary {
 }
 export interface LessonNode { lesson_id: string; code: string; title: string; items: ItemSummary[]; items_total: number; items_done: number }
 export interface CourseTree {
-  course_id: string; code: string; title: string; description?: string; items_total: number; items_done: number;
+  course_id: string; code: string; title: string; description?: string; cover_url?: string | null; items_total: number; items_done: number;
   current_item_id: string | null;
   chapters: { chapter_id: string; title: string; lessons: LessonNode[] }[];
 }
-export interface CourseSummary { course_id: string; code: string; title: string; description?: string; items_total: number; items_done: number; current_item_id: string | null }
+export interface CourseSummary { course_id: string; code: string; title: string; description?: string; cover_url?: string | null; items_total: number; items_done: number; current_item_id: string | null }
 export interface LessonView {
   lesson_id: string; code: string; title: string; description?: string; chapter_title: string; course_id: string;
   course_title: string; items: ItemSummary[]; items_total: number; items_done: number;

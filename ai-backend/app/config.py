@@ -9,11 +9,7 @@ class Settings(BaseSettings):
     # --- Database ---
     database_url: str = "postgresql://postgres:postgres@localhost:5433/ai_learning"
 
-    # --- LLM: claude | openai ---
-    llm_provider: str = "claude"
-    claude_api_key: str = ""
-    claude_base_url: str = ""  # để trống = endpoint mặc định của Anthropic SDK (https://api.anthropic.com)
-    claude_llm_model: str = "claude-fable-5"
+    # --- LLM: OpenAI (hệ thống không còn gọi Claude) ---
     openai_api_key: str = ""
     openai_llm_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
@@ -33,8 +29,13 @@ class Settings(BaseSettings):
     groq_whisper_model: str = "whisper-large-v3-turbo"
     stt_chunk_seconds: int = 600  # cắt audio thành đoạn 10 phút trước khi gửi Whisper
 
-    # --- Lưu trữ file ---
+    # --- Lưu trữ file: MEDIA_STORAGE=r2 (Cloudflare R2) | local (thư mục storage_path) ---
+    media_storage: str = "local"
     storage_path: str = "./storage"
+    r2_account_id: str = ""
+    r2_bucket: str = ""
+    r2_access_key_id: str = ""
+    r2_secret_access_key: str = ""
     max_document_mb: int = 50
     max_media_mb: int = 500
 
@@ -80,8 +81,12 @@ class Settings(BaseSettings):
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
 
+    @property
+    def llm_provider(self) -> str:
+        return "openai"
+
     def current_llm_model(self) -> str:
-        return self.claude_llm_model if self.llm_provider.lower() == "claude" else self.openai_llm_model
+        return self.openai_llm_model
 
 
 settings = Settings()

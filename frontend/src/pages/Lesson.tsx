@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Flame, Gem, Icon } from '../components/Icon';
 import { TutorPanel, type TutorContext } from '../components/TutorPanel';
-import { Button, ErrorBox, IconButton, Progress, Spinner, useToast } from '../components/ui';
+import { Button, CountUp, ErrorBox, IconButton, Progress, Spinner, useToast } from '../components/ui';
 import { api, errorText, storage, type ItemDetail, type LessonView, type Source, type Stats } from '../lib/api';
 import { useAsync } from '../lib/hooks';
 import { navigate, useLocation } from '../lib/router';
@@ -98,8 +98,8 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
               <div style={{ width: 150 }}><Progress value={lesson.data.items_done / Math.max(1, lesson.data.items_total)} label="Tiến độ bài học" /></div>
             </>
           )}
-          <span className="stat" style={{ fontSize: 16 }}><Flame size={22} dim={!stats?.studied_today} />{stats?.streak_days ?? 0}</span>
-          <span className="stat" style={{ fontSize: 16 }}><Gem size={20} />{stats?.total_xp ?? 0}</span>
+          <span className="stat" style={{ fontSize: 16 }}><Flame size={22} dim={!stats?.studied_today} /><CountUp value={stats?.streak_days ?? 0} /></span>
+          <span className="stat" style={{ fontSize: 16 }}><Gem size={20} /><CountUp value={stats?.total_xp ?? 0} /></span>
         </div>
         <Button variant={tutorOpen ? 'soft' : 'blue'} icon="sparkle" aria-pressed={tutorOpen} onClick={() => setTutorOpen((v) => !v)}>Hỏi Tutor AI</Button>
       </header>

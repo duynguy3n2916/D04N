@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Icon } from '../../components/Icon';
 import { Mascot } from '../../components/Mascot';
-import { Button, ErrorBox, Progress } from '../../components/ui';
+import { Button, celebrate, ErrorBox, Progress } from '../../components/ui';
 import { api, errorText } from '../../lib/api';
 import type { ItemProps } from '../Lesson';
 
@@ -61,6 +61,7 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
     try {
       const r = await api<QFinish>(`/ai/learn/items/${item.item_id}/quiz/finish`, { method: 'POST' });
       setFinal(r); setPhase('done');
+      if (r.passed) celebrate();
       onCompleted((r.xp_awarded || 0) + xp || undefined);
     } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   }, [i, qs.length, item.item_id, onCompleted, xp]);
@@ -103,7 +104,7 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
     return (
       <div className="quiz-page">
         <div className="result-hero">
-          <Mascot size={130} mood={final.passed ? 'happy' : 'think'} />
+          <Mascot size={130} mood={final.passed ? 'celebrate' : 'think'} />
           <h2>{final.passed ? 'Xuất sắc, bạn đã qua bài!' : 'Chưa đạt lần này'}</h2>
           <p className="muted" style={{ fontWeight: 700 }}>
             {final.passed ? 'Bài tiếp theo đã được mở khóa.' : `Cần đúng ít nhất ${Math.round(final.pass_ratio * 100)}%. Ôn lại rồi thử lần nữa nhé.`}

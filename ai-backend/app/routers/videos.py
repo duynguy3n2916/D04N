@@ -89,9 +89,9 @@ def transcribe_video(
     _check_media_access(db, user, video_id)
     ensure_class_access(user, class_id)
     ext = safe_extension(file.filename, MEDIA_TYPES)
-    path, _, size = save_upload(file, "media", ext, settings.max_media_mb)
+    key, _, size = save_upload(file, "media", ext, settings.max_media_mb)
     job = jobs.submit(db, "transcribe_video", {
-        "video_id": video_id, "file_path": str(path), "language": language, "lesson_id": clean_id(lesson_id),
+        "video_id": video_id, "file_path": key, "language": language, "lesson_id": clean_id(lesson_id),
         "course_id": clean_id(course_id), "class_id": class_id, "created_by": user.user_id}, created_by=user.user_id)
     return JSONResponse(status_code=202, content={"video_id": video_id, "job_id": str(job.id), "status": job.status,
                                                   "size_mb": round(size / 1048576, 1)})

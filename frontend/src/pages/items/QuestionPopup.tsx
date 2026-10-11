@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Icon } from '../../components/Icon';
 import { Markdown } from '../../components/Markdown';
-import { Button } from '../../components/ui';
+import { Button, celebrate } from '../../components/ui';
 import { fmtTime, type AnswerResult, type PublicQuestion } from '../../lib/api';
 
 /** Popup câu hỏi giữa video: chọn → Kiểm tra → giải thích → "Xem tiếp video" mới đóng. */
@@ -25,6 +25,7 @@ export function QuestionPopup({ question, deadlineAt, result, onSubmit, onTimeou
 
   useEffect(() => { setSelected(null); setText(''); firedTimeout.current = false; }, [question?.question_id]);
   useEffect(() => { ref.current?.focus(); }, [question?.question_id, !!result]);
+  useEffect(() => { if (result?.is_correct) celebrate(); }, [result]);
 
   useEffect(() => {
     if (!deadlineAt || result) { setLeft(null); return; }

@@ -29,18 +29,20 @@ export function Profile() {
   };
 
   return (
-    <div style={{ maxWidth: 820 }}>
+    <div className="profile-page">
       <PageHeader title={me.data?.name || user?.user_id || 'Hồ sơ'} sub={`@${user?.user_id}${user?.class_ids?.length ? ` · lớp ${user.class_ids.join(', ')}` : ' · chưa vào lớp nào'}`} />
       {me.loading && <Spinner />}
       {me.error && <ErrorBox message={me.error} onRetry={me.reload} />}
       {stats && (
-        <div className="col" style={{ gap: 20 }}>
+        <>
           <div className="stat-tiles">
             <div className="tile"><span className="row" style={{ gap: 6 }}><Flame size={26} dim={!stats.studied_today} /><strong>{stats.streak_days}</strong></span><span>Ngày học liên tiếp</span></div>
             <div className="tile"><span className="row" style={{ gap: 6 }}><Gem size={24} /><strong>{stats.total_xp}</strong></span><span>Tổng XP</span></div>
             <div className="tile"><strong>{stats.week_xp}</strong><span>XP tuần này</span></div>
             <div className="tile"><strong>{stats.today_xp}/{stats.daily_goal_xp}</strong><span>XP hôm nay</span></div>
           </div>
+          <div className="profile-cols">
+          <div className="col" style={{ gap: 20 }}>
           <section className="card col">
             <h2>7 ngày gần đây</h2>
             <div className="week-bars" role="img" aria-label={`XP 7 ngày gần đây: ${stats.last_7_days.map((d) => d.xp).join(', ')}`}>
@@ -65,9 +67,14 @@ export function Profile() {
             </div>
           </section>
           <div className="row"><Mascot size={80} /><p className="muted">Mỗi ngày học một chút, chuỗi ngày sẽ dài ra. Cố lên!</p></div>
-        </div>
+          </div>
+          <div className="col" style={{ gap: 20 }}>
+            <AccountSection />
+          </div>
+          </div>
+        </>
       )}
-      <div style={{ marginTop: 28 }}><AccountSection /></div>
+      {!stats && <div className="col" style={{ gap: 20 }}><AccountSection /></div>}
     </div>
   );
 }

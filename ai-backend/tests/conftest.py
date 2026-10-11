@@ -7,13 +7,13 @@ os.environ.setdefault("TEST_DATABASE_URL", "postgresql://postgres:postgres@local
 os.environ["DATABASE_URL"] = os.environ["TEST_DATABASE_URL"]
 os.environ["EMBEDDING_PROVIDER"] = "hash"
 os.environ["EMBEDDING_DIM"] = "384"
-os.environ["LLM_PROVIDER"] = "claude"
-os.environ["CLAUDE_API_KEY"] = "test-key"
+os.environ["OPENAI_API_KEY"] = "test-key"
 os.environ["RAG_MIN_SCORE"] = "0.15"
 os.environ["JWT_SECRET"] = "test-secret-key-for-pytest-only-0123456789"
 os.environ["ALLOW_TEST_LOGIN"] = "true"
 os.environ["ALLOW_REGISTRATION"] = "true"
 os.environ["STORAGE_PATH"] = os.environ.get("TEST_STORAGE_PATH", "/tmp/ai_test_storage")
+os.environ["MEDIA_STORAGE"] = "local"  # test không được ghi lên R2 thật, dù .env đặt r2
 
 
 def _create_database():

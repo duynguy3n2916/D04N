@@ -1,6 +1,6 @@
 """LLM Gateway: điểm duy nhất gọi model.
 
-- Chọn provider (Claude / OpenAI) theo cấu hình, timeout + retry của SDK.
+- Gọi OpenAI, timeout + retry của SDK.
 - Gắn prompt_id/version, ghi nhật ký ai_llm_calls (token, latency, chi phí, correlation_id).
 - complete_json: parse + validate bằng Pydantic, tự sửa 1 lần nếu model trả JSON sai schema.
 """
@@ -48,17 +48,6 @@ class LLMResult:
 # Provider adapters
 # ----------------------------------------------------------------------------
 
-def _anthropic_client():
-    with _client_lock:
-        if "anthropic" not in _clients:
-            import anthropic
-            kwargs = {"api_key": settings.claude_api_key, "timeout": settings.llm_timeout_seconds, "max_retries": 2}
-            if settings.claude_base_url:
-                kwargs["base_url"] = settings.claude_base_url
-            _clients["anthropic"] = anthropic.Anthropic(**kwargs)
-        return _clients["anthropic"]
-
-
 def _openai_client():
     with _client_lock:
         if "openai" not in _clients:
@@ -69,42 +58,25 @@ def _openai_client():
 
 def _call_provider(system: str, messages: list[dict], max_tokens: int, json_mode: bool,
                    temperature: float) -> tuple[str, int | None, int | None, str]:
-    """Gọi model. Trả về (text, input_tokens, output_tokens, model). Test có thể thay hàm này."""
-    provider = settings.llm_provider.lower()
-    if provider == "claude":
-        if not settings.claude_api_key:
-            raise LLMError("Chưa cấu hình CLAUDE_API_KEY.")
-        resp = _anthropic_client().messages.create(
-            model=settings.claude_llm_model,
-            max_tokens=max_tokens,
-            system=system,
-            messages=messages,
-            temperature=temperature,
-        )
-        text = "".join(getattr(b, "text", "") for b in resp.content if getattr(b, "type", "") == "text")
-        usage = getattr(resp, "usage", None)
-        return (text, getattr(usage, "input_tokens", None), getattr(usage, "output_tokens", None),
-                getattr(resp, "model", settings.claude_llm_model))
-    if provider == "openai":
-        if not settings.openai_api_key:
-            raise LLMError("Chưa cấu hình OPENAI_API_KEY.")
-        kwargs = {"model": settings.openai_llm_model,
-                  "messages": [{"role": "system", "content": system}] + messages,
-                  # max_completion_tokens dùng được cho cả gpt-4o / gpt-4.1 lẫn các model suy luận (o*, gpt-5)
-                  "max_completion_tokens": max_tokens, "temperature": temperature}
-        if json_mode:
-            kwargs["response_format"] = {"type": "json_object"}
-        try:
-            resp = _openai_client().chat.completions.create(**kwargs)
-        except Exception as e:  # một số model chỉ nhận temperature mặc định -> gọi lại không kèm temperature
-            if "temperature" not in str(e):
-                raise
-            kwargs.pop("temperature")
-            resp = _openai_client().chat.completions.create(**kwargs)
-        usage = getattr(resp, "usage", None)
-        return (resp.choices[0].message.content or "", getattr(usage, "prompt_tokens", None),
-                getattr(usage, "completion_tokens", None), getattr(resp, "model", settings.openai_llm_model))
-    raise LLMError(f"LLM_PROVIDER không hỗ trợ: {settings.llm_provider}")
+    """Gọi model OpenAI. Trả về (text, input_tokens, output_tokens, model). Test có thể thay hàm này."""
+    if not settings.openai_api_key:
+        raise LLMError("Chưa cấu hình OPENAI_API_KEY.")
+    kwargs = {"model": settings.openai_llm_model,
+              "messages": [{"role": "system", "content": system}] + messages,
+              # max_completion_tokens dùng được cho cả gpt-4o / gpt-4.1 lẫn các model suy luận (o*, gpt-5)
+              "max_completion_tokens": max_tokens, "temperature": temperature}
+    if json_mode:
+        kwargs["response_format"] = {"type": "json_object"}
+    try:
+        resp = _openai_client().chat.completions.create(**kwargs)
+    except Exception as e:  # một số model chỉ nhận temperature mặc định -> gọi lại không kèm temperature
+        if "temperature" not in str(e):
+            raise
+        kwargs.pop("temperature")
+        resp = _openai_client().chat.completions.create(**kwargs)
+    usage = getattr(resp, "usage", None)
+    return (resp.choices[0].message.content or "", getattr(usage, "prompt_tokens", None),
+            getattr(usage, "completion_tokens", None), getattr(resp, "model", settings.openai_llm_model))
 
 
 # ----------------------------------------------------------------------------
@@ -219,7 +191,7 @@ def _short_error(e: Exception) -> str:
 
 
 def _normalize_history(history: list[dict]) -> list[dict]:
-    """Anthropic yêu cầu lượt user/assistant xen kẽ và bắt đầu bằng user."""
+    """Gộp lượt liên tiếp cùng vai trò, bắt đầu bằng user và bỏ câu hỏi cuối (đã là câu hỏi mới)."""
     out: list[dict] = []
     for m in history:
         role = m.get("role")

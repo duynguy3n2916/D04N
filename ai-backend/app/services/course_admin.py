@@ -1,6 +1,7 @@
 """Giáo viên quản lý cấu trúc khóa học: khóa → chương → bài → mục (video / slide / bài đọc / kiểm tra)."""
 import re
 
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
@@ -11,8 +12,12 @@ from app.models.learning import Chapter, Course, Lesson, LessonItem, MediaVideo
 from app.models.transcript import VideoTranscript
 from app.services import jobs
 from app.services.ingestion import create_document, find_duplicate
-from app.services.learning import ITEM_TYPES
-from app.services.storage import sha256_text
+from app.services.learning import ITEM_TYPES, cover_url
+from app.services.object_store import get_store
+from app.services.storage import safe_extension, save_upload, sha256_text
+
+COVER_EXT = ("png", "jpg", "jpeg", "webp")
+COVER_MAX_MB = 5
 
 _CODE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
@@ -32,7 +37,7 @@ def admin_tree(course: Course) -> dict:
     """Cấu trúc đầy đủ cho màn hình soạn khóa học (không có trạng thái học)."""
     return {
         "course_id": str(course.id), "code": course.code, "title": course.title, "description": course.description,
-        "class_id": course.class_id,
+        "class_id": course.class_id, "cover_url": cover_url(course),
         "chapters": [{
             "chapter_id": str(ch.id), "title": ch.title, "position": ch.position,
             "lessons": [{
@@ -66,6 +71,27 @@ def update_course(db: Session, user: Principal, course: Course, data: dict) -> C
         if data.get(k) is not None:
             setattr(course, k, data[k])
     db.commit()
+    return course
+
+
+def set_cover(db: Session, course: Course, file) -> Course:
+    """Thay ảnh bìa: lưu file mới trước, xóa file cũ sau khi commit thành công."""
+    ext = safe_extension(file.filename, COVER_EXT)
+    key, _, _ = save_upload(file, "covers", ext, COVER_MAX_MB)
+    old = course.cover_path
+    course.cover_path = key
+    db.commit()
+    if old:
+        get_store().delete(old)
+    return course
+
+
+def clear_cover(db: Session, course: Course) -> Course:
+    old = course.cover_path
+    course.cover_path = None
+    db.commit()
+    if old:
+        get_store().delete(old)
     return course
 
 
@@ -131,12 +157,13 @@ def _apply_item_fields(db: Session, item: LessonItem, data: dict) -> None:
             meta = dict(item.meta or {})
             if doc.file_path:
                 try:
-                    if doc.source_type == "pdf":
-                        from pypdf import PdfReader
-                        meta["pages"] = len(PdfReader(doc.file_path).pages)
-                    else:
-                        from pptx import Presentation
-                        meta["pages"] = len(Presentation(doc.file_path).slides)
+                    with get_store().local_path(doc.file_path) as local:
+                        if doc.source_type == "pdf":
+                            from pypdf import PdfReader
+                            meta["pages"] = len(PdfReader(local).pages)
+                        else:
+                            from pptx import Presentation
+                            meta["pages"] = len(Presentation(local).slides)
                 except Exception:
                     pass
             item.meta = meta
@@ -153,6 +180,22 @@ def _apply_item_fields(db: Session, item: LessonItem, data: dict) -> None:
         item.meta = meta
 
 
+def link_video_sources(db: Session, video_id: str, lesson: Lesson) -> None:
+    """Gắn phụ đề của video (transcript + tài liệu trong Knowledge Base) vào bài đang chứa video.
+
+    Phụ đề được tạo lúc phiên âm, nên nếu video được gắn vào bài sau đó thì lesson_id vẫn trống
+    và giáo viên không chọn được phụ đề làm nguồn soạn câu hỏi. Chỉ điền các bản ghi chưa có bài.
+    """
+    course = lesson.chapter.course
+    for model, cond in ((VideoTranscript, VideoTranscript.video_id == video_id),
+                        (AIDocument, and_(AIDocument.source_type == "video", AIDocument.source_id == video_id))):
+        db.query(model).filter(cond, model.lesson_id.is_(None)).update(
+            {model.lesson_id: lesson.code,
+             model.course_id: func.coalesce(model.course_id, course.code),
+             model.class_id: func.coalesce(model.class_id, course.class_id)},
+            synchronize_session=False)
+
+
 def add_item(db: Session, user: Principal, lesson: Lesson, data: dict) -> LessonItem:
     t = data.get("type")
     if t not in ITEM_TYPES:
@@ -167,6 +210,8 @@ def add_item(db: Session, user: Principal, lesson: Lesson, data: dict) -> Lesson
         raise AppError(400, "VIDEO_REQUIRED", "Mục video cần video_id.")
     if t == "slide" and not item.document_id:
         raise AppError(400, "DOCUMENT_REQUIRED", "Mục slide cần document_id (PDF/PPTX đã nạp).")
+    if t == "video":
+        link_video_sources(db, item.video_id, lesson)
     db.commit()
     if t == "reading":
         _index_reading(db, user, item)
@@ -176,6 +221,8 @@ def add_item(db: Session, user: Principal, lesson: Lesson, data: dict) -> Lesson
 def update_item(db: Session, user: Principal, item: LessonItem, data: dict) -> LessonItem:
     before = item.content_md
     _apply_item_fields(db, item, data)
+    if item.type == "video" and item.video_id:
+        link_video_sources(db, item.video_id, item.lesson)
     db.commit()
     if item.type == "reading" and item.content_md != before:
         _index_reading(db, user, item)

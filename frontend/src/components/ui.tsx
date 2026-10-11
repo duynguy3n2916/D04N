@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { storage } from '../lib/api';
 import { Icon, type IconName } from './Icon';
 
 type Variant = 'green' | 'blue' | 'ghost' | 'red' | 'danger-ghost' | 'soft';
@@ -36,6 +37,64 @@ export function Progress({ value, tone = 'green', height = 14, label }: { value:
       <div className={`progress-fill progress-${tone}`} style={{ width: `${v * 100}%` }} />
     </div>
   );
+}
+
+// ---------------------------------------------------------------- Hiệu ứng nhẹ
+
+const FX_KEY = 'mam.reduceFx';
+
+/** Đúng khi được phép chạy hiệu ứng: không bật "Giảm hiệu ứng" và hệ điều hành không yêu cầu giảm chuyển động. */
+export function motionOk() {
+  if (document.documentElement.classList.contains('reduce-fx')) return false;
+  return !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+
+/** Áp lựa chọn "Giảm hiệu ứng" đã lưu. Gọi một lần khi khởi động app. */
+export function applyReduceFx(on: boolean = storage.get(FX_KEY) === '1') {
+  document.documentElement.classList.toggle('reduce-fx', on);
+}
+
+export function setReduceFx(on: boolean) {
+  storage.set(FX_KEY, on ? '1' : '0');
+  applyReduceFx(on);
+}
+
+/** Số đếm lên mượt khi giá trị đổi (XP, chuỗi ngày). Tắt khi giảm hiệu ứng. */
+export function CountUp({ value, decimals = 0 }: { value: number; decimals?: number }) {
+  const cur = useRef(value);
+  const [shown, setShown] = useState(value);
+  useEffect(() => {
+    if (!motionOk()) { cur.current = value; setShown(value); return; }
+    const from = cur.current, start = performance.now();
+    let raf = 0;
+    const step = (now: number) => {
+      const p = Math.min(1, (now - start) / 900), e = 1 - Math.pow(1 - p, 3);
+      const v = from + (value - from) * e;
+      cur.current = v;
+      setShown(v);
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value]);
+  return <>{shown.toLocaleString('vi-VN', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })}</>;
+}
+
+/** Pháo giấy nhẹ khi trả lời đúng hoặc đạt bài kiểm tra. */
+export function celebrate(pieces = 36) {
+  if (!motionOk()) return;
+  const colors = ['#34A30F', '#1E9BF0', '#8B5CF6', '#FFC233', '#FF922B', '#FF6B6B'];
+  for (let i = 0; i < pieces; i++) {
+    const c = document.createElement('i');
+    c.className = 'confetti';
+    c.style.left = `${Math.random() * 100}vw`;
+    c.style.background = colors[i % colors.length];
+    c.style.setProperty('--x', `${Math.random() * 160 - 80}px`);
+    c.style.animationDuration = `${1.7 + Math.random()}s`;
+    c.style.animationDelay = `${Math.random() * 0.2}s`;
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 3000);
+  }
 }
 
 export function Spinner({ label = 'Đang tải…' }: { label?: string }) {

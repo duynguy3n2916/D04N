@@ -2,7 +2,7 @@ import { Fragment, useMemo } from 'react';
 import { AppShell } from '../components/AppShell';
 import { Bolt, Flame, Gem, Icon, type IconName } from '../components/Icon';
 import { Mascot } from '../components/Mascot';
-import { Badge, Empty, ErrorBox, Progress, Spinner } from '../components/ui';
+import { Badge, CountUp, Empty, ErrorBox, Progress, Spinner } from '../components/ui';
 import { api, type CourseSummary, type CourseTree, type ItemSummary, type Stats } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useAsync } from '../lib/hooks';
@@ -17,8 +17,8 @@ export function StatsAside({ stats, compact }: { stats: Stats | null; compact?: 
   return (
     <>
       <div className="stat-row">
-        <span className="stat" title="Chuỗi ngày học"><Flame size={30} dim={!stats?.studied_today} />{stats?.streak_days ?? 0} ngày</span>
-        <span className="stat" title="Tổng điểm kinh nghiệm"><Gem size={26} />{stats?.total_xp ?? 0} XP</span>
+        <span className="stat" title="Chuỗi ngày học"><Flame size={30} dim={!stats?.studied_today} /><CountUp value={stats?.streak_days ?? 0} /> ngày</span>
+        <span className="stat" title="Tổng điểm kinh nghiệm"><Gem size={26} /><CountUp value={stats?.total_xp ?? 0} /> XP</span>
       </div>
       <section className="card col">
         <div className="card-title" style={{ marginBottom: 0 }}><h2>Mục tiêu hôm nay</h2><Link to="/profile" style={{ fontWeight: 800, fontSize: 14, textTransform: 'uppercase', textDecoration: 'none' }}>Sửa</Link></div>
@@ -49,7 +49,7 @@ export function StatsAside({ stats, compact }: { stats: Stats | null; compact?: 
   );
 }
 
-function Node({ item, offset, isCurrent }: { item: ItemSummary; offset: number; isCurrent: boolean }) {
+function Node({ item, offset, delay, isCurrent }: { item: ItemSummary; offset: number; delay: number; isCurrent: boolean }) {
   const locked = item.status === 'locked';
   const done = item.status === 'done';
   const cls = locked ? 'node-locked' : done ? 'node-done' : isCurrent ? 'node-current' : `node-${item.type}`;
@@ -63,7 +63,7 @@ function Node({ item, offset, isCurrent }: { item: ItemSummary; offset: number; 
     </a>
   );
   return (
-    <div className="node-wrap" style={{ marginLeft: offset }}>
+    <div className="node-wrap" style={{ marginLeft: offset, animationDelay: `${delay}s` }}>
       {isCurrent && <span className="node-start">BẮT ĐẦU</span>}
       {isCurrent ? <div className="node-ring">{node}</div> : node}
       <span className="node-label">{item.title}</span>
@@ -93,7 +93,10 @@ function CoursePath({ tree }: { tree: CourseTree }) {
               {ch.lessons.map((ls, li) => (
                 <Fragment key={ls.lesson_id}>
                   {li > 0 && <div className="lesson-sep">{ls.title}</div>}
-                  {ls.items.map((it) => <Node key={it.item_id} item={it} offset={OFFSETS[idx++ % OFFSETS.length]} isCurrent={it.item_id === tree.current_item_id} />)}
+                  {ls.items.map((it) => {
+                    const n = idx++;
+                    return <Node key={it.item_id} item={it} offset={OFFSETS[n % OFFSETS.length]} delay={Math.min(n, 12) * 0.06} isCurrent={it.item_id === tree.current_item_id} />;
+                  })}
                   {!ls.items.length && <p className="muted small">Bài này chưa có nội dung.</p>}
                 </Fragment>
               ))}
@@ -131,12 +134,13 @@ export function Learn({ path, courseId }: { path: string; courseId?: string }) {
           </div>
         )}
         {tree.data && (
-          <div className="row" style={{ width: '100%', maxWidth: 620, justifyContent: 'space-between' }}>
+          <div className="course-head">
             <div>
-              <h1 style={{ fontSize: 26 }}>{tree.data.title}</h1>
+              <small className="course-head-kicker">Khóa học</small>
+              <h1>{tree.data.title}</h1>
               <span className="muted small">{tree.data.items_done}/{tree.data.items_total} mục đã hoàn thành</span>
             </div>
-            <div style={{ width: 200 }}><Progress value={progress} label="Tiến độ khóa học" /></div>
+            <div className="course-head-progress"><Progress value={progress} height={16} label="Tiến độ khóa học" /></div>
           </div>
         )}
         {(courses.loading || tree.loading) && !tree.data && <Spinner />}
@@ -149,7 +153,7 @@ export function Learn({ path, courseId }: { path: string; courseId?: string }) {
         {tree.data && <CoursePath tree={tree.data} />}
         {tree.data && tree.data.items_total > 0 && tree.data.items_done === tree.data.items_total && (
           <div className="card row" style={{ maxWidth: 620, width: '100%' }}>
-            <Mascot size={72} mood="wave" />
+            <Mascot size={72} mood="celebrate" />
             <div className="grow"><h2>Hoàn thành khóa học!</h2><p className="muted">Bạn đã học hết các mục. <Badge tone="green">Tuyệt vời</Badge></p></div>
           </div>
         )}

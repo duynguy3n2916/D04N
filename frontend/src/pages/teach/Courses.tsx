@@ -1,26 +1,86 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { PageHeader } from '../../components/AppShell';
 import { Icon } from '../../components/Icon';
 import { Markdown } from '../../components/Markdown';
 import { Badge, Button, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
-import { api, errorText, pollJob, type ItemType } from '../../lib/api';
+import { api, errorText, mediaUrl, pollJob, type ItemType } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { Link, navigate } from '../../lib/router';
 import { TYPE_ICON, TYPE_LABEL } from '../Learn';
 
 interface AdminItem { item_id: string; type: ItemType; title: string; position: number; video_id: string | null; document_id: string | null; meta: any; has_content: boolean }
 interface AdminLesson { lesson_id: string; code: string; title: string; description?: string; items: AdminItem[] }
-interface AdminCourse { course_id: string; code: string; title: string; description?: string; class_id: string | null; chapters: { chapter_id: string; title: string; lessons: AdminLesson[] }[] }
-interface CourseRow { course_id: string; code: string; title: string; class_id: string | null; chapters: number; items: number }
+interface AdminCourse { course_id: string; code: string; title: string; description?: string; class_id: string | null; cover_url?: string | null; chapters: { chapter_id: string; title: string; lessons: AdminLesson[] }[] }
+interface CourseRow { course_id: string; code: string; title: string; class_id: string | null; cover_url?: string | null; chapters: number; items: number }
 interface VideoRow { video_id: string; title: string; has_file: boolean; transcript: { version: number } | null; questions: { approved: number; draft: number } }
 interface DocRow { document_id: string; title: string; source_type: string; status: string; lesson_id: string | null }
+
+// ---------------------------------------------------------------- Ảnh bìa
+
+const COVER_ACCEPT = 'image/png,image/jpeg,image/webp';
+const COVER_MAX_BYTES = 5 * 1024 * 1024;
+
+/** Trả về thông báo lỗi nếu file không hợp lệ làm ảnh bìa, hoặc null nếu hợp lệ. */
+function coverError(file: File): string | null {
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type)) return 'Ảnh bìa phải là PNG, JPG hoặc WEBP.';
+  if (file.size > COVER_MAX_BYTES) return 'Ảnh bìa vượt quá 5 MB.';
+  return null;
+}
+
+function uploadCover(courseId: string, file: File) {
+  const fd = new FormData(); fd.append('file', file);
+  return api<AdminCourse>(`/ai/courses/${courseId}/cover`, { form: fd });
+}
+
+/** Ảnh bìa khóa học; chưa có ảnh thì hiện nền màu kèm biểu tượng. */
+function CourseCover({ url, tone = 'var(--green)', className = '' }: { url?: string | null; tone?: string; className?: string }) {
+  return (
+    <span className={`cover ${className}`} style={url ? undefined : { background: tone }}>
+      {url ? <img src={mediaUrl(url)} alt="" /> : <Icon name="list" size={40} />}
+    </span>
+  );
+}
+
+/** Chọn ảnh bìa khi tạo khóa học: chỉ giữ file trong form, tải lên sau khi khóa học được tạo. */
+function CoverPicker({ file, onChange }: { file: File | null; onChange: (f: File | null) => void }) {
+  const toast = useToast();
+  const ref = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<string | null>(null);
+  useEffect(() => {
+    if (!file) { setPreview(null); return; }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  return (
+    <div className="col" style={{ gap: 8 }}>
+      <span style={{ fontWeight: 800, fontSize: 14 }}>Ảnh bìa <span className="muted">(tùy chọn)</span></span>
+      <div className="cover-pick">
+        {preview ? <img src={preview} alt="Xem trước ảnh bìa" /> : <span className="muted small">Chưa có ảnh · PNG, JPG hoặc WEBP, tối đa 5 MB</span>}
+      </div>
+      <div className="row">
+        <input ref={ref} type="file" hidden accept={COVER_ACCEPT} onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = '';
+          if (!f) return;
+          const bad = coverError(f);
+          if (bad) toast(bad, 'error'); else onChange(f);
+        }} />
+        <Button type="button" size="sm" variant="soft" icon="upload" onClick={() => ref.current?.click()}>{file ? 'Đổi ảnh' : 'Chọn ảnh'}</Button>
+        {file && <Button type="button" size="sm" variant="ghost" icon="trash" onClick={() => onChange(null)}>Bỏ ảnh</Button>}
+      </div>
+    </div>
+  );
+}
 
 // ---------------------------------------------------------------- Danh sách khóa học
 
 export function Courses() {
+  const toast = useToast();
   const list = useAsync((s) => api<CourseRow[]>('/ai/courses', { signal: s }), []);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', class_id: '' });
+  const [cover, setCover] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -28,6 +88,9 @@ export function Courses() {
     setBusy(true); setErr(null);
     try {
       const c = await api<AdminCourse>('/ai/courses', { json: { ...form, class_id: form.class_id || null } });
+      if (cover) {
+        try { await uploadCover(c.course_id, cover); } catch (e) { toast(`Đã tạo khóa học nhưng chưa lưu được ảnh bìa: ${errorText(e)}`, 'error'); }
+      }
       navigate(`/teach/courses/${c.course_id}`);
     } catch (e) { setErr(errorText(e)); } finally { setBusy(false); }
   };
@@ -39,20 +102,24 @@ export function Courses() {
       {list.loading && !list.data && <Spinner />}
       {list.error && <ErrorBox message={list.error} onRetry={list.reload} />}
       {list.data && !list.data.length && <Empty title="Chưa có khóa học nào">Bấm “Tạo khóa học” để bắt đầu.</Empty>}
-      <div className="col" style={{ gap: 12 }}>
+      <div className="course-grid">
         {list.data?.map((c) => (
-          <Link key={c.course_id} to={`/teach/courses/${c.course_id}`} className="video-card">
-            <span className="video-thumb" style={{ background: 'var(--green)' }}><Icon name="list" size={26} /></span>
-            <span className="col" style={{ gap: 2, flex: 1, minWidth: 0 }}>
-              <strong style={{ fontSize: 17 }}>{c.title}</strong>
-              <span className="muted small">{c.code} · {c.chapters} chương · {c.items} mục học{c.class_id ? ` · lớp ${c.class_id}` : ' · mọi lớp'}</span>
+          <Link key={c.course_id} to={`/teach/courses/${c.course_id}`} className="course-card">
+            <CourseCover url={c.cover_url} />
+            <span className="course-card-body">
+              <strong>{c.title}</strong>
+              <span className="muted small">{c.code}{c.class_id ? ` · lớp ${c.class_id}` : ' · mọi lớp'}</span>
+              <span className="course-card-foot">
+                <span className="muted small" style={{ fontWeight: 800 }}>{c.chapters} chương · {c.items} mục học</span>
+                <Icon name="chevronRight" />
+              </span>
             </span>
-            <Icon name="chevronRight" />
           </Link>
         ))}
       </div>
       <Modal open={open} onClose={() => setOpen(false)} title="Tạo khóa học">
         <div className="modal-body">
+          <CoverPicker file={cover} onChange={setCover} />
           <Field label="Tên khóa học"><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} /></Field>
           <Field label="Lớp (tùy chọn)" hint="Để trống = mọi lớp"><input value={form.class_id} onChange={(e) => setForm({ ...form, class_id: e.target.value })} /></Field>
           <Field label="Mô tả"><textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></Field>
@@ -104,9 +171,10 @@ export function CourseEditor({ courseId }: { courseId: string }) {
           <Button variant="ghost" icon="play" onClick={() => navigate(`/learn/${c.course_id}`)}>Xem như học sinh</Button>
           <Button icon="plus" onClick={() => setDlg({ kind: 'chapter' })}>Thêm chương</Button>
         </>} />
+      {c && <CoverEditor course={c} onChanged={tree.setData} />}
       {tree.loading && !c && <Spinner />}
       {tree.error && <ErrorBox message={tree.error} onRetry={tree.reload} />}
-      {c && !c.chapters.length && <Empty title="Khóa học chưa có chương nào">Thêm chương, sau đó thêm bài và các mục học.</Empty>}
+      {c && !c.chapters.length &&<Empty title="Khóa học chưa có chương nào">Thêm chương, sau đó thêm bài và các mục học.</Empty>}
       <div className="col" style={{ gap: 16 }}>
         {c?.chapters.map((ch, ci) => (
           <section key={ch.chapter_id} className="tree-chapter" aria-label={`Chương ${ci + 1}`}>
@@ -145,7 +213,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
       </div>
       {c && <div className="row" style={{ marginTop: 28 }}><Button variant="danger-ghost" icon="trash" onClick={delCourse}>Xóa khóa học</Button></div>}
 
-      {c && dlg?.kind === 'course' && <CourseDialog course={c} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); }} />}
+      {c && dlg?.kind === 'course' && <CourseDialog course={c} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); }} onCoverChanged={tree.setData} />}
       {c && dlg?.kind === 'chapter' && (
         <TitleDialog title={dlg.chapterId ? 'Đổi tên chương' : 'Thêm chương'} initial={dlg.title || ''} onClose={() => setDlg(null)}
           onSave={async (title) => {
@@ -158,6 +226,39 @@ export function CourseEditor({ courseId }: { courseId: string }) {
       {c && dlg?.kind === 'lesson' && <LessonDialog chapterId={dlg.chapterId} lesson={dlg.lesson} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); }} />}
       {c && dlg?.kind === 'item' && <ItemDialog course={c} lesson={dlg.lesson} item={dlg.item} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); toast('Đã lưu mục học', 'success'); }} />}
     </>
+  );
+}
+
+function CoverEditor({ course, onChanged }: { course: AdminCourse; onChanged: (c: AdminCourse) => void }) {
+  const toast = useToast();
+  const ref = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const run = async (p: Promise<AdminCourse>, msg: string) => {
+    setBusy(true);
+    try { onChanged(await p); toast(msg, 'success'); } catch (e) { toast(errorText(e), 'error'); } finally { setBusy(false); }
+  };
+  return (
+    <section className="card cover-edit" aria-label="Ảnh bìa khóa học">
+      <CourseCover url={course.cover_url} />
+      <div className="col" style={{ gap: 8 }}>
+        <strong style={{ fontSize: 16 }}>Ảnh bìa</strong>
+        <span className="muted small">Hiện ở danh sách khóa học để dễ nhận biết. PNG, JPG hoặc WEBP, tối đa 5 MB.</span>
+        <div className="row">
+          <input ref={ref} type="file" hidden accept={COVER_ACCEPT} onChange={(e) => {
+            const f = e.target.files?.[0];
+            e.target.value = '';
+            if (!f) return;
+            const bad = coverError(f);
+            if (bad) toast(bad, 'error'); else run(uploadCover(course.course_id, f), 'Đã cập nhật ảnh bìa');
+          }} />
+          <Button type="button" size="sm" variant="soft" icon="upload" loading={busy} onClick={() => ref.current?.click()}>{course.cover_url ? 'Đổi ảnh' : 'Tải ảnh lên'}</Button>
+          {course.cover_url && (
+            <Button type="button" size="sm" variant="danger-ghost" icon="trash" disabled={busy}
+              onClick={() => run(api<AdminCourse>(`/ai/courses/${course.course_id}/cover`, { method: 'DELETE' }), 'Đã gỡ ảnh bìa')}>Gỡ ảnh</Button>
+          )}
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -209,11 +310,12 @@ function TitleDialog({ title, initial, onClose, onSave }: { title: string; initi
   );
 }
 
-function CourseDialog({ course, onClose, onSaved }: { course: AdminCourse; onClose: () => void; onSaved: (c: AdminCourse) => void }) {
+function CourseDialog({ course, onClose, onSaved, onCoverChanged }: { course: AdminCourse; onClose: () => void; onSaved: (c: AdminCourse) => void; onCoverChanged: (c: AdminCourse) => void }) {
   const [f, setF] = useState({ title: course.title, description: course.description || '', class_id: course.class_id || '' });
   return (
     <FormModal title="Thông tin khóa học" onClose={onClose} canSave={!!f.title.trim()}
       onSave={async () => onSaved(await api<AdminCourse>(`/ai/courses/${course.course_id}`, { method: 'PATCH', json: f }))}>
+      <CoverEditor course={course} onChanged={onCoverChanged} />
       <Field label="Tên khóa học"><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></Field>
       <Field label="Lớp" hint="Chỉ học sinh thuộc lớp này thấy khóa học"><input value={f.class_id} onChange={(e) => setF({ ...f, class_id: e.target.value })} /></Field>
       <Field label="Mô tả"><textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field>

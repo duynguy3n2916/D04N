@@ -8,7 +8,7 @@ Question Agent điều phối bằng state machine, và đánh giá định lư�
 ```bash
 # 1. Cấu hình
 copy .env.example .env          # macOS/Linux: cp .env.example .env
-#    điền CLAUDE_API_KEY (hoặc OPENAI_API_KEY), GROQ_API_KEY nếu dùng phiên âm, đổi JWT_SECRET
+#    điền OPENAI_API_KEY, GROQ_API_KEY nếu dùng phiên âm, đổi JWT_SECRET
 
 # 2. Database (Postgres 16 + pgvector, cổng 5433)
 docker compose up -d
@@ -97,7 +97,7 @@ app/
   core/              # security (JWT, vai trò, tra tài khoản mỗi request), passwords (scrypt), errors, prompts (có version), llm_schemas (Pydantic), utils
   models/            # 17 bảng (xem architecture.md §9)
   services/
-    llm.py           # LLM Gateway: Claude/OpenAI, validate JSON + tự sửa 1 lần, log ai_llm_calls
+    llm.py           # LLM Gateway: OpenAI, validate JSON + tự sửa 1 lần, log ai_llm_calls
     retrieval.py     # RAG Engine: lọc phạm vi + lớp, pgvector, ngưỡng điểm, mở rộng lân cận, nhãn nguồn [S1]
     tutor_explain.py # Tutor tự giải thích đáp án khi học sinh hết giờ / trả lời sai (AI thứ hai, chạy nền)
     tutor.py         # Tutor: lịch sử + tóm tắt, transcript quanh video_time, hint mode do server quyết, chặn lộ đáp án

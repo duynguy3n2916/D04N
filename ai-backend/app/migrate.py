@@ -132,6 +132,32 @@ def backfill_classes(conn) -> None:
     """))
 
 
+def backfill_video_links(conn) -> None:
+    """Phụ đề video đã nạp trước khi video được gắn vào bài thì chưa có lesson_id: điền lại theo mục video."""
+    conn.execute(text("""
+        UPDATE video_transcripts t
+        SET lesson_id = l.code,
+            course_id = COALESCE(t.course_id, c.code),
+            class_id = COALESCE(t.class_id, c.class_id)
+        FROM lesson_items i
+        JOIN course_lessons l ON l.id = i.lesson_id
+        JOIN course_chapters ch ON ch.id = l.chapter_id
+        JOIN courses c ON c.id = ch.course_id
+        WHERE i.type = 'video' AND i.video_id = t.video_id AND t.lesson_id IS NULL
+    """))
+    conn.execute(text("""
+        UPDATE ai_documents d
+        SET lesson_id = l.code,
+            course_id = COALESCE(d.course_id, c.code),
+            class_id = COALESCE(d.class_id, c.class_id)
+        FROM lesson_items i
+        JOIN course_lessons l ON l.id = i.lesson_id
+        JOIN course_chapters ch ON ch.id = l.chapter_id
+        JOIN courses c ON c.id = ch.course_id
+        WHERE i.type = 'video' AND d.source_type = 'video' AND i.video_id = d.source_id AND d.lesson_id IS NULL
+    """))
+
+
 def ensure_vector_index(conn) -> None:
     conn.execute(text(
         "CREATE INDEX IF NOT EXISTS ix_chunks_embedding_hnsw ON ai_chunks USING hnsw (embedding vector_cosine_ops)"
@@ -148,6 +174,7 @@ def migrate(verbose: bool = True) -> dict:
         report["changed_types"] = fix_column_types(conn)
         backfill(conn)
         backfill_classes(conn)
+        backfill_video_links(conn)
         for sql in INDEXES:
             conn.execute(text(sql))
         dim = embedding_dim_in_db(conn)

@@ -73,7 +73,7 @@ function UsersTab({ classes, classFilter, setClassFilter }: { classes: ClassInfo
   const noClass = !admin && classes.length === 0;
   return (
     <>
-      <div className="row" style={{ marginBottom: 14, alignItems: 'flex-end' }}>
+      <div className="card row" style={{ marginBottom: 14, alignItems: 'flex-end' }}>
         <Field label="Tìm"><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tên, tên đăng nhập, email" /></Field>
         {admin && (
           <Field label="Vai trò">
@@ -337,7 +337,7 @@ function ClassesTab({ classes, onShowStudents }: { classes: ReturnType<typeof us
 
   return (
     <>
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: 14 }}>
+      <div className="card row" style={{ justifyContent: 'space-between', marginBottom: 14 }}>
         <p className="muted" style={{ fontWeight: 700, maxWidth: 640 }}>Học sinh tự vào lớp bằng <b>mã vào lớp</b> (khi đăng ký hoặc trong Hồ sơ). Đổi mã nếu mã cũ bị lộ.</p>
         <Button icon="plus" onClick={() => setCreate(true)}>Tạo lớp</Button>
       </div>

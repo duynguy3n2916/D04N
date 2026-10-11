@@ -1,15 +1,18 @@
 """API học tập cho học sinh (và giáo viên xem trước) + API soạn khóa học cho giáo viên."""
-from fastapi import APIRouter, Depends
+import mimetypes
+
+from fastapi import APIRouter, Depends, File, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
-from app.core.security import Principal, get_current_user, require_teacher
+from app.core.security import Principal, get_current_user, get_user_for_media, require_teacher
 from app.core.utils import clean_id, parse_uuid
 from app.database import get_db
 from app.models.learning import Chapter, Course, Lesson, LessonItem
 from app.services import course_admin, learning
+from app.services.object_store import get_store
 
 router = APIRouter(prefix="/ai", tags=["learning"])
 
@@ -44,8 +47,8 @@ def my_courses(user: Principal = Depends(get_current_user), db: Session = Depend
     out = []
     for c in learning.visible_courses(db, user):
         t = learning.course_tree(db, user, c)
-        out.append({k: t[k] for k in ("course_id", "code", "title", "description", "class_id", "items_total",
-                                      "items_done", "current_item_id")})
+        out.append({k: t[k] for k in ("course_id", "code", "title", "description", "class_id", "cover_url",
+                                      "items_total", "items_done", "current_item_id")})
     return out
 
 
@@ -153,7 +156,7 @@ def list_courses_admin(user: Principal = Depends(require_teacher), db: Session =
         n_items = (db.query(func.count(LessonItem.id)).join(Lesson).join(Chapter)
                    .filter(Chapter.course_id == c.id).scalar())
         out.append({"course_id": str(c.id), "code": c.code, "title": c.title, "class_id": c.class_id,
-                    "chapters": len(c.chapters), "items": int(n_items or 0)})
+                    "cover_url": learning.cover_url(c), "chapters": len(c.chapters), "items": int(n_items or 0)})
     return out
 
 
@@ -181,9 +184,36 @@ def update_course(course_id: str, req: CourseIn, user: Principal = Depends(requi
 @router.delete("/courses/{course_id}")
 def delete_course(course_id: str, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
     c = _course(db, user, course_id)
+    cover = c.cover_path
     db.delete(c)
     db.commit()
+    if cover:
+        get_store().delete(cover)
     return {"deleted": True}
+
+
+@router.get("/courses/{course_id}/cover")
+def course_cover(course_id: str, request: Request, user: Principal = Depends(get_user_for_media),
+                 db: Session = Depends(get_db)):
+    c = _course(db, user, course_id)
+    store = get_store()
+    if not c.cover_path or not store.exists(c.cover_path):
+        raise AppError(404, "NOT_FOUND", "Khóa học chưa có ảnh bìa.")
+    return store.response(c.cover_path, request, media_type=mimetypes.guess_type(c.cover_path)[0] or "image/png",
+                          inline=True, cache_control="private, max-age=86400")
+
+
+@router.post("/courses/{course_id}/cover")
+def upload_course_cover(course_id: str, file: UploadFile = File(...), user: Principal = Depends(require_teacher),
+                        db: Session = Depends(get_db)):
+    c = course_admin.set_cover(db, _course(db, user, course_id), file)
+    return _tree(db, c)
+
+
+@router.delete("/courses/{course_id}/cover")
+def remove_course_cover(course_id: str, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
+    c = course_admin.clear_cover(db, _course(db, user, course_id))
+    return _tree(db, c)
 
 
 class TitleIn(BaseModel):
