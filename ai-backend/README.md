@@ -8,18 +8,18 @@ Question Agent điều phối bằng state machine, và đánh giá định lư�
 ```bash
 # 1. Cấu hình
 copy .env.example .env          # macOS/Linux: cp .env.example .env
-#    điền OPENAI_API_KEY, GROQ_API_KEY nếu dùng phiên âm, đổi JWT_SECRET
+#    điền DATABASE_URL (Neon, direct connection, có sslmode=require), OPENAI_API_KEY,
+#    GROQ_API_KEY nếu dùng phiên âm, MEDIA_STORAGE=r2 cùng R2_* nếu lưu file lên cloud, đổi JWT_SECRET
+#    (xem .env.example để biết đủ các biến)
 
-# 2. Database (Postgres 16 + pgvector, cổng 5433)
-docker compose up -d
-
-# 3. Thư viện + khởi tạo / nâng cấp DB + dữ liệu demo (kèm tài khoản demo)
+# 2. Thư viện + khởi tạo / nâng cấp DB + dữ liệu demo (kèm tài khoản demo)
+#    Không cần Docker cho DB: schema và extension vector được app tự tạo khi khởi động.
 pip install -r requirements.txt
 python init_db.py --seed
 #    hoặc chỉ tạo tài khoản quản trị (nhập mật khẩu ẩn):
 python init_db.py --create-admin admin
 
-# 4. Chạy
+# 3. Chạy
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -55,7 +55,7 @@ npm run typecheck
 Nguồn mà Tutor trích dẫn bấm được: nguồn video tua tới đúng giây, nguồn slide mở đúng trang.
 - **Nâng cấp từ phiên bản cũ:** chỉ cần chạy lại `python init_db.py` (hoặc khởi động server — server tự đồng bộ schema).
   Dữ liệu cũ được giữ; cột `lesson_id/course_id/class_id` chuyển sang dạng chuỗi để nhận mã LMS như `lesson-oop-01`.
-- Chạy cả backend bằng Docker: `docker compose --profile full up -d --build`.
+- Chạy cả backend bằng Docker (tùy chọn): `docker compose --profile full up -d --build`. Container đọc `DATABASE_URL` và R2 từ `.env`, không có DB riêng.
 
 ## Lệnh tiện ích
 
@@ -65,7 +65,16 @@ Nguồn mà Tutor trích dẫn bấm được: nguồn video tua tới đúng gi
 | `python init_db.py --seed` | Nạp dữ liệu demo + bộ 24 câu đánh giá |
 | `python init_db.py --reembed` | Sau khi đổi model embedding / `EMBEDDING_DIM`: đổi kích thước vector và tạo lại embedding |
 | `python init_db.py --reset` | Xóa toàn bộ dữ liệu AI (có hỏi xác nhận) |
-| `pip install -r requirements-dev.txt && pytest` | Chạy 31 bài test (cần Postgres; đặt `TEST_DATABASE_URL` nếu khác `postgresql://postgres:postgres@localhost:5433/ai_pytest`) |
+| `pip install -r requirements-dev.txt && pytest` | Chạy 39 bài test trên database test riêng (`TEST_DATABASE_URL` trong .env; tên phải có chữ `test`, không được trùng `DATABASE_URL`) |
+
+## Cơ sở dữ liệu và lưu trữ file
+
+- **Database:** PostgreSQL cloud (Neon) có extension `pgvector`, cấu hình bằng `DATABASE_URL`. Không còn DB chạy local.
+  Nên dùng direct connection (bỏ `-pooler` khỏi host) cho các lệnh quản trị như `init_db.py`, restore hoặc migrate.
+- **File (tài liệu, slide, video, ảnh bìa khóa học):** mặc định lưu trên **Cloudflare R2** (`MEDIA_STORAGE=r2`). DB chỉ giữ
+  *khóa* file dạng `documents/<uuid>.pdf`, `media/<uuid>.mp4`, `covers/<uuid>.png`. Đặt `MEDIA_STORAGE=local` để lưu vào
+  thư mục `STORAGE_PATH` (mặc định `./storage`), tiện cho dev không có mạng.
+- Khi đọc file cần đường dẫn thật (PDF, PPTX, ffmpeg), code tải tạm từ R2 rồi xóa sau khi xong.
 
 ## Tài khoản & xác thực
 
@@ -95,8 +104,10 @@ app/
   config.py          # cấu hình (.env)
   migrate.py         # đồng bộ schema idempotent
   core/              # security (JWT, vai trò, tra tài khoản mỗi request), passwords (scrypt), errors, prompts (có version), llm_schemas (Pydantic), utils
-  models/            # 17 bảng (xem architecture.md §9)
+  models/            # 27 bảng (xem architecture.md §9)
   services/
+    object_store.py  # kho file: Cloudflare R2 (MEDIA_STORAGE=r2) hoặc thư mục local; hỗ trợ Range để tua video
+    storage.py       # nhận file upload: kiểm tra định dạng, dung lượng, tính SHA-256, đưa vào kho
     llm.py           # LLM Gateway: OpenAI, validate JSON + tự sửa 1 lần, log ai_llm_calls
     retrieval.py     # RAG Engine: lọc phạm vi + lớp, pgvector, ngưỡng điểm, mở rộng lân cận, nhãn nguồn [S1]
     tutor_explain.py # Tutor tự giải thích đáp án khi học sinh hết giờ / trả lời sai (AI thứ hai, chạy nền)
@@ -113,7 +124,7 @@ app/
     course_admin.py  # soạn khóa học: chương, bài, mục (video/slide/bài đọc/kiểm tra), bài đọc tự nạp vào Knowledge Base
   routers/           # auth, users, documents, chat, teacher, videos, workflow, evaluation, jobs, admin, learn, media
 sample_data/         # bài học OOP, phụ đề video-01, bộ câu hỏi đánh giá
-tests/               # pytest với Postgres thật, LLM giả lập
+tests/               # pytest: Postgres thật trên database test riêng, LLM giả lập
 ```
 
 ## API chính

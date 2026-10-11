@@ -1,8 +1,8 @@
-Generate a clean, precise Vietnamese architecture diagram in wide landscape 16:9, white background, academic report style, navy text, blue frontend, green backend, blue data storage and orange external AI. Large sharp typography, correct Vietnamese accents, simple rounded rectangular boxes, no tiny text. Title “KIẾN TRÚC TỔNG THỂ — D04N”, subtitle “Hệ thống AI hỗ trợ học tập · mầm”.
+Clean, precise Vietnamese architecture diagram in wide landscape 16:9, white background, academic report style, navy text, blue data storage, green backend, blue frontend and orange external AI. Large sharp typography, correct Vietnamese accents, simple rounded rectangular boxes, no tiny text. Title “KIẾN TRÚC TỔNG THỂ — D04N”, subtitle “Hệ thống AI hỗ trợ học tập · mầm”.
 
-Use FIVE main boxes in an easy readable layout. Far left small vertical actors panel “NGƯỜI DÙNG” with three icons and labels “Học sinh”, “Giáo viên”, “Quản trị viên”. Middle-left frontend panel “GIAO DIỆN WEB”, technology “React 19 · TypeScript · Vite”, three lines “Khóa học & bài học”, “Video · phụ đề · câu hỏi”, “Chat Tutor & quản trị”. Large center backend panel “BACKEND — FastAPI” with subtitle “Một ứng dụng · nhiều mô-đun”. Upper right data panel “DỮ LIỆU”. Lower right services panel “DỊCH VỤ AI NGOÀI”.
+Use FIVE main panels in an easy readable layout. Far left small vertical actors panel “NGƯỜI DÙNG” with three person icons and labels “Học sinh”, “Giáo viên”, “Quản trị viên”. Middle-left frontend panel “GIAO DIỆN WEB”, technology “React 19 · TypeScript · Vite”, three lines “Khóa học & bài học”, “Video · phụ đề · câu hỏi”, “Chat Tutor & quản trị”. Large center backend panel “BACKEND — FastAPI” with subtitle “Một ứng dụng · nhiều mô-đun”. Upper right data panel “DỮ LIỆU”. Lower right services panel “DỊCH VỤ AI NGOÀI”.
 
-Inside backend arrange readable module cards in a neat grid WITHOUT ANY internal arrows:
+Inside backend arrange readable module cards in a neat 3 × 2 grid WITHOUT ANY internal arrows:
 “Xác thực & phân quyền” / “JWT · vai trò · lớp học”
 “LMS” / “Khóa học · bài học · tiến độ”
 “Tutor AI” / “Hỏi đáp · gợi ý · trích nguồn”
@@ -10,15 +10,15 @@ Inside backend arrange readable module cards in a neat grid WITHOUT ANY internal
 “Video Learning” / “Question Agent · state machine”
 “Xử lý học liệu” / “PDF · DOCX · PPTX · video”
 Under these six cards, a prominent green shared infrastructure card “RAG DÙNG CHUNG” / “Lọc nguồn & quyền · tìm kiếm vector · ngữ cảnh”.
-Below it two equal shared cards: “Embedding” / “sentence-transformers cục bộ” and “LLM Gateway” / “JSON validation · retry · logs”.
+Below it two equal shared cards: “Embedding” / “sentence-transformers cục bộ” and “LLM Gateway” / “Kiểm tra JSON · retry · ghi log”.
 Bottom thin strip “Job nền trong tiến trình · Log & đánh giá”.
 
-Inside data panel two separate boxes: cylinder “PostgreSQL + pgvector” with two lines “Tài khoản · khóa học · tiến độ” and “Chunks · vectors · câu hỏi · logs”; folder “Kho tệp cục bộ” with one line “Video · tài liệu · phụ đề”.
-Inside external AI panel two boxes: “OpenAI / Claude” / “Sinh nội dung LLM”, and “Groq / OpenAI Whisper” / “Phiên âm video”.
+Inside data panel two separate boxes: cylinder “PostgreSQL cloud (Neon) + pgvector” with two lines “Tài khoản · khóa học · tiến độ” and “Chunks · vectors · câu hỏi · logs”; box “Cloudflare R2” with one line “Tài liệu · video · ảnh bìa khóa học”.
+Inside services panel two boxes: “OpenAI” / “Sinh nội dung LLM”, and “Groq / OpenAI Whisper” / “Phiên âm video”.
 
 ONLY draw FOUR broad architecture-level connections, no other arrows anywhere:
 actors → frontend.
 frontend ↔ entire backend boundary, label “REST API · JWT”.
 entire backend boundary ↔ data panel boundary, label “SQL · vector · tệp”.
-entire backend boundary ↔ external AI panel boundary, label “API dịch vụ AI”.
-The last two connections route outside the boxes using clean short elbows in gutters. Do not draw arrows to individual internal cards. This is a system component overview rather than a detailed sequence diagram. No ambiguous internal wiring. No cloud deployment, Redis, Celery, microservices or unlisted systems. Footer “Kiến trúc hiện tại: React + FastAPI + PostgreSQL/pgvector”. Balance whitespace and alignment for a professional thesis illustration.
+entire backend boundary ↔ services panel boundary, label “API dịch vụ AI”.
+The last two connections are short straight arrows in the gutters between panels. Do not draw arrows to individual internal cards. This is a system component overview rather than a detailed sequence diagram. No ambiguous internal wiring. Do NOT draw any cloud deployment, Redis, Celery, Kubernetes, microservices, load balancer or unlisted systems. Footer “Kiến trúc hiện tại: React + FastAPI + PostgreSQL (Neon) + pgvector · lưu tệp trên Cloudflare R2”. Balance whitespace and alignment for a professional thesis illustration.

@@ -62,7 +62,7 @@ Hệ thống là **AI backend** gắn vào một LMS (quản lý khóa học, l�
 | **Giáo viên** | Người tạo nội dung | Upload học liệu, nạp/sửa transcript, sinh & duyệt câu hỏi, gắn câu hỏi vào video |
 | **Quản trị / Nhóm phát triển** | Vận hành | Chạy evaluation, xem log, cấu hình model |
 | **LMS** (hệ thống ngoài) | Nguồn nghiệp vụ | Cung cấp course/class/lesson/video, xác thực người dùng |
-| **LLM / Embedding / STT Provider** | Dịch vụ ngoài | Claude / OpenAI, sentence-transformers, Groq/OpenAI Whisper |
+| **LLM / Embedding / STT Provider** | Dịch vụ ngoài | OpenAI (LLM), sentence-transformers (embedding local), Groq/OpenAI Whisper (STT) |
 
 ---
 
@@ -195,12 +195,12 @@ flowchart LR
     GV([Giáo viên]) --> FE
     FE -->|REST + JWT| API[AI Backend<br/>FastAPI]
     LMS[(LMS core<br/>course/class/lesson/video/user)] -->|webhook / API| API
-    API --> PG[(PostgreSQL 16<br/>+ pgvector)]
+    API --> PG[(PostgreSQL cloud Neon<br/>+ pgvector)]
     API --> WK[Job runner trong tiến trình<br/>ingest · phiên âm · evaluation]
     WK --> PG
-    API --> OBJ[(Lưu trữ file<br/>storage/)]
+    API --> OBJ[(Cloudflare R2<br/>tài liệu · video · ảnh bìa)]
     WK --> OBJ
-    API --> LLM[[LLM API<br/>Claude / OpenAI]]
+    API --> LLM[[LLM API<br/>OpenAI]]
     WK --> STT[[Whisper API<br/>Groq / OpenAI]]
     API --> EMB[[Embedding<br/>MiniLM local / OpenAI]]
     WK --> EMB
@@ -233,7 +233,7 @@ flowchart TB
     end
 
     subgraph INFRA["Infrastructure Adapters"]
-        I1[LLM Gateway<br/>Claude/OpenAI + logging + retry]
+        I1[LLM Gateway<br/>OpenAI + logging + retry]
         I2[Embedding Provider]
         I3[STT Provider]
         I4[Parsers PDF/DOCX/PPTX/SRT/VTT]
@@ -632,26 +632,21 @@ erDiagram
     }
 ```
 
-### 9.2 Bảng hiện có (11) và thay đổi đề xuất
+### 9.2 Danh sách bảng (27) theo module
 
-| Bảng | Hiện có | Thay đổi |
-|---|---|---|
-| `ai_documents` | ✅ | + `content_hash`, `version`, `is_active`, `uploaded_by`; unique `(lesson_id, content_hash)` |
-| `ai_chunks` | ✅ | `start_time/end_time` đổi `Integer → Float`; + HNSW index; + `token_count` |
-| `video_transcripts` | ✅ | + `version`, `is_active`, `lesson_id`, `course_id`, `class_id` |
-| `transcript_segments` | ✅ | index `(transcript_id, start_time)` |
-| `ai_conversations` | ✅ | + `summary`, `course_id`, `class_id` |
-| `ai_messages` | ✅ | + `sources jsonb`, `llm_call_id` |
-| `video_questions` | ✅ | + `origin` (`teacher`/`ai_suggest`/`agent`), `session_id` (cho câu Agent), `created_by`; mặc định `draft` |
-| `ai_interactions` | ✅ | + `is_correct`, `session_id`, `feedback_status` |
-| `ai_generations` | ✅ | Giữ làm "lần sinh"; câu hỏi tách sang `question_bank` |
-| `video_sessions` | ✅ | + `question_deadline_at`, `advanced_mode`; unique `(student_id, video_id)` |
-| `ai_evaluations` | ✅ | + `config jsonb` (model, embedding, top_k, chunk_size, dataset size) |
-| **`question_bank`** | ❌ mới | id, generation_id, lesson_id, payload, original_payload, status, reviewed_by |
-| **`session_transitions`** | ❌ mới | session_id, from_state, to_state, reason, correlation_id, created_at |
-| **`ai_llm_calls`** | ❌ mới | xem ERD |
-| **`ai_jobs`** | ❌ mới | id, type, status, progress, payload, result, error, idempotency_key |
-| **`eval_samples` / `eval_results`** | ❌ mới | câu hỏi chuẩn + ground truth; kết quả từng mẫu mỗi lần chạy |
+Mỗi model nằm trong một file của `ai-backend/app/models/`. Schema được đồng bộ idempotent bởi `app/migrate.py` khi server khởi động.
+
+| Module (`app/models/`) | Bảng |
+|---|---|
+| `accounts.py` | `users`, `classes` |
+| `learning.py` | `courses`, `course_chapters`, `course_lessons`, `lesson_items`, `media_videos`, `item_progress`, `xp_events`, `user_profiles` |
+| `documents.py` | `ai_documents`, `ai_chunks` (vector, HNSW) |
+| `transcript.py` | `video_transcripts`, `transcript_segments` |
+| `conversation.py` | `ai_conversations`, `ai_messages` |
+| `video_question.py` | `video_questions`, `ai_interactions`, `ai_generations`, `question_bank` |
+| `workflow.py` | `video_sessions`, `session_transitions` |
+| `observability.py` | `ai_llm_calls`, `ai_jobs` |
+| `evaluation.py` | `ai_evaluations`, `eval_samples`, `eval_results` |
 
 ### 9.3 Index & ràng buộc
 
@@ -792,7 +787,7 @@ admin quản lý toàn bộ và phân vai trò. Mật khẩu tạm sinh ngẫu n
 ### 13.1 Môi trường dev
 
 ```
-docker compose up -d          # pgvector/pg16 (port 5433) + redis
+# DATABASE_URL trong .env trỏ tới Postgres cloud (Neon, có pgvector)
 python init_db.py --seed      # tạo/nâng cấp schema + dữ liệu demo
 uvicorn app.main:app --reload --port 8000
 # Giao diện: http://localhost:8000/app/   Swagger: /docs
@@ -801,9 +796,9 @@ uvicorn app.main:app --reload --port 8000
 
 ### 13.2 Môi trường demo / production nhỏ
 
-- `docker compose --profile full up -d --build`: Postgres + backend (Dockerfile Python 3.10), giao diện phục vụ tại `/`.
+- Database là Postgres cloud (Neon), không chạy trong Docker. `docker compose --profile full up -d --build` chỉ đóng gói backend (Dockerfile Python 3.10), đọc `DATABASE_URL` và cấu hình R2 từ `.env`, giao diện phục vụ tại `/app/`.
 - Khi khởi động, backend tự đồng bộ schema, đánh dấu job dở dang là failed, khởi động bộ quét timeout và nạp sẵn model embedding.
-- Trước khi triển khai thật: đổi `JWT_SECRET`, đặt `ALLOW_DEMO_LOGIN=false`, giới hạn `CORS_ORIGINS`, để `CLAUDE_BASE_URL` trống nếu gọi trực tiếp Anthropic API.
+- Trước khi triển khai thật: đổi `JWT_SECRET` (≥ 32 ký tự ngẫu nhiên), đặt `ALLOW_REGISTRATION` theo nhu cầu, giới hạn `CORS_ORIGINS`, và kiểm tra `DATABASE_URL` đang trỏ đúng database production.
 
 ---
 
@@ -848,7 +843,7 @@ uvicorn app.main:app --reload --port 8000
 | P4 – Bảo mật | JWT + vai trò + phạm vi lớp; CORS whitelist; upload tên uuid, giới hạn dung lượng | ✅ Xong |
 | P5 – Mở rộng | Ngân hàng câu hỏi duyệt từng câu; phiên bản transcript + rollback; tóm tắt hội thoại; sinh bù câu thiếu | ✅ Xong. Chưa làm: hybrid search, streaming, xuất đề DOCX |
 
-Kiểm thử: 31 bài pytest chạy trên Postgres + pgvector thật (LLM giả lập), cộng kịch bản giao diện đầy đủ cho giáo viên, học sinh, admin.
+Kiểm thử: 39 bài pytest chạy trên một database Postgres + pgvector riêng trên cloud (`TEST_DATABASE_URL`, không bao giờ trên DB production), LLM giả lập; cộng kịch bản giao diện đầy đủ cho giáo viên, học sinh, admin.
 
 ---
 
@@ -889,6 +884,6 @@ thành lớp phủ toàn màn hình). Tutor nhận ngữ cảnh đang xem (`vide
 | ADR-04 | State machine viết tay bằng Python | Workflow tuyến tính, cần deterministic & test được | LangGraph khi workflow phân nhánh phức tạp |
 | ADR-05 | Embedding local multilingual MiniLM (384 chiều) mặc định | Miễn phí, chạy offline, hỗ trợ tiếng Việt | OpenAI `text-embedding-3-small` (1536) |
 | ADR-06 | STT qua API (Groq/OpenAI Whisper) + import phụ đề | Không cần GPU; import phụ đề giúp demo nhanh | faster-whisper cục bộ |
-| ADR-07 | LLM qua adapter, mặc định Claude, dự phòng OpenAI | Đổi provider bằng cấu hình; so sánh được chi phí/chất lượng | Router theo tác vụ (model rẻ cho chấm điểm, model mạnh cho sinh đề) |
+| ADR-07 | LLM qua adapter, hiện dùng OpenAI (đã bỏ Claude để gọn cấu hình) | Thêm provider mới chỉ cần thêm nhánh trong `llm.py`; so sánh được chi phí/chất lượng | Router theo tác vụ (model rẻ cho chấm điểm, model mạnh cho sinh đề) |
 | ADR-08 | Structured output + Pydantic validate + retry 1 lần | Đảm bảo dữ liệu GV duyệt có cấu trúc | Tool/function calling của provider |
 | ADR-09 | Giáo viên duyệt mọi câu hỏi trước khi tới học sinh (trừ câu Agent mở rộng) | Kiểm soát chất lượng, đo acceptance rate | Tự động phát hành (rủi ro sai kiến thức) |
