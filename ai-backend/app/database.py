@@ -5,6 +5,8 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 
 from app.config import settings
 
+if not settings.database_url:
+    raise RuntimeError("Thiếu DATABASE_URL trong .env (chuỗi kết nối Postgres cloud, ví dụ Neon).")
 engine = create_engine(settings.database_url, pool_pre_ping=True, pool_size=10, max_overflow=10)
 SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False, expire_on_commit=False)
 Base = declarative_base()

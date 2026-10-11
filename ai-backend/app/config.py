@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # --- Database ---
-    database_url: str = "postgresql://postgres:postgres@localhost:5433/ai_learning"
+    database_url: str = ""  # bắt buộc đặt trong .env: Postgres cloud (Neon), app không còn dùng DB local mặc định
 
     # --- LLM: OpenAI (hệ thống không còn gọi Claude) ---
     openai_api_key: str = ""
