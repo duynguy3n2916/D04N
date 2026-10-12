@@ -1,17 +1,20 @@
+# Chạy backend trong Docker (môi trường thử): docker compose --profile full up -d --build
+# Build context là thư mục gốc repo để Dockerfile lấy được cả frontend/.
 services:
-  # Chạy cả backend trong Docker: docker compose --profile full up -d --build
   api:
     profiles: ["full"]
-    build: .
+    build:
+      context: ..
+      dockerfile: ai-backend/Dockerfile
     env_file: .env
     environment:
       STORAGE_PATH: /data/storage
+      HF_HOME: /data/hf-cache
     ports:
       - "8000:8000"
     volumes:
       - storage:/data/storage
-      - hf_cache:/root/.cache/huggingface
-      - ../frontend:/frontend:ro
+      - hf_cache:/data/hf-cache
 
 volumes:
   storage:

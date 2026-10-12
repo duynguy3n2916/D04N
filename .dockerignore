@@ -1,0 +1,14 @@
+# Build context = thư mục gốc repo. Không đưa bí mật, dữ liệu tạm hoặc file nặng vào image.
+.git
+**/.env
+**/.env.*
+!**/.env.example
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+**/.test-storage
+**/storage
+**/node_modules
+**/*.docx
+frontend/dist
+ai-backend/sample_data/*.mp4

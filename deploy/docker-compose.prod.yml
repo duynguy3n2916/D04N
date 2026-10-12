@@ -1,0 +1,33 @@
+# File này được CI copy lên server tại $DEPLOY_PATH cùng Caddyfile. IMAGE_TAG do pipeline truyền vào.
+# Bí mật (DATABASE_URL, JWT_SECRET, OPENAI_API_KEY, R2_*...) và DOMAIN nằm trong file .env TRÊN SERVER, không đưa vào git.
+services:
+  api:
+    image: ghcr.io/duynguy3n2916/d04n-api:${IMAGE_TAG:-latest}
+    env_file: .env
+    environment:
+      STORAGE_PATH: /data/storage
+      HF_HOME: /data/hf-cache
+      PORT: "8000"
+    volumes:
+      - storage:/data/storage
+      - hf_cache:/data/hf-cache
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2
+    env_file: .env
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [api]
+    restart: unless-stopped
+
+volumes:
+  storage:
+  hf_cache:
+  caddy_data:
+  caddy_config:

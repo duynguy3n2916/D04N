@@ -1,0 +1,4 @@
+# Caddy tự cấp HTTPS (Let's Encrypt). DOMAIN lấy từ file .env trên server, ví dụ d04n.duckdns.org
+{$DOMAIN} {
+    reverse_proxy api:8000
+}
