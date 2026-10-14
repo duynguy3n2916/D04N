@@ -112,9 +112,28 @@ jobs:
       name: production
       url: ${{ vars.PUBLIC_URL }}
     steps:
+      # Chưa đặt secret server thì bỏ qua deploy (cảnh báo) thay vì làm đỏ cả pipeline.
+      # secrets không dùng được trong `if:` nên kiểm tra qua env rồi xuất output.
+      - name: Check deploy secrets
+        id: cfg
+        env:
+          HOST: ${{ secrets.DEPLOY_HOST }}
+          USER_: ${{ secrets.DEPLOY_USER }}
+          KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          PATH_: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          if [ -n "$HOST" ] && [ -n "$USER_" ] && [ -n "$KEY" ] && [ -n "$PATH_" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Bỏ qua deploy::Chưa đặt đủ secret DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH trong environment 'production'. Image vẫn đã được đẩy lên GHCR."
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.cfg.outputs.ready == 'true'
 
       - name: Copy compose file to server
+        if: steps.cfg.outputs.ready == 'true'
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -124,6 +143,7 @@ jobs:
           target: ${{ secrets.DEPLOY_PATH }}
 
       - name: Pull image and restart
+        if: steps.cfg.outputs.ready == 'true'
         uses: appleboy/ssh-action@v1.2.0
         env:
           GHCR_USER: ${{ github.actor }}
@@ -137,13 +157,15 @@ jobs:
           script_stop: true
           script: |
             cd "${{ secrets.DEPLOY_PATH }}"
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            # GHCR_TOKEN chỉ cần khi package trên GHCR để private
+            if [ -n "$GHCR_TOKEN" ]; then echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin; fi
             export IMAGE_TAG
             docker compose -f docker-compose.prod.yml pull
             docker compose -f docker-compose.prod.yml up -d --remove-orphans
             docker image prune -f
 
       - name: Health check
+        if: steps.cfg.outputs.ready == 'true' && vars.PUBLIC_URL != ''
         env:
           URL: ${{ vars.PUBLIC_URL }}
         run: |
