@@ -35,7 +35,8 @@ jobs:
           --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/d04n_test
-      TEST_STORAGE_PATH: ${{ runner.temp }}/ai_test_storage
+      # file test lưu ở /tmp/ai_test_storage (mặc định trong tests/conftest.py); không dùng runner.temp
+      # vì context `runner` không được phép trong env cấp job -> GitHub từ chối cả workflow
     defaults:
       run:
         working-directory: ai-backend
