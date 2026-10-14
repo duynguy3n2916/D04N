@@ -66,6 +66,60 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
   return data as T;
 }
 
+/** Tải file có xác thực (vd. xuất đề): trả blob + tên file từ Content-Disposition. */
+export async function apiBlob(path: string): Promise<{ blob: Blob; filename: string }> {
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(path, { headers }).catch(() => {
+    throw new ApiError(0, { detail: 'Không kết nối được máy chủ. Backend đã chạy chưa?' });
+  });
+  if (!res.ok) throw new ApiError(res.status, await res.json().catch(() => null));
+  const cd = res.headers.get('Content-Disposition') || '';
+  const star = /filename\*=UTF-8''([^;]+)/i.exec(cd);
+  const plain = /filename="?([^";]+)"?/i.exec(cd);
+  const filename = star ? decodeURIComponent(star[1]) : plain ? plain[1] : 'download';
+  return { blob: await res.blob(), filename };
+}
+
+/** Gọi endpoint Server-Sent Events (POST + JSON), gọi onEvent cho từng sự kiện. Lỗi trước khi stream ném ApiError. */
+export async function apiStream(path: string, json: unknown, onEvent: (event: string, data: any) => void,
+                                signal?: AbortSignal): Promise<void> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'text/event-stream' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  let res: Response;
+  try {
+    res = await fetch(path, { method: 'POST', headers, body: JSON.stringify(json), signal });
+  } catch (e: any) {
+    if (e?.name === 'AbortError') throw e;
+    throw new ApiError(0, { detail: 'Không kết nối được máy chủ. Backend đã chạy chưa?' });
+  }
+  if (!res.ok || !res.body) {
+    const data = await res.json().catch(() => null);
+    if (res.status === 401 && token) onUnauthorized?.(data?.error?.code, data?.error?.message);
+    if (res.status === 403 && data?.error?.code === 'PASSWORD_CHANGE_REQUIRED') onMustChange?.();
+    throw new ApiError(res.status, data);
+  }
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  const flush = (block: string) => {
+    let event = 'message', data = '';
+    for (const line of block.split('\n')) {
+      if (line.startsWith('event: ')) event = line.slice(7).trim();
+      else if (line.startsWith('data: ')) data += line.slice(6);
+    }
+    if (data) onEvent(event, JSON.parse(data));
+  };
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    let i: number;
+    while ((i = buf.indexOf('\n\n')) >= 0) { flush(buf.slice(0, i)); buf = buf.slice(i + 2); }
+  }
+  if (buf.trim()) flush(buf);
+}
+
 /** URL file media cho thẻ <video>/pdf.js (không gửi được header) — gắn access_token. */
 export function mediaUrl(path: string) {
   const sep = path.includes('?') ? '&' : '?';

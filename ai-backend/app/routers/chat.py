@@ -1,16 +1,22 @@
+import json
+import logging
+
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.core.security import Principal, ensure_class_access, get_current_user, require_teacher
 from app.core.utils import clean_id, parse_uuid
-from app.database import get_db
+from app.core.context import get_request_id, set_request_id
+from app.database import SessionLocal, get_db
 from app.models.conversation import AIConversation, AIMessage
 from app.services import tutor
 from app.services.retrieval import RetrievalScope, retrieve
 
 router = APIRouter(prefix="/ai", tags=["chat"])
+log = logging.getLogger("app.chat")
 
 
 class ChatRequest(BaseModel):
@@ -30,18 +36,52 @@ class ChatRequest(BaseModel):
     video_question_active: bool | None = None
 
 
-@router.post("/chat")
-def chat(req: ChatRequest, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+def _sse(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
+
+
+def _turn_args(req: ChatRequest, user: Principal) -> dict:
     class_id = clean_id(req.class_id)
     ensure_class_access(user, class_id)
-    return tutor.ask(
-        db, user, question=req.question.strip(),
+    return dict(
+        question=req.question.strip(),
         conversation_id=parse_uuid(req.conversation_id, "conversation_id", required=False),
         course_id=clean_id(req.course_id), class_id=class_id, lesson_id=clean_id(req.lesson_id),
         video_id=clean_id(req.video_id), video_time=req.video_time, top_k=req.top_k,
         focus_document_id=parse_uuid(req.focus_document_id, "focus_document_id", required=False),
         focus_page=req.focus_page, selected_text=(req.selected_text or "").strip() or None,
     )
+
+
+@router.post("/chat")
+def chat(req: ChatRequest, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    return tutor.ask(db, user, **_turn_args(req, user))
+
+
+@router.post("/chat/stream")
+def chat_stream(req: ChatRequest, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Như /chat nhưng trả Server-Sent Events: `meta` -> `delta`... -> `done` (hoặc `error`).
+
+    Lỗi trước khi gọi LLM (hết lượt, không có quyền...) vẫn trả JSON lỗi bình thường.
+    """
+    plan = tutor.prepare_turn(db, user, **_turn_args(req, user))
+    request_id = get_request_id()
+
+    def events():
+        set_request_id(request_id)  # generator chạy ngoài context của request
+        session = SessionLocal()  # session của request đã đóng khi response bắt đầu stream
+        try:
+            plan.conv = session.merge(plan.conv)
+            for ev in tutor.ask_stream(session, user, plan):
+                yield _sse(ev["event"], ev["data"])
+        except Exception:
+            log.exception("chat_stream_failed")
+            yield _sse("error", {"code": "INTERNAL_ERROR", "message": "Lỗi khi tạo câu trả lời."})
+        finally:
+            session.close()
+
+    return StreamingResponse(events(), media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
 @router.get("/chat/quota")
@@ -59,7 +99,7 @@ def retrieve_only(req: ChatRequest, user: Principal = Depends(require_teacher), 
     results = retrieve(db, req.question, scope, top_k=req.top_k or 5, min_score=0.0)
     from app.config import settings
     for r in results:
-        r["above_threshold"] = (r["score"] or 0) >= settings.rag_min_score
+        r["above_threshold"] = (r["score"] or 0) >= settings.rag_min_score or bool(r.get("lexical_match"))
     return {"query": req.question, "min_score": settings.rag_min_score, "results": results}
 
 

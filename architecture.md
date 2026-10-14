@@ -90,11 +90,11 @@ Ký hiệu trạng thái (sau đợt hoàn thiện 10/2026): ✅ đã có · �
 |---|---|---|---|
 | FR-RAG-01 | Lọc metadata **trước** vector search | ✅ | `retrieval.retrieve` (WHERE trên `ai_documents` rồi `ORDER BY cosine_distance`) |
 | FR-RAG-02 | Trả nguồn: tài liệu, trang, section, **timestamp video** | ✅ | Thêm `start_time/end_time` vào kết quả retrieve |
-| FR-RAG-03 | Phát hiện context không đủ → từ chối trả lời | ✅ | Hiện luôn trả top-K; thêm **ngưỡng similarity** (vd. `1 - distance < 0.35` ⇒ loại) |
+| FR-RAG-03 | Phát hiện context không đủ → từ chối trả lời | ✅ | Ngưỡng cosine `RAG_MIN_SCORE=0.40` (hiệu chỉnh trên tập dev); chunk chỉ khớp từ khóa phải phủ ≥ 60% từ có nghĩa của câu hỏi |
 | FR-RAG-04 | Kiểm soát quyền truy cập theo lớp trước retrieval | ✅ | Lấy `allowed_class_ids` từ token, ép vào filter (không tin client) |
 | FR-RAG-05 | Vector index cho tốc độ | ✅ | `CREATE INDEX ... USING hnsw (embedding vector_cosine_ops)` |
-| FR-RAG-06 | Mở rộng chunk lân cận, query rewriting, rerank | 🟡 (đã có mở rộng lân cận; rerank để sau) | Lấy `chunk_index ± 1`; cross-encoder rerank khi cần |
-| FR-RAG-07 | Hybrid search (dense + sparse) | ❌ (sau MVP) | `tsvector` của Postgres + RRF, hoặc Qdrant |
+| FR-RAG-06 | Mở rộng chunk lân cận, query rewriting, rerank | ✅ | `chunk_index ± 1`; câu hỏi nối tiếp ("còn X thì sao?") ghép câu hỏi trước khi truy xuất (`RAG_QUERY_REWRITE`); cross-encoder đa ngôn ngữ `RAG_RERANK=cross_encoder` (tùy chọn, `services/hybrid.py`) |
+| FR-RAG-07 | Hybrid search (dense + sparse) | ✅ | pgvector + `to_tsvector('simple', content)` (GIN index), hợp nhất bằng RRF (`RAG_HYBRID`). Trên bộ 87 câu demo: Hit@5 0.813 → **1.000**, MRR 0.589 → 0.814 |
 
 ### 3.3 Tutor Agent (FR-TUT)
 
@@ -106,7 +106,7 @@ Ký hiệu trạng thái (sau đợt hoàn thiện 10/2026): ✅ đã có · �
 | FR-TUT-04 | **Khóa đáp án** khi đang có câu hỏi video (hint mode) | ✅ | Hiện dựa vào cờ client gửi lên → phải **suy ra từ `video_sessions`** phía server |
 | FR-TUT-05 | Từ chối khi không đủ dữ liệu | ✅ | Có prompt + nhánh "không có chunk"; cần ngưỡng FR-RAG-03 |
 | FR-TUT-06 | Tóm tắt hội thoại dài | ✅ | Khi > N lượt, LLM tóm tắt và lưu vào `ai_conversations.summary` |
-| FR-TUT-07 | Streaming câu trả lời | ❌ (tùy chọn) | SSE `POST /ai/chat/stream` |
+| FR-TUT-07 | Streaming câu trả lời | ✅ | SSE `POST /ai/chat/stream` (`meta` → `delta`… → `done`); ở hint mode chỉ gửi bản cuối đã qua kiểm tra lộ đáp án |
 
 ### 3.4 Teacher AI (FR-TCH)
 
@@ -118,7 +118,7 @@ Ký hiệu trạng thái (sau đợt hoàn thiện 10/2026): ✅ đã có · �
 | FR-TCH-04 | Lưu lịch sử sinh (`draft`) | ✅ | `ai_generations` |
 | FR-TCH-05 | Giáo viên **sửa từng câu** và duyệt từng câu | ✅ | Hiện chỉ đổi status cả lần sinh → tách bảng `question_bank` (mỗi câu một dòng) |
 | FR-TCH-06 | Kiểm tra số câu đúng yêu cầu, tỷ lệ độ khó | ✅ | Hiện bỏ qua lệch số lượng → retry 1 lần nếu thiếu |
-| FR-TCH-07 | Xuất đề kiểm tra (PDF/DOCX) | ❌ (tùy chọn) | Template + python-docx |
+| FR-TCH-07 | Xuất đề kiểm tra (PDF/DOCX) | ✅ | `GET /ai/teacher/question-bank/export`: DOCX (python-docx) hoặc HTML in / lưu PDF; tối đa 4 mã đề (xáo câu và lựa chọn), trang đáp án + giải thích |
 
 ### 3.5 Speech-to-Text (FR-STT)
 
@@ -161,11 +161,11 @@ Ký hiệu trạng thái (sau đợt hoàn thiện 10/2026): ✅ đã có · �
 | ID | Yêu cầu | Trạng thái | Cách làm |
 |---|---|---|---|
 | FR-EVL-01 | Chạy benchmark, đo Hit@K, groundedness, latency | ✅ | `POST /ai/evaluation/run` |
-| FR-EVL-02 | Bộ 50–100 câu chuẩn, có **chunk/tài liệu đúng** làm ground truth | ✅ | Hiện 5 câu, Hit@K dựa trên từ khóa → thêm `relevant_document_ids` / `relevant_pages` |
+| FR-EVL-02 | Bộ 50–100 câu chuẩn, có **chunk/tài liệu đúng** làm ground truth | ✅ | 87 câu, `relevant_sources` theo tài liệu + mục / trang / khoảng giây video |
 | FR-EVL-03 | Tách dev set / test set | ✅ | Trường `split` trong bảng `eval_samples` |
 | FR-EVL-04 | Chỉ số bổ sung: correctness, context relevance, citation correctness, WER, teacher acceptance rate, cost | ✅ | Xem mục 12 |
 | FR-EVL-05 | Log prompt version, model, chunk IDs, latency, token cho mỗi lượt | ✅ | Bảng `ai_llm_calls` qua LLM Gateway |
-| FR-EVL-06 | Schema validation cho mọi structured output | ✅ | Có cho Teacher; thiếu cho Video question, Question Agent, suggest |
+| FR-EVL-06 | Schema validation cho mọi structured output | ✅ | `llm.complete_json` + Pydantic cho Teacher, Video question, Question Agent, gợi ý mốc, chấm điểm, judge (tự sửa 1 lần) |
 | FR-EVL-07 | Baseline đối chứng để chứng minh đóng góp của RAG | ✅ | `mode` = `rag` / `no_filter` / `no_rag` khi chạy đánh giá, ghi đè `min_score` / `expand_neighbors`; `GET /ai/evaluation/compare` so chỉ số và chênh lệch |
 | FR-EVL-08 | Không lộ đáp án bài kiểm tra cuối bài qua Tutor | ✅ | Lượt làm bài dở (lưu `started_at` / `finished_at`) bật hint mode phía server + post-check đáp án như câu hỏi video |
 | FR-EVL-09 | Ẩn dữ liệu nhạy cảm, thời hạn lưu log | ✅ | Che email / số điện thoại trước khi lưu và gửi LLM (`REDACT_PII`); quét nền xóa tin nhắn / `ai_llm_calls` quá `CHAT_RETENTION_DAYS` / `LLM_LOG_RETENTION_DAYS` |
@@ -692,34 +692,38 @@ CREATE INDEX ix_vq_player ON video_questions (video_id, status, timestamp);
 |---|---|---|---|
 | Knowledge | `POST /ai/documents/index` | GV | ✅ (→ async) |
 | | `GET /ai/documents`, `GET /ai/documents/{id}` | GV | ✅ |
-| | `DELETE /ai/documents/{id}` | GV | ❌ |
-| | `POST /ai/lessons/{id}/index` (text bài học) | GV/LMS | ❌ |
-| Jobs | `GET /ai/jobs/{job_id}` | GV | ❌ |
+| | `DELETE /ai/documents/{id}` | GV | ✅ |
+| | `POST /ai/lessons/{id}/index` (text bài học) | GV/LMS | ✅ (→ async) |
+| Jobs | `GET /ai/jobs/{job_id}` | GV | ✅ |
 | RAG/Tutor | `POST /ai/chat` | HS | ✅ |
+| | `POST /ai/chat/stream` (SSE) | HS | ✅ |
 | | `POST /ai/retrieve` (debug) | Admin | ✅ |
 | | `GET /ai/conversations/{id}` | HS (chủ sở hữu) | ✅ |
 | Teacher AI | `POST /ai/teacher/generate-quiz` | GV | ✅ |
 | | `POST /ai/questions/generate` | GV | ✅ |
 | | `GET /ai/teacher/generations` | GV | ✅ |
 | | `PATCH /ai/teacher/generations/{id}` | GV | ✅ |
-| | `PATCH /ai/question-bank/{id}` (sửa/duyệt từng câu) | GV | ❌ |
+| | `PATCH /ai/question-bank/{id}` (sửa/duyệt từng câu) | GV | ✅ |
+| | `GET /ai/teacher/question-bank/export` (DOCX / HTML in PDF) | GV | ✅ |
 | STT | `POST /ai/videos/import-transcript` | GV | ✅ |
 | | `POST /ai/videos/transcribe` | GV | ✅ (→ async) |
 | | `GET/PUT /ai/videos/{id}/transcript` | GV (PUT), HS (GET) | ✅ |
 | Video Learning | `POST /ai/videos/{id}/suggest-timestamps` | GV | ✅ |
 | | `POST /ai/videos/{id}/generate-question` | GV | ✅ |
 | | `POST /ai/videos/{id}/questions` | GV | ✅ |
-| | `PATCH /ai/video-questions/{id}` (sửa / approve) | GV | ❌ |
+| | `PATCH /ai/video-questions/{id}` (sửa / approve) | GV | ✅ |
 | | `GET /ai/videos/{id}/questions` | HS | ✅ |
 | | `POST /ai/video-questions/{id}/answer` | HS | ✅ |
 | Workflow | `POST /ai/question-agent/trigger` | HS | ✅ |
-| | `POST /ai/workflow/question-start` | HS | ❌ |
+| | `POST /ai/workflow/question-start` | HS | ✅ |
 | | `POST /ai/workflow/timeout` | HS | ✅ (→ chỉ là tín hiệu, server tự xác nhận) |
 | | `POST /ai/workflow/resume` | HS | ✅ |
 | | `GET /ai/workflow/session` | HS | ✅ |
 | Evaluation | `POST /ai/evaluation/run` | Admin | ✅ (→ async) |
 | | `GET /ai/evaluation/latest`, `/benchmark` | Admin | ✅ |
-| | `POST /ai/evaluation/samples` (nạp bộ test) | Admin | ❌ |
+| | `POST /ai/evaluation/samples` (nạp bộ test) | Admin | ✅ |
+| | `GET /ai/evaluation/compare` (so baseline) | GV | ✅ |
+| Tài khoản | `POST /ai/auth/forgot-password`, `POST /ai/auth/reset-password` | – | ✅ (gửi link qua SMTP) |
 | Hệ thống | `GET /health` | – | ✅ |
 
 ---
@@ -842,14 +846,14 @@ uvicorn app.main:app --reload --port 8000
 
 | Đợt | Nội dung | Trạng thái |
 |---|---|---|
-| P0 – Tin cậy số liệu | Evaluation theo nguồn đúng (Hit@K, MRR, Recall), judge lỗi không gán điểm, tách dev/test, lưu cấu hình, báo cáo trung thực, WER | ✅ Xong. Còn việc của nhóm: soạn 50–100 câu từ học liệu thật |
+| P0 – Tin cậy số liệu | Evaluation theo nguồn đúng (Hit@K, MRR, Recall), judge lỗi không gán điểm, tách dev/test, lưu cấu hình, báo cáo trung thực, WER; bộ 87 câu (68 test / 19 dev, 12 câu ngoài học liệu) gắn nguồn đúng theo mục / giây / trang | ✅ Xong |
 | P1 – Đúng nghiệp vụ | Hint mode phía server + chặn lộ đáp án; nộp bài cập nhật state; một câu active (khóa dòng); deadline phía server + quét nền; `session_transitions` | ✅ Xong |
-| P2 – RAG chất lượng | Ngưỡng similarity + từ chối; nguồn có mm:ss; HNSW; mở rộng chunk lân cận; nhãn trích dẫn [S1] | ✅ Xong (hybrid search để sau) |
+| P2 – RAG chất lượng | Ngưỡng similarity + từ chối; nguồn có mm:ss; HNSW; mở rộng chunk lân cận; nhãn trích dẫn [S1]; hybrid search + RRF; rerank tùy chọn; viết lại câu hỏi nối tiếp | ✅ Xong |
 | P3 – Kiến trúc & vận hành | LLM Gateway + `ai_llm_calls`; prompt có version; logic ra khỏi router; job nền + `/ai/jobs`; đồng bộ schema tự động | ✅ Xong |
 | P4 – Bảo mật | JWT + vai trò + phạm vi lớp; CORS whitelist; upload tên uuid, giới hạn dung lượng | ✅ Xong |
-| P5 – Mở rộng | Ngân hàng câu hỏi duyệt từng câu; phiên bản transcript + rollback; tóm tắt hội thoại; sinh bù câu thiếu | ✅ Xong. Chưa làm: hybrid search, streaming, xuất đề DOCX |
+| P5 – Mở rộng | Ngân hàng câu hỏi duyệt từng câu; phiên bản transcript + rollback; tóm tắt hội thoại; sinh bù câu thiếu; streaming Tutor; xuất đề DOCX / PDF; quên mật khẩu qua email | ✅ Xong |
 
-Kiểm thử: 46 bài pytest chạy trên một database Postgres + pgvector riêng trên cloud (`TEST_DATABASE_URL`, không bao giờ trên DB production), LLM giả lập; cộng kịch bản giao diện đầy đủ cho giáo viên, học sinh, admin.
+Kiểm thử: 55 bài pytest chạy trên một database Postgres + pgvector riêng trên cloud (`TEST_DATABASE_URL`, không bao giờ trên DB production), LLM giả lập; cộng kịch bản giao diện đầy đủ cho giáo viên, học sinh, admin.
 
 ---
 

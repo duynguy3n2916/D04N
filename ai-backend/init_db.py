@@ -8,6 +8,7 @@
 """
 import argparse
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -103,9 +104,22 @@ BANK_QUESTIONS = [
 ]
 
 
+def _store_sample(src: Path, key: str) -> str:
+    """Đưa file mẫu vào kho file đang dùng (local hoặc R2). put_file chuyển/xóa file nguồn nên chép ra file tạm trước."""
+    import shutil
+    import tempfile
+
+    from app.services.object_store import get_store
+
+    fd, tmp = tempfile.mkstemp(suffix=src.suffix)
+    os.close(fd)
+    shutil.copyfile(src, tmp)
+    get_store().put_file(key, tmp)
+    return key
+
+
 def seed_course(db, teacher) -> None:
     """Khóa học demo: chương 1 / bài 1 gồm video, slide, bài đọc, bài kiểm tra."""
-    import shutil
 
     from app.core.llm_schemas import QuestionItem
     from app.models.documents import AIDocument
@@ -113,7 +127,6 @@ def seed_course(db, teacher) -> None:
     from app.models.video_question import QuestionBankItem
     from app.services import course_admin, jobs
     from app.services.ingestion import create_document, find_duplicate
-    from app.services.storage import storage_dir
 
     if db.query(Course).filter(Course.code == COURSE_ID).first():
         print("• Khóa học demo đã có, bỏ qua.")
@@ -121,10 +134,9 @@ def seed_course(db, teacher) -> None:
 
     # File video demo (slide có phụ đề) để phát được ngay
     if not db.get(MediaVideo, VIDEO_ID):
-        dst = storage_dir("media") / "video-01-demo.mp4"
-        shutil.copyfile(SAMPLE / "video-01.mp4", dst)
-        db.add(MediaVideo(video_id=VIDEO_ID, title="Lớp, đối tượng và 4 tính chất", file_path=str(dst),
-                          mime="video/mp4", size_bytes=dst.stat().st_size, duration_seconds=307,
+        key = _store_sample(SAMPLE / "video-01.mp4", "media/video-01-demo.mp4")
+        db.add(MediaVideo(video_id=VIDEO_ID, title="Lớp, đối tượng và 4 tính chất", file_path=key,
+                          mime="video/mp4", size_bytes=(SAMPLE / "video-01.mp4").stat().st_size, duration_seconds=307,
                           created_by="gv-demo"))
         db.commit()
 
@@ -134,10 +146,9 @@ def seed_course(db, teacher) -> None:
     digest = hashlib.sha256(pdf_src.read_bytes()).hexdigest()
     slide_doc = find_duplicate(db, digest, LESSON_ID, None)
     if not slide_doc:
-        dst = storage_dir("documents") / "slides_oop_demo.pdf"
-        shutil.copyfile(pdf_src, dst)
+        key = _store_sample(pdf_src, "documents/slides_oop_demo.pdf")
         slide_doc = create_document(db, title="Slide Bài 1 - 4 tính chất OOP.pdf", source_type="pdf",
-                                    file_path=str(dst), content_hash=digest, course_id=COURSE_ID,
+                                    file_path=key, content_hash=digest, course_id=COURSE_ID,
                                     lesson_id=LESSON_ID, uploaded_by="gv-demo")
         jobs.submit(db, "ingest_document", {"document_id": str(slide_doc.id)}, created_by="gv-demo")
 

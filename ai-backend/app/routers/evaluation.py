@@ -23,6 +23,7 @@ class RunEvaluationRequest(BaseModel):
     mode: str = Field(default="rag", pattern="^(rag|no_filter|no_rag)$")  # no_rag / no_filter: baseline đối chứng
     min_score: float | None = Field(default=None, ge=0.0, le=1.0)  # ghi đè RAG_MIN_SCORE cho thí nghiệm
     expand_neighbors: bool | None = None  # ghi đè RAG_EXPAND_NEIGHBORS cho thí nghiệm
+    hybrid: bool | None = None  # ghi đè RAG_HYBRID: so sánh chỉ-vector với hybrid
 
 
 @router.post("/run", status_code=202)
@@ -34,7 +35,8 @@ def run_evaluation(req: RunEvaluationRequest | None = None, user: Principal = De
         raise AppError(400, "NO_SAMPLES", f"Bộ '{req.test_suite_name}' chưa có mẫu. Nạp mẫu trước (POST /ai/evaluation/samples).")
     job = jobs.submit(db, "run_evaluation", {"suite": req.test_suite_name, "split": req.split, "top_k": req.top_k,
                                              "use_judge": req.use_judge, "created_by": user.user_id, "mode": req.mode,
-                                             "min_score": req.min_score, "expand": req.expand_neighbors},
+                                             "min_score": req.min_score, "expand": req.expand_neighbors,
+                                             "hybrid": req.hybrid},
                       created_by=user.user_id)
     return JSONResponse(status_code=202, content=jobs.job_to_dict(job))
 

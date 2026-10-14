@@ -1,5 +1,5 @@
 {
- "description": "Bộ mẫu đánh giá gắn với dữ liệu demo (lesson_oop.md + video-01.srt). Thay bằng 50-100 câu từ học liệu thật trước khi báo cáo.",
+ "description": "Bộ mẫu đánh giá gắn với học liệu demo (bài đọc lesson_oop.md, video-01, slide PDF): câu trong học liệu có nguồn đúng theo mục / khoảng thời gian / trang; câu ngoài học liệu để đo khả năng từ chối. Khi có học liệu thật, soạn bộ riêng cùng định dạng.",
  "samples": [
   {
    "id": "q01",
@@ -432,6 +432,1231 @@
    "id": "u03",
    "split": "dev",
    "question": "Cách cấu hình định tuyến OSPF trên router Cisco?",
+   "expected_answer": "Hệ thống nên trả lời rằng học liệu không có thông tin này.",
+   "relevant_sources": [],
+   "answerable": false
+  },
+  {
+   "id": "q22",
+   "split": "test",
+   "question": "OOP giúp chương trình có những lợi ích gì?",
+   "expected_answer": "Dễ mở rộng, dễ bảo trì và tái sử dụng mã nguồn.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Giới thiệu lập trình hướng đối tượng"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      2
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q23",
+   "split": "dev",
+   "question": "Kể tên một số ngôn ngữ lập trình hỗ trợ OOP.",
+   "expected_answer": "Java, C++, C# và Python.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Giới thiệu lập trình hướng đối tượng"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      2
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q24",
+   "split": "test",
+   "question": "Thuộc tính và phương thức của một đối tượng là gì?",
+   "expected_answer": "Thuộc tính là dữ liệu của đối tượng, phương thức là hành vi của đối tượng.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Giới thiệu lập trình hướng đối tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 19,
+     "end": 28
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q25",
+   "split": "test",
+   "question": "Cho ví dụ về các thực thể có thể mô hình hóa thành đối tượng.",
+   "expected_answer": "Sinh viên, tài khoản ngân hàng, hóa đơn.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Giới thiệu lập trình hướng đối tượng"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      2
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q26",
+   "split": "test",
+   "question": "Trong ví dụ ngôi nhà, lớp và đối tượng tương ứng với gì?",
+   "expected_answer": "Lớp giống bản vẽ ngôi nhà, đối tượng là ngôi nhà thật được xây theo bản vẽ.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Lớp và đối tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 36,
+     "end": 51
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      3
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q27",
+   "split": "test",
+   "question": "Từ một lớp có thể tạo ra bao nhiêu đối tượng?",
+   "expected_answer": "Nhiều đối tượng, mỗi đối tượng có giá trị thuộc tính riêng.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Lớp và đối tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 51,
+     "end": 59
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      3
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q28",
+   "split": "dev",
+   "question": "Instance (thể hiện) là gì?",
+   "expected_answer": "Instance là đối tượng cụ thể được tạo ra từ một lớp.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Lớp và đối tượng"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q29",
+   "split": "test",
+   "question": "Lớp SinhVien trong ví dụ có những thuộc tính và phương thức nào?",
+   "expected_answer": "Thuộc tính ho_ten, ma_sv, diem_tb và phương thức xep_loai().",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Lớp và đối tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 59,
+     "end": 68
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      3
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q30",
+   "split": "test",
+   "question": "Trong Python, lớp được khai báo bằng từ khóa nào?",
+   "expected_answer": "Từ khóa class.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Lớp và đối tượng"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      3
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q31",
+   "split": "test",
+   "question": "Hai đối tượng sv1 và sv2 cùng lớp SinhVien khác nhau ở điểm nào?",
+   "expected_answer": "Cùng lớp nhưng có giá trị thuộc tính riêng như họ tên và điểm khác nhau.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Lớp và đối tượng"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      3
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q32",
+   "split": "test",
+   "question": "Vì sao số dư tài khoản ngân hàng nên để private?",
+   "expected_answer": "Để che giấu và bảo vệ dữ liệu, bên ngoài không sửa tùy tiện; muốn rút tiền phải qua phương thức có kiểm tra.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đóng gói"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 117,
+     "end": 134
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      4
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q33",
+   "split": "test",
+   "question": "Phương thức rut_tien() của lớp TaiKhoan làm gì và minh họa tính chất nào?",
+   "expected_answer": "Kiểm tra số dư trước khi trừ tiền; minh họa tính đóng gói.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đóng gói"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 124,
+     "end": 134
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      4
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q34",
+   "split": "dev",
+   "question": "Các phạm vi truy cập (access modifier) trong Java và C++ gồm những gì?",
+   "expected_answer": "private, protected và public.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đóng gói"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      4
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q35",
+   "split": "test",
+   "question": "Thuộc tính private có thể được truy cập ở đâu?",
+   "expected_answer": "Chỉ bên trong lớp.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đóng gói"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q36",
+   "split": "test",
+   "question": "Đóng gói giúp đảm bảo điều gì cho trạng thái của đối tượng?",
+   "expected_answer": "Đối tượng luôn ở trạng thái hợp lệ, dữ liệu được bảo vệ.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đóng gói"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 143,
+     "end": 152
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      4
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q37",
+   "split": "test",
+   "question": "Quan hệ is-a là gì? Cho ví dụ.",
+   "expected_answer": "Quan hệ \"là một\" của kế thừa, ví dụ lớp Cho kế thừa DongVat vì chó là một động vật.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính kế thừa"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 166,
+     "end": 176
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      5
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q38",
+   "split": "test",
+   "question": "Trong Python, lớp con khai báo lớp cha như thế nào?",
+   "expected_answer": "Ghi lớp cha trong cặp ngoặc, ví dụ class Cho(DongVat).",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính kế thừa"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      5
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q39",
+   "split": "dev",
+   "question": "Lợi ích chính của kế thừa là gì?",
+   "expected_answer": "Tái sử dụng mã nguồn và xây dựng hệ thống phân cấp lớp rõ ràng.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính kế thừa"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 183,
+     "end": 192
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q40",
+   "split": "test",
+   "question": "Lớp con có thể thay đổi hành vi kế thừa từ lớp cha không?",
+   "expected_answer": "Có, lớp con có thể bổ sung hoặc thay đổi hành vi riêng.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính kế thừa"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q41",
+   "split": "test",
+   "question": "Đa kế thừa là gì và ngôn ngữ nào trong bài hỗ trợ?",
+   "expected_answer": "Một lớp kế thừa từ nhiều lớp cha; Python hỗ trợ, Java thì không với lớp.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính kế thừa"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 192,
+     "end": 200
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q42",
+   "split": "test",
+   "question": "Java chỉ cho đơn kế thừa lớp, vậy một lớp Java muốn có hành vi từ nhiều nguồn thì làm sao?",
+   "expected_answer": "Cài đặt nhiều interface.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính kế thừa"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q43",
+   "split": "test",
+   "question": "Trong ví dụ của bài, lớp Cho kế thừa lớp nào?",
+   "expected_answer": "Lớp DongVat (Động vật).",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính kế thừa"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 166,
+     "end": 176
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      5
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q44",
+   "split": "test",
+   "question": "Ví dụ chó kêu \"Gâu gâu\", mèo kêu \"Meo meo\" minh họa tính chất nào?",
+   "expected_answer": "Tính đa hình.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đa hình"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 216,
+     "end": 224
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      6
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q45",
+   "split": "dev",
+   "question": "Ghi đè phương thức là đa hình lúc chạy hay lúc biên dịch?",
+   "expected_answer": "Lúc chạy (runtime).",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đa hình"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 241,
+     "end": 250
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      6
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q46",
+   "split": "test",
+   "question": "Nạp chồng phương thức là gì?",
+   "expected_answer": "Nhiều phương thức cùng tên nhưng khác danh sách tham số trong cùng một lớp; là đa hình lúc biên dịch.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đa hình"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 233,
+     "end": 242
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      6
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q47",
+   "split": "test",
+   "question": "Python thường dùng gì thay cho nạp chồng phương thức kiểu Java?",
+   "expected_answer": "Tham số mặc định.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đa hình"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q48",
+   "split": "test",
+   "question": "Khi ghi đè, phương thức ở lớp con giống phương thức lớp cha ở điểm nào?",
+   "expected_answer": "Cùng tên và cùng tham số.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đa hình"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      6
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q49",
+   "split": "test",
+   "question": "Phương thức trừu tượng là gì?",
+   "expected_answer": "Phương thức chỉ khai báo, không có phần thân.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính trừu tượng"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q50",
+   "split": "dev",
+   "question": "Decorator @abstractmethod dùng để làm gì?",
+   "expected_answer": "Đánh dấu phương thức trừu tượng trong lớp kế thừa ABC; lớp con bắt buộc cài đặt.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính trừu tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 272,
+     "end": 280
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      7
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q51",
+   "split": "test",
+   "question": "Interface trong Java là gì?",
+   "expected_answer": "Dạng trừu tượng hoàn toàn, chỉ định nghĩa các phương thức mà lớp cài đặt phải có.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính trừu tượng"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q52",
+   "split": "test",
+   "question": "Lớp con có bắt buộc cài đặt phương thức trừu tượng của lớp cha không?",
+   "expected_answer": "Có, bắt buộc.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính trừu tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 280,
+     "end": 289
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      7
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q53",
+   "split": "test",
+   "question": "Tính trừu tượng giúp người dùng lớp như thế nào?",
+   "expected_answer": "Chỉ cần biết đối tượng làm được gì, không cần biết nó làm như thế nào; chi tiết cài đặt bị ẩn.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính trừu tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 256,
+     "end": 265
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q54",
+   "split": "test",
+   "question": "Lớp ABC dùng để tạo lớp trừu tượng nằm trong module nào của Python?",
+   "expected_answer": "Module abc.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính trừu tượng"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      7
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q55",
+   "split": "dev",
+   "question": "Nêu ý chính của từng tính chất trong bốn tính chất của OOP.",
+   "expected_answer": "Đóng gói bảo vệ dữ liệu; kế thừa tái sử dụng mã; đa hình một giao diện nhiều cách thực hiện; trừu tượng giảm phức tạp, ẩn cài đặt.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Bốn tính chất cơ bản của OOP"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      8
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q56",
+   "split": "test",
+   "question": "Tính chất nào của OOP giúp giảm độ phức tạp bằng cách ẩn chi tiết cài đặt?",
+   "expected_answer": "Tính trừu tượng.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Bốn tính chất cơ bản của OOP"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      8
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q57",
+   "split": "test",
+   "question": "Tính chất nào của OOP giúp tái sử dụng mã của lớp cha?",
+   "expected_answer": "Tính kế thừa.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Bốn tính chất cơ bản của OOP"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      8
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q58",
+   "split": "test",
+   "question": "Quan hệ has-a giữa các lớp là gì?",
+   "expected_answer": "Quan hệ kết hợp \"có một\", gồm kết tập và hợp thành, khác với quan hệ is-a của kế thừa.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Quan hệ giữa các lớp"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q59",
+   "split": "test",
+   "question": "Cho ví dụ về quan hệ hợp thành (composition).",
+   "expected_answer": "Ngôi nhà và các phòng: các phòng bị hủy khi ngôi nhà bị hủy.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Quan hệ giữa các lớp"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q60",
+   "split": "dev",
+   "question": "Lớp học giải thể nhưng sinh viên vẫn tồn tại là quan hệ gì?",
+   "expected_answer": "Kết tập (aggregation).",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Quan hệ giữa các lớp"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q61",
+   "split": "test",
+   "question": "Lập trình thủ tục phù hợp với loại chương trình nào?",
+   "expected_answer": "Chương trình nhỏ, tuần tự.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "So sánh với lập trình thủ tục"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q62",
+   "split": "test",
+   "question": "Lập trình hướng đối tượng phù hợp với hệ thống như thế nào?",
+   "expected_answer": "Hệ thống lớn, nhiều thực thể và cần mở rộng lâu dài.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "So sánh với lập trình thủ tục"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q63",
+   "split": "test",
+   "question": "Bài học sau sẽ thực hành xây dựng lớp gì?",
+   "expected_answer": "Lớp TaiKhoan áp dụng cả bốn tính chất.",
+   "relevant_sources": [
+    {
+     "video_id": "video-01",
+     "start": 297,
+     "end": 306
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q64",
+   "split": "dev",
+   "question": "Tính chất đầu tiên của OOP được giới thiệu trong video là gì?",
+   "expected_answer": "Tính đóng gói.",
+   "relevant_sources": [
+    {
+     "video_id": "video-01",
+     "start": 93,
+     "end": 101
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q65",
+   "split": "test",
+   "question": "Theo video, tính chất thứ ba của OOP là gì?",
+   "expected_answer": "Tính đa hình.",
+   "relevant_sources": [
+    {
+     "video_id": "video-01",
+     "start": 200,
+     "end": 216
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q66",
+   "split": "test",
+   "question": "Theo video, lớp là khuôn mẫu còn đối tượng là gì?",
+   "expected_answer": "Đối tượng là thể hiện cụ thể của lớp.",
+   "relevant_sources": [
+    {
+     "video_id": "video-01",
+     "start": 84,
+     "end": 93
+    },
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Lớp và đối tượng"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q67",
+   "split": "test",
+   "question": "Trong hàm khởi tạo của lớp Cho, làm sao gọi hàm khởi tạo của lớp cha DongVat?",
+   "expected_answer": "Gọi super().__init__(ten).",
+   "relevant_sources": [
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      5
+     ]
+    },
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính kế thừa"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 175,
+     "end": 184
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q68",
+   "split": "test",
+   "question": "Đoạn code class Hinh(ABC) có phương thức dien_tich gắn @abstractmethod minh họa điều gì?",
+   "expected_answer": "Lớp trừu tượng Hinh với phương thức trừu tượng dien_tich mà lớp con phải cài đặt.",
+   "relevant_sources": [
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      7
+     ]
+    },
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính trừu tượng"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q69",
+   "split": "dev",
+   "question": "Ghi đè và nạp chồng khác nhau ở những tiêu chí nào?",
+   "expected_answer": "Vị trí (lớp con định nghĩa lại / cùng một lớp), tham số (giống / khác) và thời điểm (lúc chạy / lúc biên dịch).",
+   "relevant_sources": [
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      6
+     ]
+    },
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đa hình"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q70",
+   "split": "test",
+   "question": "Hàm khởi tạo còn được gọi là gì và được gọi khi nào?",
+   "expected_answer": "Constructor; được gọi tự động khi tạo đối tượng mới.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Lớp và đối tượng"
+     ]
+    },
+    {
+     "video_id": "video-01",
+     "start": 67,
+     "end": 77
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q71",
+   "split": "test",
+   "question": "Đặt tên thuộc tính là __so_du trong Python có ý nghĩa gì?",
+   "expected_answer": "Quy ước hai dấu gạch dưới để hạn chế truy cập trực tiếp từ bên ngoài lớp.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính đóng gói"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      4
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q72",
+   "split": "test",
+   "question": "Theo video, kế thừa giúp tránh điều gì khi viết mã?",
+   "expected_answer": "Tránh viết lặp lại, tái sử dụng mã nguồn.",
+   "relevant_sources": [
+    {
+     "video_id": "video-01",
+     "start": 183,
+     "end": 192
+    },
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính kế thừa"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q73",
+   "split": "test",
+   "question": "super().__init__() thường được gọi ở đâu?",
+   "expected_answer": "Trong hàm khởi tạo của lớp con.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Tính kế thừa"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      5
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q74",
+   "split": "dev",
+   "question": "Vì sao nói đa hình là \"một giao diện, nhiều cách thực hiện\"?",
+   "expected_answer": "Cùng một lời gọi phương thức nhưng mỗi đối tượng thực hiện theo cách riêng.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Bốn tính chất cơ bản của OOP",
+      "Tính đa hình"
+     ]
+    },
+    {
+     "document_title": "Slide Bài 1 - 4 tính chất OOP.pdf",
+     "pages": [
+      8
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "q75",
+   "split": "test",
+   "question": "Nguyên tắc ưu tiên hợp thành hơn kế thừa giúp hệ thống như thế nào?",
+   "expected_answer": "Linh hoạt hơn và ít phụ thuộc hơn.",
+   "relevant_sources": [
+    {
+     "document_title": "Bài 1: Lập trình hướng đối tượng",
+     "sections": [
+      "Quan hệ giữa các lớp"
+     ]
+    }
+   ],
+   "lesson_id": null,
+   "answerable": true
+  },
+  {
+   "id": "u04",
+   "split": "test",
+   "question": "Cách cài đặt thuật toán sắp xếp nhanh (quicksort)?",
+   "expected_answer": "Hệ thống nên trả lời rằng học liệu không có thông tin này.",
+   "relevant_sources": [],
+   "answerable": false
+  },
+  {
+   "id": "u05",
+   "split": "test",
+   "question": "Mạng nơ-ron tích chập (CNN) hoạt động như thế nào?",
+   "expected_answer": "Hệ thống nên trả lời rằng học liệu không có thông tin này.",
+   "relevant_sources": [],
+   "answerable": false
+  },
+  {
+   "id": "u06",
+   "split": "dev",
+   "question": "Thủ đô của nước Úc là gì?",
+   "expected_answer": "Hệ thống nên trả lời rằng học liệu không có thông tin này.",
+   "relevant_sources": [],
+   "answerable": false
+  },
+  {
+   "id": "u07",
+   "split": "test",
+   "question": "Làm sao tối ưu câu truy vấn SQL có JOIN nhiều bảng?",
+   "expected_answer": "Hệ thống nên trả lời rằng học liệu không có thông tin này.",
+   "relevant_sources": [],
+   "answerable": false
+  },
+  {
+   "id": "u08",
+   "split": "test",
+   "question": "Định luật Ohm phát biểu như thế nào?",
+   "expected_answer": "Hệ thống nên trả lời rằng học liệu không có thông tin này.",
+   "relevant_sources": [],
+   "answerable": false
+  },
+  {
+   "id": "u09",
+   "split": "test",
+   "question": "Quá trình bắt tay ba bước của giao thức TCP diễn ra thế nào?",
+   "expected_answer": "Hệ thống nên trả lời rằng học liệu không có thông tin này.",
+   "relevant_sources": [],
+   "answerable": false
+  },
+  {
+   "id": "u10",
+   "split": "dev",
+   "question": "Cách viết hồ sơ xin học bổng du học?",
+   "expected_answer": "Hệ thống nên trả lời rằng học liệu không có thông tin này.",
+   "relevant_sources": [],
+   "answerable": false
+  },
+  {
+   "id": "u11",
+   "split": "test",
+   "question": "React hook useEffect dùng để làm gì?",
+   "expected_answer": "Hệ thống nên trả lời rằng học liệu không có thông tin này.",
+   "relevant_sources": [],
+   "answerable": false
+  },
+  {
+   "id": "u12",
+   "split": "test",
+   "question": "Giải phương trình bậc hai như thế nào?",
    "expected_answer": "Hệ thống nên trả lời rằng học liệu không có thông tin này.",
    "relevant_sources": [],
    "answerable": false

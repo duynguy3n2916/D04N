@@ -1,12 +1,16 @@
-from fastapi import APIRouter, Depends, Query
+from urllib.parse import quote
+
+from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.errors import AppError
 from app.core.llm_schemas import Difficulty, QuestionType
 from app.core.security import Principal, ensure_class_access, require_teacher
 from app.core.utils import clean_id, parse_uuid
 from app.database import get_db
-from app.services import question_gen
+from app.models.learning import Lesson
+from app.services import question_gen, quiz_export
 
 router = APIRouter(prefix="/ai", tags=["teacher"])
 
@@ -86,6 +90,33 @@ def update_generation_status(generation_id: str, status: str | None = Query(defa
 def list_question_bank(lesson_id: str | None = None, status: str | None = None,
                        user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
     return question_gen.list_bank(db, user, lesson_id=clean_id(lesson_id), status=status)
+
+
+@router.get("/teacher/question-bank/export")
+def export_question_bank(lesson_id: str | None = None, ids: str | None = None,
+                         status: str = Query(default="approved", pattern="^(approved|draft|rejected|all)$"),
+                         format: str = Query(default="docx", pattern="^(docx|html)$"),
+                         answers: bool = True, variants: int = Query(default=1, ge=1, le=4), shuffle: bool = False,
+                         duration: int | None = Query(default=None, ge=1, le=300),
+                         title: str | None = Query(default=None, max_length=200),
+                         user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
+    """Xuất đề kiểm tra: DOCX, hoặc HTML để in / lưu PDF. Mặc định lấy các câu đã duyệt của bài."""
+    lesson_id = clean_id(lesson_id)
+    item_ids = [parse_uuid(x.strip(), "ids") for x in (ids or "").split(",") if x.strip()]
+    if not lesson_id and not item_ids:
+        raise AppError(400, "INVALID_EXPORT", "Cần lesson_id hoặc danh sách ids câu hỏi.")
+    payloads = question_gen.bank_payloads(db, user, lesson_id=lesson_id, item_ids=item_ids or None,
+                                          status=None if status == "all" else status)
+    if not payloads:
+        raise AppError(404, "NO_QUESTIONS", "Không có câu hỏi phù hợp để xuất (cần duyệt câu hỏi trước).")
+    lesson = db.query(Lesson).filter(Lesson.code == lesson_id).first() if lesson_id else None
+    doc_title = title or (f"Đề kiểm tra: {lesson.title}" if lesson else "Đề kiểm tra")
+    content, media_type, ext = quiz_export.export(payloads, title=doc_title, fmt=format, include_answers=answers,
+                                                  variants=variants, shuffle=shuffle, duration_minutes=duration)
+    ascii_name = f"de-kiem-tra.{ext}"
+    utf8_name = quote(f"{doc_title}.{ext}")
+    return Response(content, media_type=media_type, headers={
+        "Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{utf8_name}"})
 
 
 class BankItemUpdate(BaseModel):

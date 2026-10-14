@@ -1,6 +1,8 @@
 """Tutor Agent: hội thoại có căn cứ trên RAG, ưu tiên lời giảng quanh thời điểm video, khóa đáp án khi đang kiểm tra."""
 import logging
 import re
+from collections.abc import Iterator
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -17,8 +19,9 @@ from app.models.conversation import AIConversation, AIMessage
 from app.models.documents import AIChunk, AIDocument
 from app.services import learning, llm, workflow
 from app.services.grading import correct_answer_text
-from app.services.retrieval import (RetrievalScope, _apply_scope, _row_to_dict, build_context, expand_neighbors, format_segments, retrieve,
-                                    transcript_window)
+from app.services.hybrid import rrf
+from app.services.retrieval import (RetrievalScope, _apply_scope, _row_to_dict, build_context, contextual_query, expand_neighbors,
+                                    format_segments, retrieve, transcript_window)
 
 log = logging.getLogger("app.tutor")
 
@@ -117,9 +120,28 @@ def tutor_quota(db: Session, user: Principal, lesson_id: str | None) -> dict | N
             "resets_at": (day_local + timedelta(days=1)).isoformat()}
 
 
-def ask(db: Session, user: Principal, *, question: str, conversation_id=None, course_id=None, class_id=None,
-        lesson_id=None, video_id=None, video_time: float | None = None, top_k: int | None = None,
-        focus_document_id=None, focus_page: int | None = None, selected_text: str | None = None) -> dict:
+@dataclass
+class TurnPlan:
+    """Mọi thứ đã quyết định trước khi gọi LLM cho một lượt hỏi (dùng chung cho trả lời thường và streaming)."""
+    conv: AIConversation
+    question: str
+    lesson_id: str | None
+    video_id: str | None
+    video_time: float | None
+    hint_mode: bool
+    guarded: list
+    sources: list[dict]
+    history: list[dict]
+    meta: dict
+    transcript_block: dict | None
+    prompt: object | None = None  # None -> từ chối, không gọi LLM
+    user_content: str = ""
+    chunk_ids: list[str] = field(default_factory=list)
+
+
+def prepare_turn(db: Session, user: Principal, *, question: str, conversation_id=None, course_id=None, class_id=None,
+                 lesson_id=None, video_id=None, video_time: float | None = None, top_k: int | None = None,
+                 focus_document_id=None, focus_page: int | None = None, selected_text: str | None = None) -> TurnPlan:
     conv = get_or_create_conversation(db, user, conversation_id, course_id=course_id, class_id=class_id,
                                       lesson_id=lesson_id, video_id=video_id)
     lesson_id = lesson_id or conv.lesson_id
@@ -145,8 +167,17 @@ def ask(db: Session, user: Principal, *, question: str, conversation_id=None, co
         guarded = ([active_q] if active_q else []) + learning.active_quiz_questions(db, user)
     hint_mode = bool(guarded)
 
+    history = _history(db, conv)
     scope = RetrievalScope.for_user(user, course_id=course_id, class_id=class_id, lesson_id=lesson_id)
     chunks = retrieve(db, question, scope, top_k=top_k)
+    follow_up = contextual_query(question, history)
+    if follow_up != question:
+        # Câu hỏi nối tiếp: truy xuất thêm với câu đã ghép ngữ cảnh rồi hợp nhất RRF; danh sách của câu hiện tại
+        # đứng trước để chủ đề mới ("còn kế thừa...") không bị chủ đề cũ lấn át.
+        extra = retrieve(db, follow_up, scope, top_k=top_k)
+        by_id = {c["chunk_id"]: c for c in extra + chunks}
+        fused = rrf([[c["chunk_id"] for c in chunks], [c["chunk_id"] for c in extra]])
+        chunks = [by_id[k] for k in sorted(fused, key=fused.get, reverse=True)][:top_k or settings.rag_top_k]
     if video_id:
         # chunk transcript của video hiện tại đã được đưa riêng qua cửa sổ thời gian
         if video_time is not None:
@@ -179,57 +210,107 @@ def ask(db: Session, user: Principal, *, question: str, conversation_id=None, co
             focus_ids = {f["chunk_id"] for f in focus}
             chunks = focus + [c for c in chunks if c["chunk_id"] not in focus_ids]
 
-    history = _history(db, conv)
     meta = {"hint_mode": hint_mode, "request_id": get_request_id()}
     if selected_text and not chunks and not transcript_block:
         # Đoạn bôi đen do client gửi lên nên KHÔNG được dùng làm học liệu (sẽ lách được cơ chế từ chối).
         # Dùng nó để truy xuất lại; vẫn phải qua ngưỡng điểm và phạm vi quyền như câu hỏi thường.
         chunks = retrieve(db, selected_text[:2000], scope, top_k=top_k)
+    plan = TurnPlan(conv=conv, question=question, lesson_id=lesson_id, video_id=video_id, video_time=video_time,
+                    hint_mode=hint_mode, guarded=guarded, sources=[], history=history, meta=meta,
+                    transcript_block=transcript_block)
     if not chunks and not transcript_block:
-        answer, sources, res = REFUSAL, [], None
         meta["refused"] = True
+        return plan
+
+    context, plan.sources = build_context(chunks, transcript_block)
+    plan.prompt = TUTOR_HINT if hint_mode else TUTOR_ANSWER
+    user_content = f"{wrap_documents(context)}\n\n"
+    if selected_text:
+        user_content += f"Học sinh đang hỏi về đoạn sau trong bài:\n«{selected_text[:2000]}»\n\n"
+    user_content += f"Câu hỏi của học sinh: {question}"
+    if hint_mode:
+        open_qs = "\n".join(f"- {q.question}" for q in guarded[:MAX_GUARDED_QUESTIONS_IN_PROMPT])
+        user_content += f"\n\n(Câu hỏi kiểm tra đang mở, không được nêu đáp án:\n{open_qs})"
+    plan.user_content = user_content
+    plan.chunk_ids = [s["chunk_id"] for s in plan.sources if s.get("chunk_id")]
+    return plan
+
+
+def finish_turn(db: Session, user: Principal, plan: TurnPlan, raw_answer: str | None,
+                res: "llm.LLMResult | None") -> dict:
+    """Guardrail đầu ra + lưu hai tin nhắn + kết quả trả về client."""
+    meta = plan.meta
+    if plan.prompt is None:
+        answer = REFUSAL
     else:
-        context, sources = build_context(chunks, transcript_block)
-        prompt = TUTOR_HINT if hint_mode else TUTOR_ANSWER
-        user_content = f"{wrap_documents(context)}\n\n"
-        if selected_text:
-            user_content += f"Học sinh đang hỏi về đoạn sau trong bài:\n«{selected_text[:2000]}»\n\n"
-        user_content += f"Câu hỏi của học sinh: {question}"
-        if hint_mode:
-            open_qs = "\n".join(f"- {q.question}" for q in guarded[:MAX_GUARDED_QUESTIONS_IN_PROMPT])
-            user_content += f"\n\n(Câu hỏi kiểm tra đang mở, không được nêu đáp án:\n{open_qs})"
-        res = llm.complete_text("tutor", prompt, user_content, history=history, max_tokens=1500,
-                                chunk_ids=[s["chunk_id"] for s in sources if s.get("chunk_id")],
-                                user_id=user.user_id)
-        answer = res.text.strip() or REFUSAL
-        if hint_mode and any(_leaks_answer(answer, q) for q in guarded):
+        answer = (raw_answer or "").strip() or REFUSAL
+        if plan.hint_mode and any(_leaks_answer(answer, q) for q in plan.guarded):
             answer = HINT_REDACTED
             meta["guardrail"] = "answer_redacted"
         elif REFUSAL_MARK in answer.lower():
             # LLM tự từ chối theo đúng câu trong prompt: vẫn đếm vào tỉ lệ từ chối.
             # Không dùng cụm rộng như "không tìm thấy" vì hay xuất hiện trong lời giải thích bình thường.
             meta["refused"] = True
-        meta["llm_call_ids"] = res.call_ids
-        meta["prompt_version"] = f"{res.prompt_id}:{res.prompt_version}"
+        if res is not None:
+            meta["llm_call_ids"] = res.call_ids
+            meta["prompt_version"] = f"{res.prompt_id}:{res.prompt_version}"
 
     asked_at = utcnow()
-    db.add(AIMessage(conversation_id=conv.id, role="user", content=question, created_at=asked_at,
-                     meta={"video_id": video_id, "video_time": video_time}))
-    db.add(AIMessage(conversation_id=conv.id, role="assistant", content=answer, sources=sources, meta=meta,
+    db.add(AIMessage(conversation_id=plan.conv.id, role="user", content=plan.question, created_at=asked_at,
+                     meta={"video_id": plan.video_id, "video_time": plan.video_time}))
+    db.add(AIMessage(conversation_id=plan.conv.id, role="assistant", content=answer, sources=plan.sources, meta=meta,
                      created_at=asked_at + timedelta(milliseconds=1)))
     db.commit()
-    _maybe_summarize(db, conv, user)
+    _maybe_summarize(db, plan.conv, user)
 
     return {
         "answer": answer,
-        "sources": sources,
-        "conversation_id": str(conv.id),
-        "hint_mode": hint_mode,
-        "video_question_active": hint_mode,
+        "sources": plan.sources,
+        "conversation_id": str(plan.conv.id),
+        "hint_mode": plan.hint_mode,
+        "video_question_active": plan.hint_mode,
         "refused": bool(meta.get("refused")),
-        "transcript_context": transcript_block["content"] if transcript_block else None,
+        "redacted": meta.get("guardrail") == "answer_redacted",
+        "transcript_context": plan.transcript_block["content"] if plan.transcript_block else None,
         "model": res.model if res else None,
         "prompt_version": meta.get("prompt_version"),
         "request_id": get_request_id(),
-        "quota": tutor_quota(db, user, lesson_id),
+        "quota": tutor_quota(db, user, plan.lesson_id),
     }
+
+
+def ask(db: Session, user: Principal, **kw) -> dict:
+    plan = prepare_turn(db, user, **kw)
+    res = None
+    if plan.prompt is not None:
+        res = llm.complete_text("tutor", plan.prompt, plan.user_content, history=plan.history, max_tokens=1500,
+                                chunk_ids=plan.chunk_ids, user_id=user.user_id)
+    return finish_turn(db, user, plan, res.text if res else None, res)
+
+
+def ask_stream(db: Session, user: Principal, plan: TurnPlan) -> Iterator[dict]:
+    """Sự kiện streaming: `meta` (nguồn, hint mode) -> nhiều `delta` -> `done` (câu trả lời cuối đã qua guardrail).
+
+    Ở hint mode KHÔNG phát từng phần: phải có đủ câu trả lời mới kiểm tra được lộ đáp án, nên chỉ gửi ở `done`.
+    """
+    yield {"event": "meta", "data": {"conversation_id": str(plan.conv.id), "sources": plan.sources,
+                                     "hint_mode": plan.hint_mode, "refused": plan.prompt is None}}
+    res = None
+    text = None
+    if plan.prompt is not None:
+        parts: list[str] = []
+        try:
+            stream = llm.stream_text("tutor", plan.prompt, plan.user_content, history=plan.history, max_tokens=1500,
+                                     chunk_ids=plan.chunk_ids, user_id=user.user_id)
+            for piece in stream:
+                if isinstance(piece, llm.LLMResult):
+                    res = piece
+                    continue
+                parts.append(piece)
+                if not plan.hint_mode:
+                    yield {"event": "delta", "data": {"text": piece}}
+        except AppError as e:
+            yield {"event": "error", "data": {"code": e.code, "message": str(e.detail)}}
+            return
+        text = "".join(parts)
+    yield {"event": "done", "data": finish_turn(db, user, plan, text, res)}

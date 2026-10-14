@@ -81,6 +81,14 @@ def client():
 def fake_llm(monkeypatch):
     fake = FakeLLM()
     monkeypatch.setattr(llm, "_call_provider", fake)
+
+    def fake_stream(system, messages, max_tokens, temperature):
+        text, in_tok, out_tok, model = fake(system, messages, max_tokens, False, temperature)
+        for i in range(0, len(text), 12):  # phát từng đoạn như stream thật
+            yield text[i:i + 12]
+        yield (in_tok, out_tok, model)
+
+    monkeypatch.setattr(llm, "_stream_provider", fake_stream)
     return fake
 
 

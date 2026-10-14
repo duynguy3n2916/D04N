@@ -5,10 +5,16 @@ Quyền quản lý:
 - teacher: chỉ học sinh thuộc lớp mình dạy; chỉ gán học sinh vào lớp của mình; tạo lớp mới (tự thành giáo viên lớp đó).
 """
 import csv
+import hashlib
 import io
 import re
 import secrets
+import time
 import unicodedata
+from datetime import datetime, timedelta, timezone
+from html import escape
+
+import jwt
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -20,6 +26,7 @@ from app.core.security import ROLES, Principal, create_token
 from app.core.utils import utcnow
 from app.models.accounts import ClassRoom, User
 from app.models.learning import UserProfile
+from app.services import mailer
 
 USERNAME_RE = re.compile(r"^[a-z0-9][a-z0-9._-]{2,63}$")
 CLASS_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$")
@@ -125,6 +132,80 @@ def login(db: Session, username: str, password: str) -> dict:
         raise AppError(401, "INVALID_CREDENTIALS", "Sai tên đăng nhập hoặc mật khẩu.")
     if not u.is_active:
         raise AppError(403, "ACCOUNT_DISABLED", "Tài khoản đã bị khóa. Liên hệ giáo viên hoặc quản trị viên.")
+    u.last_login_at = utcnow()
+    _sync_profile(db, u)
+    db.commit()
+    return issue(u)
+
+
+# ---------------------------------------------------------------- quên mật khẩu (qua email)
+
+_RESET_THROTTLE_SECONDS = 60
+_last_reset_sent: dict[str, float] = {}
+
+
+def _password_fingerprint(u: User) -> str:
+    # đổi mật khẩu -> dấu vân tay đổi -> link cũ mất hiệu lực (link chỉ dùng được một lần)
+    return hashlib.sha256((u.password_hash or "").encode()).hexdigest()[:24]
+
+
+def _find_by_identifier(db: Session, identifier: str) -> User | None:
+    ident = (identifier or "").strip().lower()
+    if not ident:
+        return None
+    u = db.get(User, ident)
+    if u is None and "@" in ident:
+        u = db.query(User).filter(func.lower(User.email) == ident).first()
+    return u
+
+
+def request_password_reset(db: Session, identifier: str, base_url: str) -> None:
+    """Gửi link đặt lại mật khẩu nếu tài khoản tồn tại, còn hoạt động và có email.
+
+    Luôn im lặng như nhau (không báo tài khoản có tồn tại hay không); mỗi tài khoản tối đa 1 email / phút.
+    """
+    u = _find_by_identifier(db, identifier)
+    if u is None or not u.is_active or not u.email or not u.password_hash:
+        return
+    now = time.monotonic()
+    if now - _last_reset_sent.get(u.user_id, -1e9) < _RESET_THROTTLE_SECONDS:
+        return
+    _last_reset_sent[u.user_id] = now
+    exp = datetime.now(timezone.utc) + timedelta(minutes=settings.password_reset_ttl_minutes)
+    token = jwt.encode({"typ": "pwreset", "sub": u.user_id, "fp": _password_fingerprint(u),
+                        "tv": int(u.token_version or 0), "exp": int(exp.timestamp())},
+                       settings.jwt_secret, algorithm=settings.jwt_algorithm)
+    link = f"{(settings.public_app_url or base_url).rstrip('/')}/#/reset-password?token={token}"  # router dạng hash
+    name = u.display_name or u.user_id
+    mins = settings.password_reset_ttl_minutes
+    text = (f"Chào {name},\n\nBạn (hoặc ai đó) vừa yêu cầu đặt lại mật khẩu cho tài khoản \"{u.user_id}\".\n"
+            f"Mở link sau trong {mins} phút để đặt mật khẩu mới:\n{link}\n\n"
+            "Nếu không phải bạn yêu cầu, hãy bỏ qua email này — mật khẩu hiện tại vẫn giữ nguyên.")
+    html = (f"<p>Chào {escape(name)},</p><p>Bạn (hoặc ai đó) vừa yêu cầu đặt lại mật khẩu cho tài khoản "
+            f"<b>{escape(u.user_id)}</b>.</p><p><a href=\"{escape(link)}\">Đặt mật khẩu mới</a> "
+            f"(link có hiệu lực {mins} phút, dùng được một lần).</p>"
+            "<p>Nếu không phải bạn yêu cầu, hãy bỏ qua email này — mật khẩu hiện tại vẫn giữ nguyên.</p>")
+    mailer.send_async(u.email, "Đặt lại mật khẩu", text, html)
+
+
+def reset_password_with_token(db: Session, token: str, new_password: str) -> dict:
+    invalid = AppError(400, "INVALID_RESET_TOKEN", "Link đặt lại mật khẩu không hợp lệ hoặc đã được dùng. Hãy yêu cầu link mới.")
+    try:
+        data = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
+    except jwt.ExpiredSignatureError:
+        raise AppError(400, "RESET_TOKEN_EXPIRED", "Link đặt lại mật khẩu đã hết hạn. Hãy yêu cầu link mới.")
+    except jwt.PyJWTError:
+        raise invalid
+    if data.get("typ") != "pwreset":
+        raise invalid
+    u = db.get(User, data.get("sub") or "")
+    if u is None or not u.is_active or data.get("fp") != _password_fingerprint(u) \
+            or int(data.get("tv", -1)) != int(u.token_version or 0):
+        raise invalid
+    check_policy(new_password, u.user_id)
+    u.password_hash = hash_password(new_password)
+    u.must_change_password = False
+    u.token_version = int(u.token_version or 0) + 1  # mọi phiên cũ mất hiệu lực
     u.last_login_at = utcnow()
     _sync_profile(db, u)
     db.commit()

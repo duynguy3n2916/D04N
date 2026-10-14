@@ -131,6 +131,20 @@ def list_bank(db: Session, user: Principal, lesson_id=None, status=None, limit: 
     return [_bank_to_dict(i) for i in q.order_by(QuestionBankItem.created_at.desc()).limit(limit).all()]
 
 
+def bank_payloads(db: Session, user: Principal, *, lesson_id=None, item_ids=None, status: str | None = "approved") -> list[dict]:
+    """Nội dung câu hỏi để xuất đề (cùng quy tắc quyền với list_bank), theo thứ tự tạo."""
+    q = db.query(QuestionBankItem)
+    if not user.is_admin:
+        q = q.filter(QuestionBankItem.teacher_id == user.user_id)
+    if lesson_id:
+        q = q.filter(QuestionBankItem.lesson_id == lesson_id)
+    if item_ids:
+        q = q.filter(QuestionBankItem.id.in_(item_ids))
+    if status:
+        q = q.filter(QuestionBankItem.status == status)
+    return [i.payload or {} for i in q.order_by(QuestionBankItem.created_at).limit(200).all()]
+
+
 def update_bank_item(db: Session, user: Principal, item_id, payload: dict | None, status: str | None) -> dict:
     item = db.get(QuestionBankItem, item_id)
     if not item:

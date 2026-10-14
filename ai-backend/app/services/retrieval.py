@@ -1,7 +1,9 @@
-"""RAG Engine dùng chung: lọc phạm vi -> vector search -> ngưỡng điểm -> mở rộng lân cận -> context có nhãn nguồn."""
+"""RAG Engine dùng chung: lọc phạm vi -> vector + từ khóa (hybrid, RRF) -> ngưỡng điểm -> rerank
+-> mở rộng lân cận -> context có nhãn nguồn."""
+import re
 from dataclasses import dataclass, field
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -11,6 +13,12 @@ from app.models.documents import AIChunk, AIDocument
 from app.models.learning import Lesson, LessonItem
 from app.models.transcript import TranscriptSegment, VideoTranscript
 from app.services.embedding import embed_query
+from app.services.hybrid import lexical_accept, query_terms, rerank, rrf, tsquery_text
+
+_WORDS = re.compile(r"\w+")
+# dấu hiệu câu hỏi nối tiếp, phụ thuộc câu trước ("còn X thì sao?", "nó dùng để làm gì?", "cho ví dụ")
+_FOLLOW_UP = re.compile(r"^(còn|vậy|thế|và)\b|thì sao|\bnó\b|\bcái (đó|này)\b|\bđiều (đó|này)\b|\bví dụ\b"
+                        r"|\bgiải thích (thêm|rõ hơn)\b|\btiếp\b|\bở trên\b|\bvừa (rồi|nói)\b")
 
 
 @dataclass
@@ -77,22 +85,75 @@ def _row_to_dict(chunk: AIChunk, doc: AIDocument, score: float | None) -> dict:
 
 
 def retrieve(db: Session, query: str, scope: RetrievalScope, top_k: int | None = None,
-             min_score: float | None = None) -> list[dict]:
+             min_score: float | None = None, hybrid: bool | None = None) -> list[dict]:
+    """Dense (pgvector) [+ sparse full-text, hợp nhất RRF] [+ rerank]; mỗi kết quả có `score` = cosine.
+
+    Một chunk được nhận khi cosine >= min_score, hoặc (hybrid) khớp đủ từ khóa có nghĩa của câu hỏi
+    (`lexical_match`) — nên ngưỡng từ chối vẫn có tác dụng với câu ngoài học liệu.
+    """
     top_k = top_k or settings.rag_top_k
     min_score = settings.rag_min_score if min_score is None else min_score
+    hybrid = settings.rag_hybrid if hybrid is None else hybrid
+    pool = top_k * 3 if (hybrid or settings.rag_rerank != "none") else top_k * 2
     q_emb = embed_query(query)
     distance = AIChunk.embedding.cosine_distance(q_emb).label("distance")
-    stmt = select(AIChunk, AIDocument, distance).join(AIDocument, AIChunk.document_id == AIDocument.id)
-    stmt = _apply_scope(stmt, scope).where(AIChunk.embedding.is_not(None)).order_by(distance).limit(top_k * 2)
-    results = []
-    for chunk, doc, dist in db.execute(stmt).all():
-        score = 1.0 - float(dist)
-        if score < min_score:
-            continue
-        results.append(_row_to_dict(chunk, doc, score))
-        if len(results) >= top_k:
-            break
-    return results
+    base = select(AIChunk, AIDocument, distance).join(AIDocument, AIChunk.document_id == AIDocument.id)
+    base = _apply_scope(base, scope).where(AIChunk.embedding.is_not(None))
+
+    found: dict[str, dict] = {}
+    dense_rank: list[str] = []
+    for chunk, doc, dist in db.execute(base.order_by(distance).limit(pool)).all():
+        d = _row_to_dict(chunk, doc, 1.0 - float(dist))
+        found[d["chunk_id"]] = d
+        dense_rank.append(d["chunk_id"])
+
+    sparse_rank: list[str] = []
+    terms = query_terms(query) if hybrid else []
+    tsq_text = tsquery_text(terms)
+    if tsq_text:
+        tsv = func.to_tsvector("simple", AIChunk.content)
+        tsq = func.to_tsquery("simple", tsq_text)
+        rank = func.ts_rank_cd(tsv, tsq).label("lex_rank")
+        stmt = base.add_columns(rank).where(tsv.op("@@")(tsq)).order_by(rank.desc()).limit(pool)
+        for chunk, doc, dist, lex in db.execute(stmt).all():
+            if not lexical_accept(terms, chunk.content):
+                continue
+            key = str(chunk.id)
+            d = found.get(key) or _row_to_dict(chunk, doc, 1.0 - float(dist))
+            d["lexical_match"] = True
+            d["lexical_rank"] = round(float(lex), 4)
+            found[key] = d
+            sparse_rank.append(key)
+
+    if min_score > 0:
+        accepted = [k for k, d in found.items() if (d["score"] or 0) >= min_score or d.get("lexical_match")]
+    else:
+        accepted = list(found)
+    if sparse_rank:
+        fused = rrf([dense_rank, sparse_rank])
+        for k in accepted:
+            found[k]["rrf"] = round(fused.get(k, 0.0), 6)
+        accepted.sort(key=lambda k: fused.get(k, 0.0), reverse=True)
+    else:
+        order = {k: i for i, k in enumerate(dense_rank)}
+        accepted.sort(key=lambda k: order.get(k, len(order)))
+    candidates = [found[k] for k in accepted]
+    return rerank(query, candidates, top_k) if settings.rag_rerank != "none" else candidates[:top_k]
+
+
+def contextual_query(question: str, history: list[dict]) -> str:
+    """Viết lại câu hỏi nối tiếp ("còn kế thừa thì sao?") thành truy vấn đủ ngữ cảnh để truy xuất.
+
+    Chế độ `history` (mặc định, không tốn LLM): câu ngắn CÓ dấu hiệu hỏi nối tiếp thì ghép câu hỏi trước
+    của học sinh vào truy vấn. Câu không có dấu hiệu đó giữ nguyên, để câu lạc đề vẫn bị từ chối đúng.
+    """
+    if settings.rag_query_rewrite == "none" or len(_WORDS.findall(question)) > 8:
+        return question
+    if not _FOLLOW_UP.search(question.lower()):
+        return question
+    prev = next((m["content"] for m in reversed(history) if m.get("role") == "user"
+                 and not m["content"].startswith("(Tóm tắt")), None)
+    return f"{prev[:300]} {question}" if prev else question
 
 
 def expand_neighbors(db: Session, chunks: list[dict], top_n: int = 2) -> list[dict]:

@@ -65,7 +65,7 @@ Nguồn mà Tutor trích dẫn bấm được: nguồn video tua tới đúng gi
 | `python init_db.py --seed` | Nạp dữ liệu demo + bộ 24 câu đánh giá |
 | `python init_db.py --reembed` | Sau khi đổi model embedding / `EMBEDDING_DIM`: đổi kích thước vector và tạo lại embedding |
 | `python init_db.py --reset` | Xóa toàn bộ dữ liệu AI (có hỏi xác nhận) |
-| `pip install -r requirements-dev.txt && pytest` | Chạy 46 bài test trên database test riêng (`TEST_DATABASE_URL` trong .env; tên phải có chữ `test`, không được trùng `DATABASE_URL`) |
+| `pip install -r requirements-dev.txt && pytest` | Chạy 55 bài test trên database test riêng (`TEST_DATABASE_URL` trong .env; tên phải có chữ `test`, không được trùng `DATABASE_URL`) |
 
 ## Cơ sở dữ liệu và lưu trữ file
 
@@ -87,7 +87,9 @@ Nguồn mà Tutor trích dẫn bấm được: nguồn video tua tới đúng gi
   `display_name`/`ho_ten`, `class_ids`/`lop`, `email`, `password`), cấp lại mật khẩu tạm, khóa tài khoản — chỉ với học sinh lớp mình.
   **Admin** quản lý mọi tài khoản, phân vai trò.
 - Tài khoản do giáo viên/admin tạo hoặc vừa được cấp lại mật khẩu sẽ **bắt buộc đổi mật khẩu** ở lần đăng nhập đầu.
-- **Quên mật khẩu:** giáo viên hoặc admin cấp lại mật khẩu tạm (chưa gửi email tự động).
+- **Quên mật khẩu:** khi cấu hình SMTP (`SMTP_HOST`, `SMTP_FROM`...), người dùng có email nhận link đặt lại mật khẩu
+  (hết hạn sau 30 phút, dùng một lần, đặt xong thì mọi phiên cũ mất hiệu lực). Không cấu hình SMTP thì giáo viên hoặc admin
+  cấp lại mật khẩu tạm.
 - **Tích hợp LMS (tùy chọn):** LMS ký JWT bằng cùng `JWT_SECRET`; đặt `ALLOW_EXTERNAL_TOKENS=true` để chấp nhận token của người
   dùng chưa có tài khoản trong hệ thống.
 - Tài liệu / transcript / khóa học không gắn `class_id` thì mọi người dùng thấy; gắn lớp thì chỉ thành viên lớp (hoặc admin) thấy.
@@ -150,9 +152,13 @@ Lỗi trả về thống nhất: `{"request_id", "error": {"code", "message", "d
 
 ## Lưu ý
 
-- **Bộ đánh giá demo** chỉ có 24 câu gắn với dữ liệu demo. Trước khi lấy số liệu cho báo cáo, soạn 50–100 câu từ học liệu thật
-  (định dạng như `sample_data/eval_samples.json`, trường `relevant_sources` là nguồn đúng) và nạp ở tab Đánh giá.
-- `RAG_MIN_SCORE` (mặc định 0.30) là ngưỡng để Tutor từ chối khi học liệu không đủ liên quan; nên hiệu chỉnh bằng tập dev.
+- **Bộ đánh giá** (`sample_data/eval_samples.json`) có 87 câu gắn với học liệu demo: 75 câu có nguồn đúng theo mục bài đọc /
+  khoảng giây video / trang slide, 12 câu ngoài học liệu để đo khả năng từ chối; 68 câu test, 19 câu dev. Đo riêng phần truy
+  xuất trên bộ này: chỉ vector Hit@5 0.813, MRR 0.589; hybrid Hit@5 1.000, MRR 0.814. Với học liệu khác, soạn bộ riêng cùng
+  định dạng và nạp ở tab Đánh giá.
+- `RAG_MIN_SCORE` (mặc định 0.40) là ngưỡng để Tutor từ chối khi học liệu không đủ liên quan. Giá trị này được chọn trên
+  tập dev của bộ đánh giá demo (0.35 đã chặn đủ câu ngoài học liệu của tập dev, lấy 0.40 để có biên); với học liệu khác
+  nên hiệu chỉnh lại. Kết quả chỉ khớp từ khóa (hybrid) vẫn được nhận dù dưới ngưỡng nên không mất câu trả lời đúng.
 - **Baseline đối chứng:** `POST /ai/evaluation/run` nhận `mode` = `rag` (pipeline của Tutor), `no_filter` (bỏ lọc khóa/bài)
   hoặc `no_rag` (LLM không có học liệu, chỉ chấm correctness), cùng `min_score` / `expand_neighbors` để chạy thí nghiệm.
   So sánh các lần chạy bằng `GET /ai/evaluation/compare?ids=<baseline>,<rag>` (lần đầu là mốc tính chênh lệch).

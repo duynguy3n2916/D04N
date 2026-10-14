@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PageHeader } from '../../components/AppShell';
 import { Badge, Button, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
-import { api, errorText } from '../../lib/api';
+import { api, apiBlob, errorText } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 
 interface BankItem {
@@ -42,6 +42,7 @@ export function QuestionBank() {
   const stats = useAsync((s) => api<Stats>('/ai/teacher/stats', { signal: s }), []);
   const [genOpen, setGenOpen] = useState(false);
   const [edit, setEdit] = useState<BankItem | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
 
   const setSt = async (it: BankItem, st: string) => {
     try { await api(`/ai/question-bank/${it.item_id}`, { method: 'PATCH', json: { status: st } }); bank.reload(); stats.reload(); } catch (e) { toast(errorText(e), 'error'); }
@@ -56,7 +57,10 @@ export function QuestionBank() {
   return (
     <>
       <PageHeader title="Ngân hàng câu hỏi" sub="AI soạn câu hỏi từ tài liệu của bài; giáo viên sửa và duyệt. Bài kiểm tra cuối bài lấy từ các câu đã duyệt."
-        actions={<Button icon="wand" onClick={() => setGenOpen(true)}>AI soạn câu hỏi</Button>} />
+        actions={<>
+          <Button variant="ghost" icon="doc" onClick={() => setExportOpen(true)}>Xuất đề</Button>
+          <Button icon="wand" onClick={() => setGenOpen(true)}>AI soạn câu hỏi</Button>
+        </>} />
       {st && (
         <div className="stat-tiles">
           <div className="tile"><strong>{st.approved}</strong><span>Đã duyệt</span></div>
@@ -103,6 +107,7 @@ export function QuestionBank() {
         ))}
       </div>
       {genOpen && <GenerateDialog defaultLesson={lesson} onClose={() => setGenOpen(false)} onDone={(code) => { setGenOpen(false); setLesson(code); setStatus('draft'); bank.reload(); stats.reload(); }} />}
+      {exportOpen && <ExportDialog defaultLesson={lesson} onClose={() => setExportOpen(false)} />}
       {edit && <BankEditor item={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); bank.reload(); stats.reload(); }} />}
     </>
   );
@@ -219,6 +224,61 @@ function BankEditor({ item, onClose, onSaved }: { item: BankItem; onClose: () =>
           <Button variant="ghost" onClick={onClose} disabled={busy}>Hủy</Button>
           <Button variant="soft" loading={busy} onClick={() => save(false)}>Lưu</Button>
           {item.status !== 'approved' && <Button icon="check" loading={busy} onClick={() => save(true)}>Lưu & duyệt</Button>}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+/** Xuất đề kiểm tra từ các câu đã duyệt của bài: DOCX hoặc bản in (lưu PDF từ hộp thoại in của trình duyệt). */
+function ExportDialog({ defaultLesson, onClose }: { defaultLesson: string; onClose: () => void }) {
+  const toast = useToast();
+  const [lesson, setLesson] = useState(defaultLesson);
+  const [variants, setVariants] = useState(1);
+  const [shuffle, setShuffle] = useState(false);
+  const [answers, setAnswers] = useState(true);
+  const [duration, setDuration] = useState(15);
+  const [busy, setBusy] = useState<'docx' | 'html' | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const run = async (format: 'docx' | 'html') => {
+    setBusy(format); setErr(null);
+    const qs = new URLSearchParams({ lesson_id: lesson, format, answers: String(answers), variants: String(variants),
+      shuffle: String(shuffle), ...(duration > 0 && { duration: String(duration) }) });
+    try {
+      const { blob, filename } = await apiBlob(`/ai/teacher/question-bank/export?${qs}`);
+      const url = URL.createObjectURL(blob);
+      if (format === 'html') {
+        const w = window.open(url, '_blank');
+        if (!w) toast('Trình duyệt chặn cửa sổ mới — hãy cho phép pop-up để in đề.', 'error');
+      } else {
+        const a = document.createElement('a');
+        a.href = url; a.download = filename; a.click();
+      }
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      toast(format === 'html' ? 'Đã mở bản in — chọn “Lưu thành PDF” để có file PDF' : `Đã tải ${filename}`, 'success');
+    } catch (e) { setErr(errorText(e)); } finally { setBusy(null); }
+  };
+  return (
+    <Modal open onClose={onClose} title="Xuất đề kiểm tra" dismissable={!busy}>
+      <div className="modal-body">
+        <Field label="Bài học" hint="Chỉ lấy các câu đã duyệt của bài."><LessonSelect value={lesson} onChange={setLesson} /></Field>
+        <div className="form-grid">
+          <Field label="Số mã đề" hint="Nhiều mã đề: xáo thứ tự câu và lựa chọn.">
+            <select value={variants} onChange={(e) => setVariants(Number(e.target.value))}>
+              {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
+          </Field>
+          <Field label="Thời gian (phút)"><input type="number" min={0} max={300} value={duration} onChange={(e) => setDuration(Number(e.target.value))} /></Field>
+        </div>
+        <div className="row">
+          <label className="check"><input type="checkbox" checked={answers} onChange={(e) => setAnswers(e.target.checked)} />Kèm đáp án và giải thích (trang cuối)</label>
+          {variants === 1 && <label className="check"><input type="checkbox" checked={shuffle} onChange={(e) => setShuffle(e.target.checked)} />Xáo câu hỏi</label>}
+        </div>
+        {err && <ErrorBox message={err} />}
+        <div className="row" style={{ justifyContent: 'flex-end' }}>
+          <Button variant="ghost" onClick={onClose} disabled={!!busy}>Đóng</Button>
+          <Button variant="soft" icon="page" loading={busy === 'html'} disabled={!lesson || !!busy} onClick={() => run('html')}>In / PDF</Button>
+          <Button icon="doc" loading={busy === 'docx'} disabled={!lesson || !!busy} onClick={() => run('docx')}>Tải DOCX</Button>
         </div>
       </div>
     </Modal>

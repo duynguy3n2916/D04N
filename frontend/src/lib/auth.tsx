@@ -11,6 +11,8 @@ interface AuthCtx {
   login: (username: string, password: string) => Promise<User>;
   register: (p: RegisterInput) => Promise<User>;
   changePassword: (current: string, next: string) => Promise<void>;
+  /** Đặt mật khẩu mới bằng link trong email (thành công thì đăng nhập luôn). */
+  resetPassword: (token: string, next: string) => Promise<User>;
   /** Cập nhật thông tin người dùng (sau khi sửa hồ sơ / vào lớp). */
   setUser: (u: User) => void;
   refresh: () => Promise<void>;
@@ -45,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user, notice, setUser, refresh, logout,
     login: async (username, password) => accept(await api<AuthResponse>('/ai/auth/login', { json: { username, password } })),
     register: async (p) => accept(await api<AuthResponse>('/ai/auth/register', { json: p })),
+    resetPassword: async (token, next) => accept(await api<AuthResponse>('/ai/auth/reset-password', { json: { token, new_password: next } })),
     changePassword: async (current, next) => {
       accept(await api<AuthResponse>('/ai/auth/change-password', { json: { current_password: current, new_password: next } }));
     },

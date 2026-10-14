@@ -4,19 +4,23 @@ import { PasswordInput, PasswordRules, passwordOk } from '../components/Password
 import { Button, ErrorBox, Field } from '../components/ui';
 import { api, errorText } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { navigate } from '../lib/router';
 
-interface AuthConfig { allow_registration: boolean; login_hint: string | null }
+interface AuthConfig { allow_registration: boolean; login_hint: string | null; password_reset_email?: boolean }
+
+const TITLE = { login: 'Đăng nhập', register: 'Tạo tài khoản học sinh', forgot: 'Quên mật khẩu' };
 
 export function Login() {
   const { login, register, notice } = useAuth();
   const [cfg, setCfg] = useState<AuthConfig | null>(null);
-  const [mode, setMode] = useState<'login' | 'register'>(() => (location.hash.includes('register') ? 'register' : 'login'));
+  const [mode, setMode] = useState<'login' | 'register' | 'forgot'>(() => (location.hash.includes('register') ? 'register' : 'login'));
   const [f, setF] = useState({ username: '', password: '', confirm: '', display_name: '', email: '', class_code: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState<string | null>(null);
 
   useEffect(() => { api<AuthConfig>('/ai/auth/config').then(setCfg).catch(() => setCfg({ allow_registration: false, login_hint: null })); }, []);
-  useEffect(() => { setError(null); }, [mode]);
+  useEffect(() => { setError(null); setSent(null); }, [mode]);
 
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
   const uname = f.username.trim().toLowerCase();
@@ -26,7 +30,10 @@ export function Login() {
     e.preventDefault();
     setBusy(true); setError(null);
     try {
-      if (mode === 'login') await login(f.username.trim(), f.password);
+      if (mode === 'forgot') {
+        const r = await api<{ message: string }>('/ai/auth/forgot-password', { json: { identifier: f.username.trim() } });
+        setSent(r.message);
+      } else if (mode === 'login') await login(f.username.trim(), f.password);
       else await register({ username: uname, password: f.password, display_name: f.display_name.trim(),
         email: f.email.trim() || undefined, class_code: f.class_code.trim() || undefined });
     } catch (err) {
@@ -47,11 +54,19 @@ export function Login() {
           <p>Xem bài giảng, trả lời câu hỏi ngay trong video và hỏi Tutor bất cứ lúc nào.</p>
         </div>
 
-        <form className="login-form" onSubmit={submit} aria-label={mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản'}>
-          <h2 style={{ fontSize: 28 }}>{mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản học sinh'}</h2>
+        <form className="login-form" onSubmit={submit} aria-label={TITLE[mode]}>
+          <h2 style={{ fontSize: 28 }}>{TITLE[mode]}</h2>
           {notice && mode === 'login' && <div className="notice">{notice}</div>}
 
-          {mode === 'login' ? (
+          {mode === 'forgot' ? (
+            <>
+              <p className="muted" style={{ fontWeight: 700 }}>Nhập tên đăng nhập hoặc email của tài khoản. Nếu tài khoản có email, hệ thống gửi link đặt mật khẩu mới.</p>
+              <Field label="Tên đăng nhập hoặc email">
+                <input value={f.username} onChange={set('username')} required autoFocus autoComplete="username" />
+              </Field>
+              {sent && <div className="notice" role="status">{sent}</div>}
+            </>
+          ) : mode === 'login' ? (
             <>
               <Field label="Tên đăng nhập hoặc email">
                 <input value={f.username} onChange={set('username')} required autoFocus autoComplete="username" />
@@ -84,11 +99,11 @@ export function Login() {
           )}
 
           {error && <ErrorBox message={error} />}
-          <Button type="submit" size="lg" loading={busy} disabled={mode === 'register' && !canRegister}>
-            {mode === 'login' ? 'Đăng nhập' : 'Tạo tài khoản'}
+          <Button type="submit" size="lg" loading={busy} disabled={(mode === 'register' && !canRegister) || (mode === 'forgot' && !f.username.trim())}>
+            {mode === 'login' ? 'Đăng nhập' : mode === 'forgot' ? (sent ? 'Gửi lại link' : 'Gửi link đặt lại mật khẩu') : 'Tạo tài khoản'}
           </Button>
 
-          {cfg?.allow_registration && (
+          {cfg?.allow_registration && mode !== 'forgot' && (
             <p className="muted" style={{ textAlign: 'center', fontWeight: 700 }}>
               {mode === 'login' ? 'Chưa có tài khoản? ' : 'Đã có tài khoản? '}
               <button type="button" className="linkbtn" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
@@ -96,8 +111,17 @@ export function Login() {
               </button>
             </p>
           )}
-          {mode === 'login' && (
+          {mode === 'login' && (cfg?.password_reset_email ? (
+            <p className="muted small" style={{ textAlign: 'center', fontWeight: 700 }}>
+              <button type="button" className="linkbtn" onClick={() => setMode('forgot')}>Quên mật khẩu?</button>
+            </p>
+          ) : (
             <p className="muted small" style={{ textAlign: 'center' }}>Quên mật khẩu? Nhờ giáo viên hoặc quản trị viên cấp lại mật khẩu tạm.</p>
+          ))}
+          {mode === 'forgot' && (
+            <p className="muted small" style={{ textAlign: 'center', fontWeight: 700 }}>
+              <button type="button" className="linkbtn" onClick={() => setMode('login')}>Quay lại đăng nhập</button>
+            </p>
           )}
           {cfg?.login_hint && <p className="hint-box small">{cfg.login_hint}</p>}
         </form>
@@ -140,6 +164,43 @@ export function ForceChangePassword() {
           {error && <ErrorBox message={error} />}
           <Button type="submit" size="lg" loading={busy} disabled={!ok}>Lưu mật khẩu mới</Button>
           <button type="button" className="linkbtn" onClick={() => logout()}>Đăng xuất</button>
+        </form>
+      </main>
+    </div>
+  );
+}
+
+/** Đặt mật khẩu mới từ link trong email (#/reset-password?token=...). Thành công thì đăng nhập luôn. */
+export function ResetPassword() {
+  const { resetPassword } = useAuth();
+  const token = new URLSearchParams(window.location.hash.split('?')[1] || '').get('token') || '';
+  const [next, setNext] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const ok = !!token && passwordOk(next) && next === confirm;
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true); setError(null);
+    try { await resetPassword(token, next); navigate('/', true); } catch (err) { setError(errorText(err)); } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="login-page">
+      <header className="login-top"><Logo size={38} /></header>
+      <main className="login-main">
+        <form className="login-form card" onSubmit={submit} aria-label="Đặt mật khẩu mới" style={{ padding: '26px 28px' }}>
+          <Mascot size={90} mood="think" />
+          <h2 style={{ fontSize: 26 }}>Đặt mật khẩu mới</h2>
+          {!token && <ErrorBox message="Link không hợp lệ. Hãy mở đúng link trong email hoặc yêu cầu link mới." />}
+          <Field label="Mật khẩu mới"><PasswordInput value={next} onChange={(e) => setNext(e.target.value)} required autoFocus autoComplete="new-password" /></Field>
+          {next && <PasswordRules value={next} />}
+          <Field label="Nhập lại mật khẩu mới"><PasswordInput value={confirm} onChange={(e) => setConfirm(e.target.value)} required autoComplete="new-password" /></Field>
+          {confirm && confirm !== next && <span className="small" style={{ color: 'var(--red-text)', fontWeight: 800 }}>Hai mật khẩu chưa khớp.</span>}
+          {error && <ErrorBox message={error} />}
+          <Button type="submit" size="lg" loading={busy} disabled={!ok}>Lưu mật khẩu mới</Button>
+          <button type="button" className="linkbtn" onClick={() => navigate('/login', true)}>Quay lại đăng nhập</button>
         </form>
       </main>
     </div>

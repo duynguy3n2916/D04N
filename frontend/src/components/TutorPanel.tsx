@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { api, ApiError, errorText, fmtTime, storage, type ChatResponse, type Source, type TutorQuota } from '../lib/api';
+import { api, ApiError, apiStream, errorText, fmtTime, storage, type ChatResponse, type Source, type TutorQuota } from '../lib/api';
 import { Icon } from './Icon';
 import { Markdown } from './Markdown';
 import { Mascot } from './Mascot';
@@ -73,17 +73,31 @@ export function TutorPanel({ lessonCode, context, quote, onClearQuote, onSource,
     setText('');
     onClearQuote();
     setBusy(true);
+    // Câu trả lời hiện dần theo từng đoạn (SSE). Ở chế độ gợi ý server chỉ gửi bản cuối đã kiểm tra lộ đáp án.
+    let started = false;
     try {
-      const r = await api<ChatResponse>('/ai/chat', { json: {
+      await apiStream('/ai/chat/stream', {
         question, conversation_id: convId, lesson_id: lessonCode,
         video_id: context.videoId || null,
         video_time: context.getVideoTime ? Math.floor(context.getVideoTime()) : null,
         focus_document_id: context.focusDocumentId || null, focus_page: context.focusPage || null,
         selected_text: q || null,
-      } });
-      if (r.conversation_id !== convId) { setConvId(r.conversation_id); storage.set(convKey, r.conversation_id); }
-      setMsgs((m) => [...m, { role: 'assistant', content: r.answer, sources: r.sources, hint: r.hint_mode, refused: r.refused }]);
-      if (r.quota) setQuota(r.quota);
+      }, (event, d) => {
+        if (event === 'delta') {
+          if (!started) { started = true; setMsgs((m) => [...m, { role: 'assistant', content: d.text }]); return; }
+          setMsgs((m) => { const c = [...m]; const last = c[c.length - 1]; c[c.length - 1] = { ...last, content: last.content + d.text }; return c; });
+        } else if (event === 'done') {
+          const r = d as ChatResponse;
+          const fin: Msg = { role: 'assistant', content: r.answer, sources: r.sources, hint: r.hint_mode, refused: r.refused };
+          setMsgs((m) => (started ? [...m.slice(0, -1), fin] : [...m, fin]));
+          started = true;
+          // đổi convId sau khi xong (đổi sớm sẽ kích hoạt tải lại hội thoại giữa lúc đang stream)
+          if (r.conversation_id !== convId) { setConvId(r.conversation_id); storage.set(convKey, r.conversation_id); }
+          if (r.quota) setQuota(r.quota);
+        } else if (event === 'error') {
+          throw new ApiError(502, { error: { code: d.code, message: d.message } });
+        }
+      });
     } catch (e) {
       if (e instanceof ApiError && e.code === 'TUTOR_QUOTA_EXCEEDED') {
         if (e.details) setQuota(e.details as TutorQuota);
@@ -159,7 +173,7 @@ export function TutorPanel({ lessonCode, context, quote, onClearQuote, onSource,
             )}
           </div>
         ))}
-        {busy && <div className="bubble-bot" style={{ alignSelf: 'flex-start' }}><span className="typing" aria-label="Tutor đang trả lời"><i /><i /><i /></span></div>}
+        {busy && msgs[msgs.length - 1]?.role === 'user' && <div className="bubble-bot" style={{ alignSelf: 'flex-start' }}><span className="typing" aria-label="Tutor đang trả lời"><i /><i /><i /></span></div>}
       </div>
       {!busy && quota?.remaining !== 0 && (context.suggestions?.length ?? 0) > 0 && msgs.length < 2 && (
         <div className="tutor-sugg">{context.suggestions!.map((s) => <button key={s} className="chip" onClick={() => send(s)}>{s}</button>)}</div>

@@ -4,7 +4,7 @@ import { isTeacher, useAuth } from './lib/auth';
 import { match, navigate, useLocation } from './lib/router';
 import { Learn } from './pages/Learn';
 import { LessonPage } from './pages/Lesson';
-import { ForceChangePassword, Login } from './pages/Login';
+import { ForceChangePassword, Login, ResetPassword } from './pages/Login';
 import { Profile } from './pages/Profile';
 import { CourseEditor, Courses } from './pages/teach/Courses';
 import { Documents } from './pages/teach/Documents';
@@ -19,10 +19,12 @@ export function App() {
   const { user } = useAuth();
 
   useEffect(() => {
+    if (match('/reset-password', path)) return; // link đặt lại mật khẩu trong email: mở được khi chưa đăng nhập
     if (!user && path !== '/login') navigate('/login', true);
     else if (user && (path === '/' || path === '/login')) navigate(isTeacher(user) ? '/teach/courses' : '/learn', true);
   }, [user, path]);
 
+  if (match('/reset-password', path)) return <ResetPassword />;
   if (!user) return <Login />;
   if (user.must_change_password) return <ForceChangePassword />;
 

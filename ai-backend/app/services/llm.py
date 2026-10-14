@@ -9,6 +9,7 @@ import logging
 import re
 import threading
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import TypeVar
 
@@ -139,6 +140,67 @@ def complete_text(task: str, prompt: Prompt, user_content: str, *, history: list
     messages = _normalize_history(history or []) + [{"role": "user", "content": user_content}]
     return _invoke(task, prompt, messages, max_tokens=max_tokens, json_mode=False, temperature=temperature,
                    chunk_ids=chunk_ids, user_id=user_id, attempt=1)
+
+
+def _stream_provider(system: str, messages: list[dict], max_tokens: int,
+                     temperature: float) -> Iterator["str | tuple[int | None, int | None, str]"]:
+    """Gọi OpenAI dạng stream: phát từng đoạn chữ, cuối cùng phát (input_tokens, output_tokens, model).
+    Test có thể thay hàm này."""
+    if not settings.openai_api_key:
+        raise LLMError("Chưa cấu hình OPENAI_API_KEY.")
+    kwargs = {"model": settings.openai_llm_model,
+              "messages": [{"role": "system", "content": system}] + messages,
+              "max_completion_tokens": max_tokens, "temperature": temperature,
+              "stream": True, "stream_options": {"include_usage": True}}
+    try:
+        stream = _openai_client().chat.completions.create(**kwargs)
+    except Exception as e:
+        if "temperature" not in str(e):
+            raise
+        kwargs.pop("temperature")
+        stream = _openai_client().chat.completions.create(**kwargs)
+    in_tok = out_tok = None
+    model = settings.openai_llm_model
+    for ev in stream:
+        model = getattr(ev, "model", None) or model
+        if getattr(ev, "usage", None):
+            in_tok, out_tok = ev.usage.prompt_tokens, ev.usage.completion_tokens
+        if ev.choices and ev.choices[0].delta and ev.choices[0].delta.content:
+            yield ev.choices[0].delta.content
+    yield (in_tok, out_tok, model)
+
+
+def stream_text(task: str, prompt: Prompt, user_content: str, *, history: list[dict] | None = None,
+                max_tokens: int = 1500, temperature: float = 0.2, chunk_ids: list[str] | None = None,
+                user_id: str | None = None) -> Iterator["str | LLMResult"]:
+    """Như complete_text nhưng phát từng đoạn chữ; phần tử cuối là LLMResult (đã ghi ai_llm_calls)."""
+    messages = _normalize_history(history or []) + [{"role": "user", "content": user_content}]
+    base = dict(task=task, prompt_id=prompt.id, prompt_version=prompt.version, provider=settings.llm_provider,
+                correlation_id=get_request_id(), chunk_ids=chunk_ids or None, user_id=user_id, attempt=1)
+    t0 = time.perf_counter()
+    parts: list[str] = []
+    usage: tuple = (None, None, settings.current_llm_model())
+    try:
+        for piece in _stream_provider(prompt.system, messages, max_tokens, temperature):
+            if isinstance(piece, tuple):
+                usage = piece
+                continue
+            parts.append(piece)
+            yield piece
+    except LLMError as e:
+        _log_call(**base, model=settings.current_llm_model(), status="error", error=str(e.detail),
+                  latency_ms=(time.perf_counter() - t0) * 1000)
+        raise
+    except Exception as e:
+        _log_call(**base, model=settings.current_llm_model(), status="error", error=f"{type(e).__name__}: {e}"[:2000],
+                  latency_ms=(time.perf_counter() - t0) * 1000)
+        raise LLMError(f"Gọi LLM thất bại ({settings.llm_provider}): {type(e).__name__}: {str(e)[:300]}")
+    latency = (time.perf_counter() - t0) * 1000
+    in_tok, out_tok, model = usage
+    call_id = _log_call(**base, model=model, status="ok", input_tokens=in_tok, output_tokens=out_tok,
+                        latency_ms=latency, cost_usd=_estimate_cost(in_tok, out_tok))
+    yield LLMResult(text="".join(parts), model=model, input_tokens=in_tok, output_tokens=out_tok, latency_ms=latency,
+                    call_ids=[call_id] if call_id else [], prompt_id=prompt.id, prompt_version=prompt.version)
 
 
 def complete_json(task: str, prompt: Prompt, user_content: str, schema: type[T], *, max_tokens: int = 4000,

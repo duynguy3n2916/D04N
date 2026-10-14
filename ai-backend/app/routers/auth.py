@@ -1,5 +1,5 @@
 """Đăng nhập, đăng ký, hồ sơ tài khoản, đổi mật khẩu, tham gia lớp."""
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -8,7 +8,7 @@ from app.core.errors import AppError
 from app.core.passwords import MIN_LENGTH
 from app.core.security import Principal, get_current_user
 from app.database import get_db
-from app.services import accounts
+from app.services import accounts, mailer
 
 router = APIRouter(prefix="/ai/auth", tags=["auth"])
 
@@ -17,7 +17,34 @@ router = APIRouter(prefix="/ai/auth", tags=["auth"])
 def auth_config():
     """Cho màn hình đăng nhập biết bật/tắt đăng ký và đăng nhập demo."""
     return {"allow_registration": settings.allow_registration, "allow_test_login": settings.allow_test_login,
-            "password_min_length": MIN_LENGTH, "login_hint": settings.login_hint or None}
+            "password_min_length": MIN_LENGTH, "login_hint": settings.login_hint or None,
+            "password_reset_email": mailer.enabled()}
+
+
+class ForgotPasswordRequest(BaseModel):
+    identifier: str = Field(min_length=1, max_length=255)  # tên đăng nhập hoặc email
+
+
+@router.post("/forgot-password")
+def forgot_password(req: ForgotPasswordRequest, request: Request, db: Session = Depends(get_db)):
+    """Gửi link đặt lại mật khẩu qua email. Luôn trả cùng một câu (không lộ tài khoản nào tồn tại)."""
+    if not mailer.enabled():
+        raise AppError(503, "EMAIL_DISABLED", "Hệ thống chưa cấu hình gửi email. Hãy nhờ giáo viên hoặc quản trị viên "
+                                              "cấp lại mật khẩu tạm.")
+    accounts.request_password_reset(db, req.identifier, str(request.base_url).rstrip("/") + "/app")
+    return {"ok": True, "message": "Nếu tài khoản tồn tại và có email, một link đặt lại mật khẩu vừa được gửi. "
+                                   "Hãy kiểm tra hộp thư (cả mục Spam)."}
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(min_length=10, max_length=2000)
+    new_password: str = Field(min_length=1, max_length=128)
+
+
+@router.post("/reset-password")
+def reset_password(req: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Đặt mật khẩu mới bằng link trong email; thành công thì đăng nhập luôn."""
+    return accounts.reset_password_with_token(db, req.token, req.new_password)
 
 
 class LoginRequest(BaseModel):

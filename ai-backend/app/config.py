@@ -49,11 +49,27 @@ class Settings(BaseSettings):
     login_hint: str = ""  # dòng gợi ý hiện dưới form đăng nhập (vd: tài khoản demo khi bảo vệ đồ án)
     cors_origins: str = "http://localhost:8000,http://127.0.0.1:8000,null"
 
+    # --- Email (quên mật khẩu) ---
+    smtp_host: str = ""  # để trống = tắt gửi email; khi đó giáo viên/admin cấp lại mật khẩu tạm
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: str = ""
+    smtp_from: str = ""  # vd "D04N <no-reply@example.com>"
+    smtp_starttls: bool = True
+    smtp_ssl: bool = False  # cổng 465
+    public_app_url: str = ""  # gốc giao diện cho link trong email, vd https://d04n.example.com/app ; trống = lấy từ request
+    password_reset_ttl_minutes: int = 30
+
     # --- RAG ---
     rag_top_k: int = 5
-    rag_min_score: float = 0.30  # cosine similarity tối thiểu để coi là liên quan
+    rag_min_score: float = 0.40  # cosine tối thiểu để coi là liên quan; hiệu chỉnh trên tập dev của bộ đánh giá demo
     rag_expand_neighbors: bool = True
     rag_max_context_chars: int = 9000
+    rag_hybrid: bool = True  # kết hợp tìm vector với tìm từ khóa (Postgres full-text), hợp nhất bằng RRF
+    rag_hybrid_min_coverage: float = 0.6  # chunk chỉ khớp từ khóa phải chứa >= 60% từ có nghĩa của câu hỏi
+    rag_rerank: str = "none"  # none | cross_encoder (tải model ~470MB lần đầu)
+    rag_rerank_model: str = "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+    rag_query_rewrite: str = "history"  # none | history: câu hỏi nối tiếp ngắn được ghép câu hỏi trước khi truy xuất
     rag_chunk_size: int = 800
     rag_chunk_overlap: int = 100
     chat_history_turns: int = 6

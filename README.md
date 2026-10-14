@@ -19,8 +19,11 @@ thích đáp án; giáo viên dùng AI để soạn câu hỏi và quản lý l�
   - **Câu hỏi mở rộng của AI** (tùy chọn): *Question Agent* tự đặt câu hỏi từ đoạn vừa xem; khi học sinh hết giờ hoặc trả lời sai,
     *Tutor AI* (AI thứ hai) đọc lại lời giảng + học liệu và giải thích vì sao đáp án đúng.
 - **Slide** (PDF xem trực tiếp, PPTX dạng chữ) và **bài đọc** Markdown có mục lục; bôi đen đoạn văn để hỏi Tutor.
+- **Tutor trả lời dạng streaming** (chữ hiện dần); hỏi nối tiếp kiểu “còn kế thừa thì sao?” vẫn hiểu ngữ cảnh. Khi đang làm
+  câu hỏi trong video hoặc bài kiểm tra, Tutor chỉ gợi ý, không nói đáp án.
 - **Bài kiểm tra** cuối bài từ ngân hàng câu hỏi đã duyệt.
 - **XP, chuỗi ngày học, mục tiêu ngày, bảng xếp hạng tuần.**
+- **Quên mật khẩu:** nhận link đặt lại qua email (khi đã cấu hình SMTP).
 - Nguồn Tutor trích dẫn bấm được: tua video tới đúng giây, mở slide đúng trang.
 
 ### Giáo viên / quản trị
@@ -28,9 +31,12 @@ thích đáp án; giáo viên dùng AI để soạn câu hỏi và quản lý l�
 - Khi AI soạn câu hỏi, chọn rõ các nguồn video / bài đọc / slide. Slide hoặc bài đọc đã bỏ khỏi bài không còn được dùng làm nguồn của bài đó; file vẫn có thể lưu trong thư viện để dùng lại.
 - Soạn khóa học (chương, bài, mục học), tải video, phiên âm (Whisper) hoặc nhập phụ đề `.srt/.vtt`, sửa phụ đề có phiên bản.
 - **AI soạn câu hỏi** theo mốc video hoặc theo bài; ngân hàng câu hỏi với quy trình sửa / duyệt / từ chối.
+- **Xuất đề kiểm tra** ra DOCX hoặc bản in / PDF, tối đa 4 mã đề (xáo câu và lựa chọn), kèm trang đáp án.
 - Quản lý học liệu (Knowledge Base), xem các đoạn đã chia để Tutor truy xuất.
 - **Tài khoản & lớp học:** tạo lớp có mã vào lớp, thêm học sinh hoặc nhập CSV, cấp lại mật khẩu, khóa tài khoản, phân quyền.
-- **Đánh giá Tutor** định lượng (Hit@K, MRR, độ bám nguồn, từ chối đúng, độ trễ) và theo dõi chi phí / độ trễ các lượt gọi LLM.
+- **Đánh giá Tutor** định lượng (Hit@K, MRR, độ bám nguồn, từ chối đúng, độ trễ) trên bộ 87 câu, có **baseline đối chứng**
+  (không RAG / không lọc bài / chỉ vector) và so sánh các lần chạy; theo dõi chi phí / độ trễ các lượt gọi LLM.
+- **Truy xuất hybrid:** vector (pgvector) + từ khóa (Postgres full-text) hợp nhất bằng RRF, rerank cross-encoder tùy chọn.
 
 ---
 
@@ -150,7 +156,9 @@ schema `public` của database test rồi tạo lại (không tạo hay xóa dat
 | `LOGIN_HINT` | dòng gợi ý dưới form đăng nhập (vd: tài khoản demo khi bảo vệ đồ án) |
 | `QUESTION_TIMEOUT_SECONDS` | thời gian trả lời câu hỏi trong video (mặc định 120) |
 | `AGENT_COOLDOWN_SECONDS` | khoảng nghỉ giữa hai lần AI hỏi (mặc định 300) |
-| `RAG_MIN_SCORE` | ngưỡng liên quan để Tutor từ chối khi học liệu không đủ |
+| `RAG_MIN_SCORE` | ngưỡng liên quan để Tutor từ chối khi học liệu không đủ (mặc định 0.40) |
+| `RAG_HYBRID`, `RAG_RERANK`, `RAG_QUERY_REWRITE` | bật tìm từ khóa + RRF (mặc định bật); rerank `none`/`cross_encoder`; ghép câu hỏi nối tiếp `history`/`none` |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `PUBLIC_APP_URL` | gửi email đặt lại mật khẩu (để trống `SMTP_HOST` = tắt) |
 | `QUIZ_GUARD_MINUTES` | bài kiểm tra làm dở trong khoảng này thì Tutor chỉ gợi ý, không nói đáp án (mặc định 90) |
 | `REDACT_PII` | che email / số điện thoại trong câu hỏi trước khi lưu và gửi LLM (mặc định bật) |
 | `CHAT_RETENTION_DAYS`, `LLM_LOG_RETENTION_DAYS` | thời hạn lưu tin nhắn Tutor / nhật ký gọi LLM, 0 = giữ mãi (mặc định 365 / 180) |

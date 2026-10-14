@@ -143,12 +143,13 @@ def _mean(values: list) -> float | None:
 @jobs.register("run_evaluation")
 def run_evaluation_job(ctx: "jobs.JobContext", suite: str = "default", split: str = "test", top_k: int = 5,
                        use_judge: bool = True, created_by: str | None = None, mode: str = "rag",
-                       min_score: float | None = None, expand: bool | None = None) -> dict:
+                       min_score: float | None = None, expand: bool | None = None, hybrid: bool | None = None) -> dict:
     db = ctx.db
     if mode not in MODES:
         raise AppError(400, "INVALID_MODE", f"mode phải là một trong {', '.join(MODES)}.")
     min_score = settings.rag_min_score if min_score is None else min_score
     expand = settings.rag_expand_neighbors if expand is None else expand
+    hybrid = settings.rag_hybrid if hybrid is None else hybrid
     q = db.query(EvalSample).filter(EvalSample.suite == suite)
     if split != "all":
         q = q.filter(EvalSample.split == split)
@@ -178,13 +179,13 @@ def run_evaluation_job(ctx: "jobs.JobContext", suite: str = "default", split: st
                 filtered = mode == "rag"
                 scope = RetrievalScope(allowed_class_ids=None, course_id=s.course_id if filtered else None,
                                        lesson_id=s.lesson_id if filtered else None)
-                ranked = retrieve(db, s.question, scope, top_k=top_k, min_score=0.0)
+                ranked = retrieve(db, s.question, scope, top_k=top_k, min_score=0.0, hybrid=hybrid)
                 r.retrieval_ms = (time.perf_counter() - t0) * 1000
                 m = retrieval_metrics(ranked, s)
                 r.hit, r.first_relevant_rank, r.recall, r.hit_method = m["hit"], m["rank"], m["recall"], m["method"]
                 r.retrieved = [{"rank": k + 1, "title": c["document_title"], "page": c["page"],
                                 "start_time": c["start_time"], "score": c["score"]} for k, c in enumerate(ranked)]
-                usable = [c for c in ranked if (c["score"] or 0) >= min_score]
+                usable = [c for c in ranked if (c["score"] or 0) >= min_score or c.get("lexical_match")]
                 if not usable:
                     answer, context = "Mình chưa tìm thấy thông tin liên quan trong học liệu.", ""
                     r.refused = True
@@ -221,7 +222,7 @@ def run_evaluation_job(ctx: "jobs.JobContext", suite: str = "default", split: st
         db.commit()
 
     summary = _summarize(db, rows, samples, correlation, top_k, use_judge,
-                         {"mode": mode, "rag_min_score": min_score, "expand_neighbors": expand})
+                         {"mode": mode, "rag_min_score": min_score, "expand_neighbors": expand, "hybrid": hybrid})
     report = _report_markdown(suite, split, top_k, summary)
     evaluation = db.get(AIEvaluation, evaluation.id)
     evaluation.error_count = summary["errors"]
@@ -284,6 +285,7 @@ def _summarize(db: Session, rows: list[EvalResult], samples: list[EvalSample], c
         "cost_usd": round(float(calls[3]), 4) if calls[3] is not None else None,
         "config": {
             "mode": run_cfg["mode"], "expand_neighbors": run_cfg["expand_neighbors"],
+            "hybrid": run_cfg.get("hybrid", settings.rag_hybrid), "rerank": settings.rag_rerank,
             "top_k": top_k, "rag_min_score": run_cfg["rag_min_score"], "llm_provider": settings.llm_provider,
             "llm_model": settings.current_llm_model(), "embedding_provider": settings.embedding_provider,
             "embedding_model": {"local": settings.embedding_model, "openai": settings.openai_embedding_model}
@@ -350,6 +352,7 @@ def _report_markdown(suite: str, split: str, top_k: int, m: dict) -> str:
         f"- Embedding: {cfg['embedding_provider']} / {cfg['embedding_model']} ({cfg['embedding_dim']} chiều)",
         f"- Top-K = {cfg['top_k']}, ngưỡng similarity = {cfg['rag_min_score']}, chunk {cfg['chunk_size']} ký tự, "
         f"overlap {cfg['chunk_overlap']}, mở rộng chunk lân cận: {'có' if cfg.get('expand_neighbors') else 'không'}",
+        f"- Truy xuất: {'hybrid (vector + từ khóa, RRF)' if cfg.get('hybrid') else 'chỉ vector'}; rerank: {cfg.get('rerank', 'none')}",
         f"- Groundedness / correctness chấm bằng LLM-as-judge ({cfg['prompt_versions']['judge']}).",
         "",
         "## 3. Nhận xét",
@@ -425,6 +428,7 @@ def compare(evals: list[AIEvaluation]) -> dict:
         runs.append({"evaluation_id": str(e.id), "suite": e.test_suite_name, "split": e.split,
                      "total": e.total_samples, "mode": cfg.get("mode", "rag"), "top_k": cfg.get("top_k"),
                      "rag_min_score": cfg.get("rag_min_score"), "chunk_size": cfg.get("chunk_size"),
+                     "hybrid": cfg.get("hybrid"),
                      "metrics": {k: m.get(k) for k in COMPARE_KEYS},
                      "created_at": e.created_at.isoformat() if e.created_at else None})
     same = len({(r["suite"], r["split"], r["total"]) for r in runs}) <= 1
