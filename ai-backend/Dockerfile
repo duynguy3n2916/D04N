@@ -19,8 +19,11 @@ ENV PYTHONUNBUFFERED=1 \
     HF_HOME=/data/hf-cache
 WORKDIR /app
 
-# Torch bản CPU (embedding chạy local không cần GPU) để image nhỏ hơn nhiều
-RUN pip install --index-url https://download.pytorch.org/whl/cpu torch
+# Torch bản CPU (embedding chạy local không cần GPU) để image nhỏ hơn nhiều.
+# Phải nâng pip trước: pip 23 đi kèm python:3.10-slim lấy typing_extensions dạng sdist từ index PyTorch
+# rồi đòi build (cần flit_core, index đó không có) -> build image linux/arm64 thất bại.
+RUN pip install --upgrade pip \
+    && pip install --only-binary=:all: --index-url https://download.pytorch.org/whl/cpu torch
 
 COPY ai-backend/requirements.txt ./
 RUN pip install -r requirements.txt
