@@ -151,6 +151,9 @@ schema `public` của database test rồi tạo lại (không tạo hay xóa dat
 | `QUESTION_TIMEOUT_SECONDS` | thời gian trả lời câu hỏi trong video (mặc định 120) |
 | `AGENT_COOLDOWN_SECONDS` | khoảng nghỉ giữa hai lần AI hỏi (mặc định 300) |
 | `RAG_MIN_SCORE` | ngưỡng liên quan để Tutor từ chối khi học liệu không đủ |
+| `QUIZ_GUARD_MINUTES` | bài kiểm tra làm dở trong khoảng này thì Tutor chỉ gợi ý, không nói đáp án (mặc định 90) |
+| `REDACT_PII` | che email / số điện thoại trong câu hỏi trước khi lưu và gửi LLM (mặc định bật) |
+| `CHAT_RETENTION_DAYS`, `LLM_LOG_RETENTION_DAYS` | thời hạn lưu tin nhắn Tutor / nhật ký gọi LLM, 0 = giữ mãi (mặc định 365 / 180) |
 
 Không commit file `.env` (đã có trong `.gitignore`).
 

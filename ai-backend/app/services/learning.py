@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.errors import AppError
 from app.core.security import Principal
-from app.core.utils import utcnow
+from app.core.utils import as_aware, utcnow
 from app.models.documents import AIDocument
 from app.models.learning import (Chapter, Course, ItemProgress, Lesson, LessonItem, MediaVideo, UserProfile,
                                  XPEvent)
@@ -358,7 +358,7 @@ def start_quiz(db: Session, user: Principal, item: LessonItem) -> dict:
     rnd = random.Random(f"{user.user_id}:{item.id}:{utcnow().date()}")
     chosen = rnd.sample(pool, min(count, len(pool)))
     p = _get_progress(db, user, item)
-    p.meta = {"question_ids": [str(q.id) for q in chosen], "answers": {}}
+    p.meta = {"question_ids": [str(q.id) for q in chosen], "answers": {}, "started_at": utcnow().isoformat()}
     db.commit()
     return {"item_id": str(item.id), "pass_ratio": (item.meta or {}).get("pass_ratio", 0.8),
             "questions": [{"question_id": str(q.id), "type": q.payload.get("type"), "question": q.payload.get("question"),
@@ -371,10 +371,7 @@ def answer_quiz(db: Session, user: Principal, item: LessonItem, question_id: str
     meta = dict(p.meta or {})
     if question_id not in (meta.get("question_ids") or []):
         raise AppError(409, "QUIZ_NOT_STARTED", "Câu hỏi không thuộc lượt làm bài hiện tại. Hãy bắt đầu lại.")
-    bank = db.get(QuestionBankItem, question_id)
-    pl = bank.payload or {}
-    q = SimpleNamespace(type=pl.get("type"), options=pl.get("options"), correct_index=pl.get("correct_index"),
-                        answer=pl.get("correct_answer"), explanation=pl.get("explanation"), question=pl.get("question"))
+    q = _bank_as_question(db.get(QuestionBankItem, question_id))
     result = grading.grade(q, answer, selected_index, user_id=user.user_id)
     answers = dict(meta.get("answers") or {})
     if question_id not in answers:  # chỉ tính lần trả lời đầu tiên
@@ -403,6 +400,7 @@ def finish_quiz(db: Session, user: Principal, item: LessonItem) -> dict:
     pass_ratio = float((item.meta or {}).get("pass_ratio", 0.8))
     passed = ratio >= pass_ratio
     p.score = max(p.score or 0, ratio)
+    p.meta = {**meta, "finished_at": utcnow().isoformat()}  # kết thúc lượt làm: Tutor hết chế độ gợi ý
     xp = 0
     if passed:
         first = p.status != "completed"
@@ -414,3 +412,36 @@ def finish_quiz(db: Session, user: Principal, item: LessonItem) -> dict:
         db.commit()
     return {"item_id": str(item.id), "correct": correct, "total": len(qids), "score": round(ratio, 4),
             "pass_ratio": pass_ratio, "passed": passed, "xp_awarded": xp}
+
+
+def _bank_as_question(bank: QuestionBankItem) -> SimpleNamespace:
+    pl = bank.payload or {}
+    return SimpleNamespace(type=pl.get("type"), options=pl.get("options"), correct_index=pl.get("correct_index"),
+                           answer=pl.get("correct_answer"), explanation=pl.get("explanation"), question=pl.get("question"))
+
+
+def active_quiz_questions(db: Session, user: Principal) -> list[SimpleNamespace]:
+    """Các câu của bài kiểm tra học sinh đang làm dở mà chưa trả lời (để Tutor bật chế độ gợi ý).
+
+    Xác định hoàn toàn phía server từ tiến độ đã lưu, không tin cờ client. Lượt làm bị bỏ dở quá
+    quiz_guard_minutes thì không tính nữa để Tutor không bị khóa vĩnh viễn.
+    """
+    since = utcnow() - timedelta(minutes=settings.quiz_guard_minutes)
+    rows = (db.query(ItemProgress).join(LessonItem, ItemProgress.item_id == LessonItem.id)
+            .filter(ItemProgress.student_id == user.user_id, LessonItem.type == "quiz",
+                    ItemProgress.updated_at >= since).all())
+    pending: list[str] = []
+    for p in rows:
+        meta = p.meta or {}
+        if meta.get("finished_at") or not meta.get("started_at"):
+            continue
+        try:
+            if as_aware(datetime.fromisoformat(meta["started_at"])) < since:
+                continue
+        except (TypeError, ValueError):
+            continue
+        answered = meta.get("answers") or {}
+        pending += [q for q in meta.get("question_ids") or [] if q not in answered]
+    if not pending:
+        return []
+    return [_bank_as_question(b) for b in db.query(QuestionBankItem).filter(QuestionBankItem.id.in_(pending)).all()]

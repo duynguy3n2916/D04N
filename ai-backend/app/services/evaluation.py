@@ -4,6 +4,10 @@ Chỉ số:
 - Retrieval: Hit@K, MRR, Recall@K so với nguồn đúng (ground truth) của từng câu hỏi.
 - Trả lời: groundedness, correctness, context relevance (LLM-as-judge), tỷ lệ từ chối.
 - Hệ thống: latency (trung bình, p50, p95), token, chi phí ước tính.
+Chế độ (mode) để có baseline đối chứng trong báo cáo:
+- rag: đúng pipeline của Tutor (lọc phạm vi bài, ngưỡng điểm, mở rộng chunk lân cận).
+- no_filter: như rag nhưng bỏ lọc theo khóa/bài -> đo tác dụng của filter metadata.
+- no_rag: LLM trả lời không có học liệu -> đo phần đóng góp của RAG (chỉ chấm correctness).
 Mẫu lỗi (retrieval / LLM / judge) được đếm riêng và KHÔNG được gán điểm mặc định.
 """
 import json
@@ -19,13 +23,18 @@ from app.config import settings
 from app.core.context import get_request_id
 from app.core.errors import AppError
 from app.core.llm_schemas import JudgeOutput
-from app.core.prompts import EVAL_JUDGE, TUTOR_ANSWER, wrap_documents
+from app.core.prompts import EVAL_JUDGE, EVAL_NO_RAG, TUTOR_ANSWER, wrap_documents
 from app.models.evaluation import AIEvaluation, EvalResult, EvalSample
 from app.models.observability import AILLMCall
 from app.services import jobs, llm
-from app.services.retrieval import RetrievalScope, build_context, retrieve
+from app.core.utils import is_refusal
+from app.services.retrieval import RetrievalScope, build_context, expand_neighbors, retrieve
 
 TARGETS = {"hit_at_k": 0.85, "groundedness": 0.85, "latency_s": 5.0}
+MODES = ("rag", "no_filter", "no_rag")
+MODE_LABELS = {"rag": "RAG đầy đủ (như Tutor)", "no_filter": "RAG không lọc theo khóa/bài",
+               "no_rag": "Baseline: LLM không dùng học liệu"}
+NO_CONTEXT = "(Chế độ baseline: hệ thống trả lời KHÔNG dùng học liệu. Chỉ chấm correctness.)"
 SAMPLE_FILE = Path(__file__).resolve().parents[2] / "sample_data" / "eval_samples.json"
 
 
@@ -117,11 +126,6 @@ def _judge(question: str, context: str, expected: str | None, answer: str) -> Ju
     return out
 
 
-def _is_refusal(answer: str) -> bool:
-    a = answer.lower()
-    return any(p in a for p in ("chưa tìm thấy", "không tìm thấy", "không có thông tin", "không đủ thông tin"))
-
-
 def _pct(values: list[float], q: float) -> float | None:
     if not values:
         return None
@@ -138,8 +142,13 @@ def _mean(values: list) -> float | None:
 
 @jobs.register("run_evaluation")
 def run_evaluation_job(ctx: "jobs.JobContext", suite: str = "default", split: str = "test", top_k: int = 5,
-                       use_judge: bool = True, created_by: str | None = None) -> dict:
+                       use_judge: bool = True, created_by: str | None = None, mode: str = "rag",
+                       min_score: float | None = None, expand: bool | None = None) -> dict:
     db = ctx.db
+    if mode not in MODES:
+        raise AppError(400, "INVALID_MODE", f"mode phải là một trong {', '.join(MODES)}.")
+    min_score = settings.rag_min_score if min_score is None else min_score
+    expand = settings.rag_expand_neighbors if expand is None else expand
     q = db.query(EvalSample).filter(EvalSample.suite == suite)
     if split != "all":
         q = q.filter(EvalSample.split == split)
@@ -159,24 +168,35 @@ def run_evaluation_job(ctx: "jobs.JobContext", suite: str = "default", split: st
         r = EvalResult(evaluation_id=evaluation.id, sample_id=s.id, question=s.question, status="ok")
         try:
             t0 = time.perf_counter()
-            scope = RetrievalScope(allowed_class_ids=None, course_id=s.course_id, lesson_id=s.lesson_id)
-            ranked = retrieve(db, s.question, scope, top_k=top_k, min_score=0.0)
-            r.retrieval_ms = (time.perf_counter() - t0) * 1000
-            m = retrieval_metrics(ranked, s)
-            r.hit, r.first_relevant_rank, r.recall, r.hit_method = m["hit"], m["rank"], m["recall"], m["method"]
-            r.retrieved = [{"rank": k + 1, "title": c["document_title"], "page": c["page"],
-                            "start_time": c["start_time"], "score": c["score"]} for k, c in enumerate(ranked)]
-            usable = [c for c in ranked if (c["score"] or 0) >= settings.rag_min_score]
-            if not usable:
-                answer, context = "Mình chưa tìm thấy thông tin liên quan trong học liệu.", ""
-                r.refused = True
-            else:
-                context, _ = build_context(usable)
-                res = llm.complete_text("eval_answer", TUTOR_ANSWER,
-                                        f"{wrap_documents(context)}\n\nCâu hỏi của học sinh: {s.question}",
+            if mode == "no_rag":
+                r.hit_method = "none"
+                res = llm.complete_text("eval_answer_baseline", EVAL_NO_RAG, f"Câu hỏi của học sinh: {s.question}",
                                         max_tokens=1200)
-                answer = res.text.strip()
-                r.refused = _is_refusal(answer)
+                answer, context = res.text.strip(), NO_CONTEXT
+                r.refused = is_refusal(answer)
+            else:
+                filtered = mode == "rag"
+                scope = RetrievalScope(allowed_class_ids=None, course_id=s.course_id if filtered else None,
+                                       lesson_id=s.lesson_id if filtered else None)
+                ranked = retrieve(db, s.question, scope, top_k=top_k, min_score=0.0)
+                r.retrieval_ms = (time.perf_counter() - t0) * 1000
+                m = retrieval_metrics(ranked, s)
+                r.hit, r.first_relevant_rank, r.recall, r.hit_method = m["hit"], m["rank"], m["recall"], m["method"]
+                r.retrieved = [{"rank": k + 1, "title": c["document_title"], "page": c["page"],
+                                "start_time": c["start_time"], "score": c["score"]} for k, c in enumerate(ranked)]
+                usable = [c for c in ranked if (c["score"] or 0) >= min_score]
+                if not usable:
+                    answer, context = "Mình chưa tìm thấy thông tin liên quan trong học liệu.", ""
+                    r.refused = True
+                else:
+                    if expand:
+                        usable = expand_neighbors(db, usable)
+                    context, _ = build_context(usable)
+                    res = llm.complete_text("eval_answer", TUTOR_ANSWER,
+                                            f"{wrap_documents(context)}\n\nCâu hỏi của học sinh: {s.question}",
+                                            max_tokens=1200)
+                    answer = res.text.strip()
+                    r.refused = is_refusal(answer)
             r.latency_ms = (time.perf_counter() - t0) * 1000
             r.answer = answer
         except Exception as e:
@@ -189,7 +209,9 @@ def run_evaluation_job(ctx: "jobs.JobContext", suite: str = "default", split: st
             if context:
                 try:
                     j = _judge(s.question, context, s.expected_answer, answer)
-                    r.groundedness, r.correctness, r.context_relevance = j.groundedness, j.correctness, j.context_relevance
+                    r.correctness = j.correctness
+                    if mode != "no_rag":  # không có học liệu thì groundedness / context relevance vô nghĩa
+                        r.groundedness, r.context_relevance = j.groundedness, j.context_relevance
                 except Exception as e:
                     r.error = f"judge_failed: {str(getattr(e, 'detail', e))[:500]}"
             elif s.answerable is False:
@@ -198,7 +220,8 @@ def run_evaluation_job(ctx: "jobs.JobContext", suite: str = "default", split: st
         db.add(r)
         db.commit()
 
-    summary = _summarize(db, rows, samples, correlation, top_k, use_judge)
+    summary = _summarize(db, rows, samples, correlation, top_k, use_judge,
+                         {"mode": mode, "rag_min_score": min_score, "expand_neighbors": expand})
     report = _report_markdown(suite, split, top_k, summary)
     evaluation = db.get(AIEvaluation, evaluation.id)
     evaluation.error_count = summary["errors"]
@@ -218,7 +241,9 @@ def _headline(summary: dict) -> dict:
 
 
 def _summarize(db: Session, rows: list[EvalResult], samples: list[EvalSample], correlation: str, top_k: int,
-               use_judge: bool) -> dict:
+               use_judge: bool, run_cfg: dict | None = None) -> dict:
+    run_cfg = {"mode": "rag", "rag_min_score": settings.rag_min_score,
+               "expand_neighbors": settings.rag_expand_neighbors, **(run_cfg or {})}
     by_id = {s.id: s for s in samples}
     ok = [r for r in rows if r.status == "ok"]
     answerable = [r for r in ok if by_id[r.sample_id].answerable is not False]
@@ -229,6 +254,7 @@ def _summarize(db: Session, rows: list[EvalResult], samples: list[EvalSample], c
     calls = db.query(func.count(AILLMCall.id), func.sum(AILLMCall.input_tokens), func.sum(AILLMCall.output_tokens),
                      func.sum(AILLMCall.cost_usd)).filter(AILLMCall.correlation_id == correlation).one()
     judged = [r for r in answerable if r.groundedness is not None]
+    judged_correct = [r for r in answerable if r.correctness is not None]
     return {
         "total": len(rows),
         "errors": len(rows) - len(ok),
@@ -242,7 +268,7 @@ def _summarize(db: Session, rows: list[EvalResult], samples: list[EvalSample], c
         if measured else None,
         "recall_at_k": _mean([r.recall for r in measured]),
         "groundedness": _mean([r.groundedness for r in judged]),
-        "correctness": _mean([r.correctness for r in judged]),
+        "correctness": _mean([r.correctness for r in judged_correct]),
         "context_relevance": _mean([r.context_relevance for r in judged]),
         "judged": len(judged),
         "false_refusal_rate": round(sum(1 for r in answerable if r.refused) / len(answerable), 4) if answerable else None,
@@ -257,12 +283,14 @@ def _summarize(db: Session, rows: list[EvalResult], samples: list[EvalSample], c
         "output_tokens": int(calls[2] or 0),
         "cost_usd": round(float(calls[3]), 4) if calls[3] is not None else None,
         "config": {
-            "top_k": top_k, "rag_min_score": settings.rag_min_score, "llm_provider": settings.llm_provider,
+            "mode": run_cfg["mode"], "expand_neighbors": run_cfg["expand_neighbors"],
+            "top_k": top_k, "rag_min_score": run_cfg["rag_min_score"], "llm_provider": settings.llm_provider,
             "llm_model": settings.current_llm_model(), "embedding_provider": settings.embedding_provider,
             "embedding_model": {"local": settings.embedding_model, "openai": settings.openai_embedding_model}
             .get(settings.embedding_provider, "hash (chỉ dùng kiểm thử)"), "embedding_dim": settings.embedding_dim,
-            "chunk_size": 800, "chunk_overlap": 100, "judge": use_judge,
-            "prompt_versions": {"answer": f"{TUTOR_ANSWER.id}:{TUTOR_ANSWER.version}",
+            "chunk_size": settings.rag_chunk_size, "chunk_overlap": settings.rag_chunk_overlap, "judge": use_judge,
+            "prompt_versions": {"answer": f"{EVAL_NO_RAG.id}:{EVAL_NO_RAG.version}" if run_cfg["mode"] == "no_rag"
+                                else f"{TUTOR_ANSWER.id}:{TUTOR_ANSWER.version}",
                                 "judge": f"{EVAL_JUDGE.id}:{EVAL_JUDGE.version}"},
         },
         "details": [{"question": r.question, "status": r.status, "hit": r.hit, "rank": r.first_relevant_rank,
@@ -292,6 +320,7 @@ def _report_markdown(suite: str, split: str, top_k: int, m: dict) -> str:
         "# Báo cáo đánh giá định lượng hệ thống AI",
         "",
         f"- **Bộ mẫu:** {suite} (split = {split})",
+        f"- **Chế độ:** {MODE_LABELS.get(m['config'].get('mode', 'rag'), m['config'].get('mode'))}",
         f"- **Thời điểm:** {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}",
         f"- **Số mẫu:** {m['total']} (trả lời được: {m['answerable']}, ngoài học liệu: {m['unanswerable']}); "
         f"lỗi: {m['errors']}; judge lỗi: {m['judge_failures']}",
@@ -319,13 +348,17 @@ def _report_markdown(suite: str, split: str, top_k: int, m: dict) -> str:
         "",
         f"- LLM: {cfg['llm_provider']} / {cfg['llm_model']}; prompt {cfg['prompt_versions']['answer']}",
         f"- Embedding: {cfg['embedding_provider']} / {cfg['embedding_model']} ({cfg['embedding_dim']} chiều)",
-        f"- Top-K = {cfg['top_k']}, ngưỡng similarity = {cfg['rag_min_score']}, chunk {cfg['chunk_size']} ký tự, overlap {cfg['chunk_overlap']}",
+        f"- Top-K = {cfg['top_k']}, ngưỡng similarity = {cfg['rag_min_score']}, chunk {cfg['chunk_size']} ký tự, "
+        f"overlap {cfg['chunk_overlap']}, mở rộng chunk lân cận: {'có' if cfg.get('expand_neighbors') else 'không'}",
         f"- Groundedness / correctness chấm bằng LLM-as-judge ({cfg['prompt_versions']['judge']}).",
         "",
         "## 3. Nhận xét",
         "",
     ]
     notes = []
+    if cfg.get("mode") == "no_rag":
+        notes.append("- Đây là lần chạy baseline (không dùng học liệu): chỉ dùng để so correctness và tỉ lệ từ chối "
+                     "với lần chạy chế độ rag trên cùng bộ mẫu (GET /ai/evaluation/compare).")
     if m["hit_at_k"] is not None:
         notes.append(f"- Retrieval tìm đúng nguồn trong top {top_k} ở {_fmt_pct(m['hit_at_k'])} số câu "
                      f"({m['hit_methods']['ground_truth']} câu chấm theo nguồn đúng, {m['hit_methods']['key_terms']} câu theo từ khóa).")
@@ -378,3 +411,29 @@ def word_error_rate(reference: str, hypothesis: str) -> dict:
         prev = cur
     return {"wer": round(prev[-1] / len(ref), 4), "edits": prev[-1], "reference_words": len(ref),
             "hypothesis_words": len(hyp)}
+
+
+COMPARE_KEYS = ("hit_at_k", "mrr", "recall_at_k", "groundedness", "correctness", "context_relevance",
+                "false_refusal_rate", "correct_refusal_rate", "latency_ms_avg", "latency_ms_p95", "cost_usd", "errors")
+
+
+def compare(evals: list[AIEvaluation]) -> dict:
+    """So sánh các lần chạy (vd. baseline no_rag với rag) trên cùng chỉ số; cảnh báo nếu khác bộ mẫu."""
+    runs = []
+    for e in evals:
+        m, cfg = e.metrics_summary or {}, e.config or {}
+        runs.append({"evaluation_id": str(e.id), "suite": e.test_suite_name, "split": e.split,
+                     "total": e.total_samples, "mode": cfg.get("mode", "rag"), "top_k": cfg.get("top_k"),
+                     "rag_min_score": cfg.get("rag_min_score"), "chunk_size": cfg.get("chunk_size"),
+                     "metrics": {k: m.get(k) for k in COMPARE_KEYS},
+                     "created_at": e.created_at.isoformat() if e.created_at else None})
+    same = len({(r["suite"], r["split"], r["total"]) for r in runs}) <= 1
+    out = {"runs": runs, "comparable": same}
+    if not same:
+        out["warning"] = "Các lần chạy khác bộ mẫu / split / số mẫu: không nên so sánh trực tiếp."
+    if len(runs) >= 2:
+        base = runs[0]["metrics"]
+        out["delta_vs_first"] = [{k: (r["metrics"][k] - base[k]) if isinstance(r["metrics"][k], (int, float))
+                                  and isinstance(base[k], (int, float)) else None for k in COMPARE_KEYS}
+                                 for r in runs[1:]]
+    return out

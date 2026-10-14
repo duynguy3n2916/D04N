@@ -54,8 +54,16 @@ class Settings(BaseSettings):
     rag_min_score: float = 0.30  # cosine similarity tối thiểu để coi là liên quan
     rag_expand_neighbors: bool = True
     rag_max_context_chars: int = 9000
+    rag_chunk_size: int = 800
+    rag_chunk_overlap: int = 100
     chat_history_turns: int = 6
     chat_summary_after_messages: int = 16
+
+    # --- Guardrail / lưu trữ ---
+    quiz_guard_minutes: int = 90  # bài kiểm tra đang làm dở trong khoảng này thì Tutor chỉ gợi ý, không nói đáp án
+    redact_pii: bool = True  # che email / số điện thoại trong câu hỏi trước khi lưu và gửi LLM
+    chat_retention_days: int = 365  # xóa tin nhắn Tutor cũ hơn N ngày (0 = giữ mãi)
+    llm_log_retention_days: int = 180  # xóa nhật ký ai_llm_calls cũ hơn N ngày (0 = giữ mãi)
 
     # --- Workflow / Video ---
     question_timeout_seconds: int = 120

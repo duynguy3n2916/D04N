@@ -4,6 +4,7 @@ import uuid
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.core.errors import AppError
 from app.models.documents import AIChunk, AIDocument
 from app.services import jobs
@@ -41,7 +42,7 @@ def create_document(db: Session, *, title: str, source_type: str, file_path: str
 def _chunk_sections(sections: list[dict]) -> list[dict]:
     all_chunks: list[dict] = []
     for item in sections:
-        for c in chunk_text(item["text"], section=item.get("section")):
+        for c in chunk_text(item["text"], settings.rag_chunk_size, settings.rag_chunk_overlap, section=item.get("section")):
             c["page"] = item.get("page")
             all_chunks.append(c)
     return all_chunks

@@ -3,6 +3,7 @@ import logging
 import mimetypes
 import os
 import threading
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from app.routers import (admin, auth, chat, documents, evaluation, jobs as jobs_
                          users, workflow)
 from app.services import evaluation as _ev, ingestion as _ing, jobs, transcription as _tr  # noqa: F401 (đăng ký job)
 from app.services import tutor_explain as _te  # noqa: F401 (đăng ký job tutor_explain)
+from app.services.retention import purge_expired
 from app.services.workflow import sweep_expired
 
 # Windows lấy kiểu file từ registry: .mjs (pdf.js worker) hay .js có thể bị trả về text/plain,
@@ -29,6 +31,7 @@ for _ext, _type in ((".js", "text/javascript"), (".mjs", "text/javascript"), (".
     mimetypes.add_type(_type, _ext)
 
 log = logging.getLogger("app")
+RETENTION_INTERVAL_SECONDS = 6 * 3600  # dọn dữ liệu quá hạn lưu mỗi 6 giờ
 FRONTEND_DIST = Path(os.environ.get("FRONTEND_DIST", Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"))
 
 
@@ -41,11 +44,25 @@ async def _sweeper(stop: asyncio.Event) -> None:
         finally:
             db.close()
 
+    def purge_once():
+        db = SessionLocal()
+        try:
+            return purge_expired(db)
+        finally:
+            db.close()
+
+    last_purge = 0.0
     while not stop.is_set():
         try:
             await asyncio.to_thread(run_once)
         except Exception:
             log.exception("sweeper_error")
+        if time.monotonic() - last_purge >= RETENTION_INTERVAL_SECONDS:
+            last_purge = time.monotonic()
+            try:
+                await asyncio.to_thread(purge_once)
+            except Exception:
+                log.exception("retention_error")
         try:
             await asyncio.wait_for(stop.wait(), timeout=settings.timeout_sweep_interval_seconds)
         except asyncio.TimeoutError:

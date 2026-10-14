@@ -50,6 +50,24 @@ def generate_code(prefix: str) -> str:
     return f"{prefix}-{uuid.uuid4().hex}"
 
 
+_EMAIL = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
+# số điện thoại VN: 0xxxxxxxxx hoặc +84xxxxxxxxx, cho phép dấu cách / chấm / gạch giữa các nhóm
+_PHONE = re.compile(r"(?<![\w])(?:\+?84|0)(?:[\s.\-]?\d){8,10}(?![\w])")
+
+
+def redact_pii(text: str) -> str:
+    """Che email và số điện thoại trước khi lưu / gửi cho nhà cung cấp LLM."""
+    return _PHONE.sub("[số điện thoại]", _EMAIL.sub("[email]", text or ""))
+
+
+_REFUSAL_PHRASES = ("chưa tìm thấy", "không tìm thấy", "không có thông tin", "không đủ thông tin")
+
+
+def is_refusal(answer: str) -> bool:
+    a = (answer or "").lower()
+    return any(p in a for p in _REFUSAL_PHRASES)
+
+
 _OPTION_PREFIX = re.compile(r"^\s*([A-Ha-h])\s*[\.\)\:\-]\s*")
 
 

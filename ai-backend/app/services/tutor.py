@@ -12,11 +12,10 @@ from app.core.context import get_request_id
 from app.core.errors import AppError
 from app.core.prompts import CONVERSATION_SUMMARY, TUTOR_ANSWER, TUTOR_HINT, wrap_documents
 from app.core.security import Principal
-from app.core.utils import fmt_ts, normalize_text, strip_option_label, utcnow
+from app.core.utils import fmt_ts, normalize_text, redact_pii, strip_option_label, utcnow
 from app.models.conversation import AIConversation, AIMessage
 from app.models.documents import AIChunk, AIDocument
-from app.models.video_question import VideoQuestion
-from app.services import llm, workflow
+from app.services import learning, llm, workflow
 from app.services.grading import correct_answer_text
 from app.services.retrieval import (RetrievalScope, _apply_scope, _row_to_dict, build_context, expand_neighbors, format_segments, retrieve,
                                     transcript_window)
@@ -27,6 +26,8 @@ REFUSAL = ("Mình chưa tìm thấy thông tin liên quan trong học liệu c�
            "Bạn thử hỏi cụ thể hơn, hoặc nhờ giáo viên bổ sung tài liệu nhé.")
 HINT_REDACTED = ("Câu hỏi kiểm tra đang diễn ra nên mình chưa thể nói đáp án. Gợi ý: hãy nhớ lại khái niệm chính "
                  "vừa được giảng ngay trước đó và loại dần các lựa chọn không phù hợp với định nghĩa.")
+MAX_GUARDED_QUESTIONS_IN_PROMPT = 10
+REFUSAL_MARK = "chưa tìm thấy thông tin"  # khớp câu từ chối trong prompt TUTOR_ANSWER
 
 
 def get_or_create_conversation(db: Session, user: Principal, conversation_id, *, course_id=None, class_id=None,
@@ -79,7 +80,8 @@ def _maybe_summarize(db: Session, conv: AIConversation, user: Principal) -> None
         db.rollback()  # tóm tắt là phụ, không làm hỏng lượt chat
 
 
-def _leaks_answer(answer: str, q: VideoQuestion) -> bool:
+def _leaks_answer(answer: str, q) -> bool:
+    """q: VideoQuestion hoặc câu ngân hàng (cùng các thuộc tính type/options/correct_index/answer)."""
     text = normalize_text(answer)
     if q.options and q.correct_index is not None:
         letter = "abcdefgh"[q.correct_index]
@@ -132,9 +134,16 @@ def ask(db: Session, user: Principal, *, question: str, conversation_id=None, co
                        "Hãy xem lại các nguồn Tutor đã trích hoặc quay lại vào ngày mai nhé. "
                        "Video, slide và bài kiểm tra vẫn học bình thường.", quota)
 
-    # Hint mode do server quyết định từ trạng thái phiên video, không tin cờ phía client
-    active_q = workflow.active_question_for_hint(db, user, video_id) if not user.is_teacher else None
-    hint_mode = active_q is not None
+    if settings.redact_pii:
+        question = redact_pii(question)
+        selected_text = redact_pii(selected_text) if selected_text else selected_text
+
+    # Hint mode do server quyết định (câu hỏi video đang mở hoặc bài kiểm tra đang làm dở), không tin cờ client
+    guarded: list = []
+    if not user.is_teacher:
+        active_q = workflow.active_question_for_hint(db, user, video_id)
+        guarded = ([active_q] if active_q else []) + learning.active_quiz_questions(db, user)
+    hint_mode = bool(guarded)
 
     scope = RetrievalScope.for_user(user, course_id=course_id, class_id=class_id, lesson_id=lesson_id)
     chunks = retrieve(db, question, scope, top_k=top_k)
@@ -173,8 +182,9 @@ def ask(db: Session, user: Principal, *, question: str, conversation_id=None, co
     history = _history(db, conv)
     meta = {"hint_mode": hint_mode, "request_id": get_request_id()}
     if selected_text and not chunks and not transcript_block:
-        chunks = [{"chunk_id": None, "content": selected_text[:2000], "source_type": "selection",
-                   "label": "Đoạn học sinh đang chọn", "document_title": "Đoạn đang chọn"}]
+        # Đoạn bôi đen do client gửi lên nên KHÔNG được dùng làm học liệu (sẽ lách được cơ chế từ chối).
+        # Dùng nó để truy xuất lại; vẫn phải qua ngưỡng điểm và phạm vi quyền như câu hỏi thường.
+        chunks = retrieve(db, selected_text[:2000], scope, top_k=top_k)
     if not chunks and not transcript_block:
         answer, sources, res = REFUSAL, [], None
         meta["refused"] = True
@@ -186,14 +196,19 @@ def ask(db: Session, user: Principal, *, question: str, conversation_id=None, co
             user_content += f"Học sinh đang hỏi về đoạn sau trong bài:\n«{selected_text[:2000]}»\n\n"
         user_content += f"Câu hỏi của học sinh: {question}"
         if hint_mode:
-            user_content += f"\n\n(Câu hỏi kiểm tra đang mở: {active_q.question})"
+            open_qs = "\n".join(f"- {q.question}" for q in guarded[:MAX_GUARDED_QUESTIONS_IN_PROMPT])
+            user_content += f"\n\n(Câu hỏi kiểm tra đang mở, không được nêu đáp án:\n{open_qs})"
         res = llm.complete_text("tutor", prompt, user_content, history=history, max_tokens=1500,
                                 chunk_ids=[s["chunk_id"] for s in sources if s.get("chunk_id")],
                                 user_id=user.user_id)
         answer = res.text.strip() or REFUSAL
-        if hint_mode and _leaks_answer(answer, active_q):
+        if hint_mode and any(_leaks_answer(answer, q) for q in guarded):
             answer = HINT_REDACTED
             meta["guardrail"] = "answer_redacted"
+        elif REFUSAL_MARK in answer.lower():
+            # LLM tự từ chối theo đúng câu trong prompt: vẫn đếm vào tỉ lệ từ chối.
+            # Không dùng cụm rộng như "không tìm thấy" vì hay xuất hiện trong lời giải thích bình thường.
+            meta["refused"] = True
         meta["llm_call_ids"] = res.call_ids
         meta["prompt_version"] = f"{res.prompt_id}:{res.prompt_version}"
 

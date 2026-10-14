@@ -20,6 +20,9 @@ class RunEvaluationRequest(BaseModel):
     split: str = Field(default="test", pattern="^(dev|test|all)$")
     top_k: int = Field(default=5, ge=1, le=10)
     use_judge: bool = True
+    mode: str = Field(default="rag", pattern="^(rag|no_filter|no_rag)$")  # no_rag / no_filter: baseline đối chứng
+    min_score: float | None = Field(default=None, ge=0.0, le=1.0)  # ghi đè RAG_MIN_SCORE cho thí nghiệm
+    expand_neighbors: bool | None = None  # ghi đè RAG_EXPAND_NEIGHBORS cho thí nghiệm
 
 
 @router.post("/run", status_code=202)
@@ -30,7 +33,8 @@ def run_evaluation(req: RunEvaluationRequest | None = None, user: Principal = De
     if not db.query(EvalSample.id).filter(EvalSample.suite == req.test_suite_name).first():
         raise AppError(400, "NO_SAMPLES", f"Bộ '{req.test_suite_name}' chưa có mẫu. Nạp mẫu trước (POST /ai/evaluation/samples).")
     job = jobs.submit(db, "run_evaluation", {"suite": req.test_suite_name, "split": req.split, "top_k": req.top_k,
-                                             "use_judge": req.use_judge, "created_by": user.user_id},
+                                             "use_judge": req.use_judge, "created_by": user.user_id, "mode": req.mode,
+                                             "min_score": req.min_score, "expand": req.expand_neighbors},
                       created_by=user.user_id)
     return JSONResponse(status_code=202, content=jobs.job_to_dict(job))
 
@@ -47,6 +51,19 @@ def get_latest_evaluation(user: Principal = Depends(require_teacher), db: Sessio
 def list_runs(user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
     rows = db.query(AIEvaluation).order_by(AIEvaluation.created_at.desc()).limit(30).all()
     return [{k: v for k, v in ev.evaluation_to_dict(r).items() if k not in ("details", "report_markdown")} for r in rows]
+
+
+@router.get("/compare")
+def compare_runs(ids: str, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
+    """So sánh các lần chạy, vd. ?ids=<baseline>,<rag>. Lần đầu tiên là mốc để tính chênh lệch."""
+    uids = [parse_uuid(x.strip(), "evaluation_id") for x in ids.split(",") if x.strip()]
+    if not 2 <= len(uids) <= 6:
+        raise AppError(400, "INVALID_COMPARE", "Cần từ 2 đến 6 evaluation_id, cách nhau bằng dấu phẩy.")
+    found = {e.id: e for e in db.query(AIEvaluation).filter(AIEvaluation.id.in_(uids)).all()}
+    missing = [str(u) for u in uids if u not in found]
+    if missing:
+        raise AppError(404, "NOT_FOUND", f"Không tìm thấy lần đánh giá: {', '.join(missing)}")
+    return ev.compare([found[u] for u in uids])
 
 
 @router.get("/runs/{evaluation_id}")

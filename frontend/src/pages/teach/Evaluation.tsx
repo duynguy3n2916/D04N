@@ -6,8 +6,10 @@ import { api, errorText, pollJob } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useAsync } from '../../lib/hooks';
 
-interface Run { evaluation_id: string; test_suite_name: string; split: string; total_samples: number; error_count: number; hit_at_k: number | null; groundedness_score: number | null; avg_latency_ms: number | null; metrics: Record<string, any>; created_at: string }
+interface Run { evaluation_id: string; test_suite_name: string; split: string; total_samples: number; error_count: number; hit_at_k: number | null; groundedness_score: number | null; avg_latency_ms: number | null; metrics: Record<string, any>; config?: { mode?: string } | null; created_at: string }
 interface RunFull extends Run { report_markdown: string | null }
+
+const MODE_LABEL: Record<string, string> = { rag: 'RAG đầy đủ', no_filter: 'RAG không lọc bài', no_rag: 'Baseline: không RAG' };
 
 const pct = (x: number | null | undefined) => (x == null ? '—' : `${Math.round(x * 1000) / 10}%`);
 
@@ -26,6 +28,7 @@ export function Evaluation() {
   const [job, setJob] = useState<string | null>(null);
   const [split, setSplit] = useState('test');
   const [judge, setJudge] = useState(true);
+  const [mode, setMode] = useState('rag');
   const fileRef = useRef<HTMLInputElement>(null);
 
   const loadDefault = async () => {
@@ -43,7 +46,7 @@ export function Evaluation() {
   };
   const run = async () => {
     try {
-      const j = await api<{ job_id: string }>('/ai/evaluation/run', { json: { split, use_judge: judge } });
+      const j = await api<{ job_id: string }>('/ai/evaluation/run', { json: { split, use_judge: judge, mode } });
       setJob('Đang chạy…');
       const r = await pollJob(j.job_id, (x) => setJob(`Đang chạy… ${x.progress != null ? Math.round(x.progress * 100) + '%' : ''} ${x.message || ''}`));
       setJob(null);
@@ -76,6 +79,9 @@ export function Evaluation() {
           <select className="input" style={{ width: 'auto' }} value={split} onChange={(e) => setSplit(e.target.value)} aria-label="Tập dữ liệu">
             <option value="test">Tập test</option><option value="dev">Tập dev</option><option value="all">Tất cả</option>
           </select>
+          <select className="input" style={{ width: 'auto' }} value={mode} onChange={(e) => setMode(e.target.value)} aria-label="Chế độ">
+            {Object.entries(MODE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
           <label className="check"><input type="checkbox" checked={judge} onChange={(e) => setJudge(e.target.checked)} />Chấm độ bám nguồn bằng LLM</label>
           <Button icon="play" loading={!!job} disabled={!samples.data?.total} onClick={run}>Chạy đánh giá</Button>
         </div>
@@ -90,8 +96,8 @@ export function Evaluation() {
           {r && (
             <>
               <div className="stat-tiles">
-                <div className="tile"><strong>{pct(r.hit_at_k)}</strong><span>Hit@{r.metrics?.config?.top_k ?? 5} (tìm đúng nguồn)</span></div>
-                <div className="tile"><strong>{pct(r.groundedness_score)}</strong><span>Bám nguồn</span></div>
+                <div className="tile"><strong>{pct(r.metrics?.hit_at_k ?? null)}</strong><span>Hit@{r.metrics?.config?.top_k ?? 5} (tìm đúng nguồn)</span></div>
+                <div className="tile"><strong>{pct(r.metrics?.groundedness ?? null)}</strong><span>Bám nguồn</span></div>
                 <div className="tile"><strong>{pct(r.metrics?.correct_refusal_rate)}</strong><span>Từ chối đúng</span></div>
                 <div className="tile"><strong>{r.avg_latency_ms != null ? `${Math.round(r.avg_latency_ms)} ms` : '—'}</strong><span>Độ trễ TB</span></div>
               </div>
@@ -109,9 +115,12 @@ export function Evaluation() {
               <button key={x.evaluation_id} className="chip" style={(sel || runs.data?.[0]?.evaluation_id) === x.evaluation_id ? { borderColor: 'var(--blue-line)' } : undefined} onClick={() => setSel(x.evaluation_id)}>
                 <div className="row" style={{ justifyContent: 'space-between' }}>
                   <span>{new Date(x.created_at).toLocaleString('vi-VN')}</span>
-                  <Badge tone="blue">{x.split}</Badge>
+                  <span className="row" style={{ gap: 4 }}>
+                    {x.config?.mode && x.config.mode !== 'rag' && <Badge tone="orange">{MODE_LABEL[x.config.mode] ?? x.config.mode}</Badge>}
+                    <Badge tone="blue">{x.split}</Badge>
+                  </span>
                 </div>
-                <span className="muted small">Hit {pct(x.hit_at_k)} · bám nguồn {pct(x.groundedness_score)} · {x.total_samples} mẫu{x.error_count ? ` · ${x.error_count} lỗi` : ''}</span>
+                <span className="muted small">Hit {pct(x.metrics?.hit_at_k ?? null)} · bám nguồn {pct(x.metrics?.groundedness ?? null)} · đúng {pct(x.metrics?.correctness ?? null)} · {x.total_samples} mẫu{x.error_count ? ` · ${x.error_count} lỗi` : ''}</span>
               </button>
             ))}
             {runs.data && !runs.data.length && <span className="muted small">Chưa có.</span>}

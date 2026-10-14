@@ -65,7 +65,7 @@ Nguồn mà Tutor trích dẫn bấm được: nguồn video tua tới đúng gi
 | `python init_db.py --seed` | Nạp dữ liệu demo + bộ 24 câu đánh giá |
 | `python init_db.py --reembed` | Sau khi đổi model embedding / `EMBEDDING_DIM`: đổi kích thước vector và tạo lại embedding |
 | `python init_db.py --reset` | Xóa toàn bộ dữ liệu AI (có hỏi xác nhận) |
-| `pip install -r requirements-dev.txt && pytest` | Chạy 39 bài test trên database test riêng (`TEST_DATABASE_URL` trong .env; tên phải có chữ `test`, không được trùng `DATABASE_URL`) |
+| `pip install -r requirements-dev.txt && pytest` | Chạy 46 bài test trên database test riêng (`TEST_DATABASE_URL` trong .env; tên phải có chữ `test`, không được trùng `DATABASE_URL`) |
 
 ## Cơ sở dữ liệu và lưu trữ file
 
@@ -153,4 +153,7 @@ Lỗi trả về thống nhất: `{"request_id", "error": {"code", "message", "d
 - **Bộ đánh giá demo** chỉ có 24 câu gắn với dữ liệu demo. Trước khi lấy số liệu cho báo cáo, soạn 50–100 câu từ học liệu thật
   (định dạng như `sample_data/eval_samples.json`, trường `relevant_sources` là nguồn đúng) và nạp ở tab Đánh giá.
 - `RAG_MIN_SCORE` (mặc định 0.30) là ngưỡng để Tutor từ chối khi học liệu không đủ liên quan; nên hiệu chỉnh bằng tập dev.
+- **Baseline đối chứng:** `POST /ai/evaluation/run` nhận `mode` = `rag` (pipeline của Tutor), `no_filter` (bỏ lọc khóa/bài)
+  hoặc `no_rag` (LLM không có học liệu, chỉ chấm correctness), cùng `min_score` / `expand_neighbors` để chạy thí nghiệm.
+  So sánh các lần chạy bằng `GET /ai/evaluation/compare?ids=<baseline>,<rag>` (lần đầu là mốc tính chênh lệch).
 - Phiên âm video dùng ffmpeg đi kèm gói `imageio-ffmpeg` để tách audio và cắt đoạn 10 phút (giới hạn 25 MB của Whisper API).

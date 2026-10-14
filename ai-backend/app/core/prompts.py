@@ -1,6 +1,7 @@
 """Prompt registry: mỗi prompt có id + version để log và so sánh trong evaluation.
 Khi sửa nội dung một prompt, tăng version.
 """
+import re
 from dataclasses import dataclass
 
 
@@ -109,9 +110,21 @@ EVAL_JUDGE = Prompt(
 - context_relevance (0..1): mức độ CONTEXT liên quan tới câu hỏi.""",
 )
 
+EVAL_NO_RAG = Prompt(
+    id="eval.no_rag",
+    version="v1",
+    system="""Bạn là Tutor AI hỗ trợ học sinh học tập (chế độ baseline để đánh giá: KHÔNG có học liệu đi kèm).
+- Trả lời bằng kiến thức chung của bạn, rõ ràng, phù hợp học sinh, bằng tiếng Việt.
+- Nếu không chắc chắn, nói rõ: "Mình không đủ thông tin để trả lời chắc chắn"; không suy đoán.""",
+)
+
 ALL = {p.id: p for p in [TUTOR_ANSWER, TUTOR_HINT, TUTOR_EXPLAIN, CONVERSATION_SUMMARY, TEACHER_QUIZ, VIDEO_QUESTION,
-                         VIDEO_SUGGEST, QUESTION_AGENT, GRADER, EVAL_JUDGE]}
+                         VIDEO_SUGGEST, QUESTION_AGENT, GRADER, EVAL_JUDGE, EVAL_NO_RAG]}
+
+
+_TAG = re.compile(r"<\s*/?\s*tai_lieu\s*>", re.IGNORECASE)
 
 
 def wrap_documents(context: str) -> str:
-    return f"<tai_lieu>\n{context}\n</tai_lieu>"
+    # học liệu không được tự đóng/mở thẻ để "thoát" khỏi vùng dữ liệu (prompt injection)
+    return f"<tai_lieu>\n{_TAG.sub('[thẻ tài liệu đã bị loại]', context)}\n</tai_lieu>"
