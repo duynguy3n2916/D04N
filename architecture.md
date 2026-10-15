@@ -50,7 +50,7 @@ Hệ thống là **AI backend** gắn vào một LMS (quản lý khóa học, l�
 4. **Modular monolith trước, tách service sau** — một FastAPI app + worker nền; chỉ tách vật lý khi tải thực sự đòi hỏi.
 5. **Đo được** — mọi lượt gọi LLM/retrieval đều log để phục vụ evaluation.
 
-**Ngoài phạm vi MVP:** fine-tune LLM, cá nhân hóa dài hạn, hybrid search nâng cao, multi-service deployment.
+**Ngoài phạm vi MVP:** fine-tune LLM, cá nhân hóa dài hạn, multi-service deployment.
 
 ---
 
@@ -89,7 +89,7 @@ Ký hiệu trạng thái (sau đợt hoàn thiện 10/2026): ✅ đã có · �
 | ID | Yêu cầu | Trạng thái | Cách làm |
 |---|---|---|---|
 | FR-RAG-01 | Lọc metadata **trước** vector search | ✅ | `retrieval.retrieve` (WHERE trên `ai_documents` rồi `ORDER BY cosine_distance`) |
-| FR-RAG-02 | Trả nguồn: tài liệu, trang, section, **timestamp video** | ✅ | Thêm `start_time/end_time` vào kết quả retrieve |
+| FR-RAG-02 | Trả nguồn: tài liệu, trang, section, **timestamp video** | ✅ | `start_time/end_time` nằm trong kết quả retrieve; nguồn hiển thị dạng mm:ss |
 | FR-RAG-03 | Phát hiện context không đủ → từ chối trả lời | ✅ | Ngưỡng cosine `RAG_MIN_SCORE=0.40` (hiệu chỉnh trên tập dev); chunk chỉ khớp từ khóa phải phủ ≥ 60% từ có nghĩa của câu hỏi |
 | FR-RAG-04 | Kiểm soát quyền truy cập theo lớp trước retrieval | ✅ | Lấy `allowed_class_ids` từ token, ép vào filter (không tin client) |
 | FR-RAG-05 | Vector index cho tốc độ | ✅ | `CREATE INDEX ... USING hnsw (embedding vector_cosine_ops)` |
@@ -102,9 +102,9 @@ Ký hiệu trạng thái (sau đợt hoàn thiện 10/2026): ✅ đã có · �
 |---|---|---|---|
 | FR-TUT-01 | Hỏi đáp có căn cứ, trích nguồn | ✅ | `POST /ai/chat` |
 | FR-TUT-02 | Lịch sử hội thoại ngắn hạn | ✅ | `ai_conversations`, `ai_messages`, `history_limit=6` |
-| FR-TUT-03 | Ưu tiên transcript quanh `video_time` | ✅ | `_transcript_context` (±60s) — nên lệch về **trước** thời điểm (vd. −90s/+15s) |
-| FR-TUT-04 | **Khóa đáp án** khi đang có câu hỏi video (hint mode) | ✅ | Hiện dựa vào cờ client gửi lên → phải **suy ra từ `video_sessions`** phía server |
-| FR-TUT-05 | Từ chối khi không đủ dữ liệu | ✅ | Có prompt + nhánh "không có chunk"; cần ngưỡng FR-RAG-03 |
+| FR-TUT-03 | Ưu tiên transcript quanh `video_time` | ✅ | `tutor.prepare_turn` lấy cửa sổ −90s/+15s quanh `video_time` (lời giảng ngay trước điểm dừng) |
+| FR-TUT-04 | **Khóa đáp án** khi đang có câu hỏi video hoặc bài kiểm tra cuối bài (hint mode) | ✅ | Server suy ra từ `video_sessions` và tiến độ quiz (`learning.active_quiz_questions`); cờ client bị bỏ qua; post-check đáp án trên đầu ra |
+| FR-TUT-05 | Từ chối khi không đủ dữ liệu | ✅ | Nhánh "không có chunk" + ngưỡng FR-RAG-03; LLM tự từ chối theo prompt cũng được đánh dấu `refused` |
 | FR-TUT-06 | Tóm tắt hội thoại dài | ✅ | Khi > N lượt, LLM tóm tắt và lưu vào `ai_conversations.summary` |
 | FR-TUT-07 | Streaming câu trả lời | ✅ | SSE `POST /ai/chat/stream` (`meta` → `delta`… → `done`); ở hint mode chỉ gửi bản cuối đã qua kiểm tra lộ đáp án |
 
@@ -116,7 +116,7 @@ Ký hiệu trạng thái (sau đợt hoàn thiện 10/2026): ✅ đã có · �
 | FR-TCH-02 | Sinh 1 câu hỏi đơn | ✅ | `POST /ai/questions/generate` |
 | FR-TCH-03 | Structured output + **schema validation** | ✅ | Pydantic `QuestionItem` |
 | FR-TCH-04 | Lưu lịch sử sinh (`draft`) | ✅ | `ai_generations` |
-| FR-TCH-05 | Giáo viên **sửa từng câu** và duyệt từng câu | ✅ | Hiện chỉ đổi status cả lần sinh → tách bảng `question_bank` (mỗi câu một dòng) |
+| FR-TCH-05 | Giáo viên **sửa từng câu** và duyệt từng câu | ✅ | Bảng `question_bank`, mỗi câu một dòng, có trạng thái draft / approved / rejected |
 | FR-TCH-06 | Kiểm tra số câu đúng yêu cầu, tỷ lệ độ khó | ✅ | Hiện bỏ qua lệch số lượng → retry 1 lần nếu thiếu |
 | FR-TCH-07 | Xuất đề kiểm tra (PDF/DOCX) | ✅ | `GET /ai/teacher/question-bank/export`: DOCX (python-docx) hoặc HTML in / lưu PDF; tối đa 4 mã đề (xáo câu và lựa chọn), trang đáp án + giải thích |
 
@@ -306,7 +306,8 @@ class RetrievalScope:
     video_id: str | None = None
     time_window: tuple[float, float] | None = None
 
-def retrieve(db, query: str, scope: RetrievalScope, top_k=5, min_score=0.35) -> list[RetrievedChunk]
+def retrieve(db, query: str, scope: RetrievalScope, top_k=5, min_score=0.40, hybrid=True) -> list[dict]
+# dense (pgvector) + full-text (RRF) -> ngưỡng cosine hoặc khớp từ khóa -> rerank tùy chọn
 def build_context(chunks, transcript_window: str | None, max_chars=8000) -> tuple[str, list[Source]]
 ```
 
@@ -772,12 +773,12 @@ admin quản lý toàn bộ và phân vai trò. Mật khẩu tạm sinh ngẫu n
 | Video AI | Timestamp relevance | GV chấm 1–5 các mốc đề xuất | báo cáo |
 | Hệ thống | Latency, cost | Từ `ai_llm_calls` | Tutor < 5s |
 
-**Lưu ý quan trọng về mã hiện tại** (cần sửa trước khi lấy số liệu cho báo cáo):
+**Các lỗi đo đạc đã phát hiện và đã khắc phục** (xem mục 14.2):
 
-1. `_evaluate_groundedness` trả **0.85 khi LLM lỗi** → làm điểm bị thổi phồng. Phải đánh dấu mẫu lỗi và **loại khỏi trung bình** (báo cáo riêng số mẫu lỗi).
-2. Hit@K hiện đúng khi *bất kỳ một* từ khóa xuất hiện trong chunk → quá dễ đạt. Dùng ground truth theo tài liệu/trang.
-3. Benchmark mặc định 5 câu về lập trình, không gắn với học liệu thật → cần bộ 50–100 câu từ chính tài liệu đã index, tách dev/test.
-4. Phần "Nhận xét" trong báo cáo tự sinh luôn khẳng định tốt bất kể kết quả → sinh nhận xét theo ngưỡng.
+1. Judge lỗi không còn gán điểm mặc định; mẫu lỗi được đếm riêng và loại khỏi trung bình.
+2. Hit@K chấm theo nguồn đúng (tài liệu, mục, trang, khoảng giây video); chỉ khi thiếu nguồn mới dùng từ khóa, và phải có ≥ một nửa từ khóa trong cùng chunk.
+3. Bộ đánh giá có 87 câu gắn với học liệu demo (68 test / 19 dev, 12 câu ngoài học liệu). Với học liệu thật, cần soạn bộ riêng 50–100 câu.
+4. Phần "Nhận xét" trong báo cáo sinh theo ngưỡng mục tiêu, không khẳng định tốt cố định.
 5. Lưu `config` (model, embedding, chunk_size, top_k, số mẫu) cùng mỗi lần chạy để so sánh thí nghiệm.
 
 ### 12.3 Thí nghiệm nên có trong báo cáo
@@ -889,7 +890,7 @@ thành lớp phủ toàn màn hình). Tutor nhận ngữ cảnh đang xem (`vide
 |---|---|---|---|
 | ADR-01 | Modular monolith FastAPI + job runner trong tiến trình (ThreadPool, trạng thái ở bảng `ai_jobs`) | Chạy được ngay trên Windows, không cần worker/Redis riêng; API job (`202 + job_id`) giữ nguyên nên có thể thay bằng Celery/RQ khi cần mở rộng | Celery + Redis (thêm hạ tầng, khó chạy trên Windows) |
 | ADR-10 | Đồng bộ schema bằng `app/migrate.py` (idempotent, chạy khi khởi động) thay vì Alembic | DB của nhóm đã được tạo bằng `create_all`; script tự thêm cột/đổi kiểu/backfill an toàn, không cần stamp revision | Alembic (nên chuyển khi schema ổn định) |
-| ADR-02 | PostgreSQL + pgvector cho cả quan hệ và vector | Một DB, filter metadata bằng SQL, join dễ | Qdrant khi cần hybrid search / quy mô lớn |
+| ADR-02 | PostgreSQL + pgvector cho cả quan hệ, vector và full-text (hybrid search bằng RRF) | Một DB, filter metadata bằng SQL, join dễ | Qdrant khi cần quy mô lớn hơn nhiều |
 | ADR-03 | RAG tự xây tối giản, không dùng LangChain/LlamaIndex | Kiểm soát, dễ giải thích trong báo cáo, ít phụ thuộc | LlamaIndex nếu cần nhiều loại retriever |
 | ADR-04 | State machine viết tay bằng Python | Workflow tuyến tính, cần deterministic & test được | LangGraph khi workflow phân nhánh phức tạp |
 | ADR-05 | Embedding local multilingual MiniLM (384 chiều) mặc định | Miễn phí, chạy offline, hỗ trợ tiếng Việt | OpenAI `text-embedding-3-small` (1536) |

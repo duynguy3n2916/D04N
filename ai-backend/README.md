@@ -62,7 +62,7 @@ Nguồn mà Tutor trích dẫn bấm được: nguồn video tua tới đúng gi
 | Lệnh | Tác dụng |
 |---|---|
 | `python init_db.py` | Tạo bảng mới, thêm cột còn thiếu, tạo index (chạy lại an toàn) |
-| `python init_db.py --seed` | Nạp dữ liệu demo + bộ 24 câu đánh giá |
+| `python init_db.py --seed` | Nạp dữ liệu demo (khóa học, video, slide, bài đọc) + bộ 87 câu đánh giá |
 | `python init_db.py --reembed` | Sau khi đổi model embedding / `EMBEDDING_DIM`: đổi kích thước vector và tạo lại embedding |
 | `python init_db.py --reset` | Xóa toàn bộ dữ liệu AI (có hỏi xác nhận) |
 | `pip install -r requirements-dev.txt && pytest` | Chạy 55 bài test trên database test riêng (`TEST_DATABASE_URL` trong .env; tên phải có chữ `test`, không được trùng `DATABASE_URL`) |
