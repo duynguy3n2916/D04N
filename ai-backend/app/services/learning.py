@@ -320,7 +320,8 @@ def item_detail(db: Session, user: Principal, item: LessonItem) -> dict:
     else:
         m = item.meta or {}
         out["quiz"] = {"count": m.get("count", 5), "pass_ratio": m.get("pass_ratio", 0.8),
-                       "time_limit_minutes": m.get("time_limit_minutes"), "available": _quiz_pool_size(db, item)}
+                       "time_limit_minutes": m.get("time_limit_minutes"), "available": _quiz_pool_size(db, item),
+                       "open_at": m.get("open_at"), "close_at": m.get("close_at"), "window": quiz_window_state(item)}
     return out
 
 
@@ -417,10 +418,27 @@ def _adaptive_sample(db: Session, user: Principal, pool: list[QuestionBankItem],
     return chosen
 
 
+def quiz_window_state(item: LessonItem, now: datetime | None = None) -> str:
+    """open | not_yet | closed theo lịch mở / đóng giáo viên đặt (không đặt = luôn mở)."""
+    m = item.meta or {}
+    now = now or utcnow()
+    if m.get("open_at") and now < as_aware(datetime.fromisoformat(m["open_at"])):
+        return "not_yet"
+    if m.get("close_at") and now > as_aware(datetime.fromisoformat(m["close_at"])):
+        return "closed"
+    return "open"
+
+
 def start_quiz(db: Session, user: Principal, item: LessonItem) -> dict:
     if item.type != "quiz":
         raise AppError(400, "NOT_QUIZ", "Mục này không phải bài kiểm tra.")
     ensure_unlocked(db, user, item)
+    if not user.is_teacher:  # giáo viên vẫn thử được bài ngoài lịch
+        state = quiz_window_state(item)
+        if state == "not_yet":
+            raise AppError(409, "QUIZ_NOT_OPEN", "Bài kiểm tra chưa mở. Hãy quay lại vào thời gian giáo viên đã đặt.")
+        if state == "closed":
+            raise AppError(409, "QUIZ_CLOSED", "Bài kiểm tra đã đóng.")
     pool = _quiz_pool(db, item)
     if not pool:
         raise AppError(409, "QUIZ_EMPTY", "Giáo viên chưa duyệt câu hỏi nào cho bài này.")
@@ -430,6 +448,10 @@ def start_quiz(db: Session, user: Principal, item: LessonItem) -> dict:
     limit = (item.meta or {}).get("time_limit_minutes")
     now = utcnow()
     deadline = now + timedelta(minutes=limit) if limit else None
+    close_at = (item.meta or {}).get("close_at")
+    if close_at and not user.is_teacher:  # lượt làm không kéo dài quá giờ đóng bài
+        close_dt = as_aware(datetime.fromisoformat(close_at))
+        deadline = min(deadline, close_dt) if deadline else close_dt
     p = _get_progress(db, user, item)
     p.meta = {"question_ids": [str(q.id) for q in chosen], "answers": {}, "started_at": now.isoformat(),
               "deadline_at": deadline.isoformat() if deadline else None}

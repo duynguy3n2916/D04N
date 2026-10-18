@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { PageHeader } from '../../components/AppShell';
 import { Icon } from '../../components/Icon';
 import { Markdown } from '../../components/Markdown';
-import { Badge, Button, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
+import { Badge, Button, confirmDialog, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
 import { api, errorText, mediaUrl, pollJob, type ClassInfo, type ItemType } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { Link, navigate } from '../../lib/router';
@@ -152,12 +152,12 @@ export function CourseEditor({ courseId }: { courseId: string }) {
   };
   const move = (kind: 'chapters' | 'lessons' | 'items', id: string, direction: number) =>
     run(api<AdminCourse>(`/ai/${kind}/${id}/move`, { json: { direction } }));
-  const del = (kind: 'chapters' | 'lessons' | 'items', id: string, label: string) => {
-    if (!window.confirm(`Xóa ${label}? Tiến độ học sinh của phần này cũng bị xóa.`)) return;
+  const del = async (kind: 'chapters' | 'lessons' | 'items', id: string, label: string) => {
+    if (!await confirmDialog(`Xóa ${label}? Tiến độ học sinh của phần này cũng bị xóa.`, { danger: true, okLabel: 'Xóa' })) return;
     run(api<AdminCourse>(`/ai/${kind}/${id}`, { method: 'DELETE' }), 'Đã xóa');
   };
   const delCourse = async () => {
-    if (!window.confirm('Xóa toàn bộ khóa học này?')) return;
+    if (!await confirmDialog('Xóa toàn bộ khóa học này?', { danger: true, okLabel: 'Xóa' })) return;
     try { await api(`/ai/courses/${courseId}`, { method: 'DELETE' }); navigate('/teach/courses'); } catch (e) { toast(errorText(e), 'error'); }
   };
 
@@ -261,6 +261,14 @@ function CoverEditor({ course, onChanged }: { course: AdminCourse; onChanged: (c
       </div>
     </section>
   );
+}
+
+/** ISO (UTC) -> giá trị cho ô datetime-local theo giờ máy người dùng. */
+function toLocalInput(iso?: string | null) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 function itemMeta(it: AdminItem) {
@@ -387,6 +395,8 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
   const [count, setCount] = useState<number>(item?.meta?.count ?? 5);
   const [passPct, setPassPct] = useState<number>(Math.round((item?.meta?.pass_ratio ?? 0.8) * 100));
   const [timeLimit, setTimeLimit] = useState<number>(item?.meta?.time_limit_minutes ?? 0);
+  const [openAt, setOpenAt] = useState<string>(toLocalInput(item?.meta?.open_at));
+  const [closeAt, setCloseAt] = useState<string>(toLocalInput(item?.meta?.close_at));
   const [preview, setPreview] = useState(false);
   const full = useAsync((s) => (item ? api<{ content_md: string | null }>(`/ai/items/${item.item_id}`, { signal: s }) : Promise.resolve({ content_md: '' })), [item?.item_id]);
   const [md, setMd] = useState<string | null>(null);
@@ -418,7 +428,7 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
     if (type === 'video') body.video_id = videoId;
     if (type === 'slide') { body.document_id = docId; body.notes = notes; }
     if (type === 'reading') body.content_md = content;
-    if (type === 'quiz') { body.count = count; body.pass_ratio = passPct / 100; body.time_limit_minutes = timeLimit; }
+    if (type === 'quiz') { body.count = count; body.pass_ratio = passPct / 100; body.time_limit_minutes = timeLimit; body.open_at = openAt ? new Date(openAt).toISOString() : ''; body.close_at = closeAt ? new Date(closeAt).toISOString() : ''; }
     onSaved(item
       ? await api<AdminCourse>(`/ai/items/${item.item_id}`, { method: 'PATCH', json: body })
       : await api<AdminCourse>(`/ai/lessons/${lesson.lesson_id}/items`, { json: body }));
@@ -493,6 +503,10 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
             <Field label="Số câu mỗi lượt"><input type="number" min={1} max={20} value={count} onChange={(e) => setCount(Number(e.target.value))} /></Field>
             <Field label="Ngưỡng qua bài (%)"><input type="number" min={10} max={100} step={5} value={passPct} onChange={(e) => setPassPct(Number(e.target.value))} /></Field>
             <Field label="Giới hạn thời gian (phút)" hint="0 = không giới hạn. Hết giờ bài tự nộp."><input type="number" min={0} max={240} value={timeLimit} onChange={(e) => setTimeLimit(Number(e.target.value))} /></Field>
+          </div>
+          <div className="form-grid">
+            <Field label="Mở lúc (tùy chọn)"><input type="datetime-local" value={openAt} onChange={(e) => setOpenAt(e.target.value)} /></Field>
+            <Field label="Đóng lúc (tùy chọn)" hint="Để trống = luôn mở."><input type="datetime-local" value={closeAt} onChange={(e) => setCloseAt(e.target.value)} /></Field>
           </div>
           <p className="muted small" style={{ fontWeight: 700 }}>
             Câu hỏi lấy ngẫu nhiên từ ngân hàng câu hỏi <b>đã duyệt</b> của bài {lesson.code}. Sinh và duyệt câu hỏi ở mục <Link to="/teach/questions">Câu hỏi</Link>.

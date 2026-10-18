@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Icon } from '../components/Icon';
 import { PasswordInput, PasswordRules, passwordOk } from '../components/PasswordInput';
-import { Badge, Button, ErrorBox, Field, useToast } from '../components/ui';
+import { Badge, Button, confirmDialog, ErrorBox, Field, useToast } from '../components/ui';
 import { api, errorText, type ClassInfo, type User } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useAsync } from '../lib/hooks';
@@ -35,7 +35,7 @@ export function AccountSection() {
     } catch (err) { toast(errorText(err), 'error'); } finally { setJoining(false); }
   };
   const leave = async (c: ClassInfo) => {
-    if (!window.confirm(`Rời lớp ${c.name}? Bạn sẽ không thấy khóa học của lớp này nữa.`)) return;
+    if (!await confirmDialog(`Rời lớp ${c.name}? Bạn sẽ không thấy khóa học của lớp này nữa.`)) return;
     try { const u = await api<User>(`/ai/auth/leave-class/${encodeURIComponent(c.class_id)}`, { method: 'POST' }); setUser({ ...user!, ...u }); me.reload(); }
     catch (err) { toast(errorText(err), 'error'); }
   };
@@ -52,7 +52,7 @@ export function AccountSection() {
   };
 
   const logoutAll = async () => {
-    if (!window.confirm('Đăng xuất khỏi mọi thiết bị, kể cả thiết bị này?')) return;
+    if (!await confirmDialog('Đăng xuất khỏi mọi thiết bị, kể cả thiết bị này?')) return;
     try { await api('/ai/auth/logout-all', { method: 'POST' }); logout('Bạn đã đăng xuất khỏi mọi thiết bị.'); }
     catch (err) { toast(errorText(err), 'error'); }
   };

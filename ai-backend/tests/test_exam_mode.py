@@ -127,3 +127,45 @@ def test_adaptive_sampling_prefers_wrong_questions(client, teacher, fake_llm):
         assert hits > 100  # trọng số 4 : 2 -> khoảng 2/3 số lần
     finally:
         db.close()
+
+
+def test_quiz_open_close_window(client, teacher, fake_llm):
+    from datetime import timedelta
+    reading, quiz = _timed_quiz(client, teacher, "exam7", 0)
+    sv = token(client, "sv-window", "student", ["lop-a"])
+    client.post(f"/ai/learn/items/{reading}/complete", headers=sv)
+    future = (utcnow() + timedelta(days=1)).isoformat()
+    past = (utcnow() - timedelta(days=1)).isoformat()
+
+    # chưa đến giờ mở: học sinh không bắt đầu được, giáo viên vẫn thử được
+    assert client.patch(f"/ai/items/{quiz}", headers=teacher, json={"open_at": future}).status_code == 200
+    assert client.get(f"/ai/learn/items/{quiz}", headers=sv).json()["quiz"]["window"] == "not_yet"
+    r = client.post(f"/ai/learn/items/{quiz}/quiz/start", headers=sv)
+    assert r.status_code == 409 and r.json()["error"]["code"] == "QUIZ_NOT_OPEN"
+    assert client.post(f"/ai/learn/items/{quiz}/quiz/start", headers=teacher).status_code == 200
+
+    # đã đóng
+    client.patch(f"/ai/items/{quiz}", headers=teacher, json={"open_at": "", "close_at": past})
+    r = client.post(f"/ai/learn/items/{quiz}/quiz/start", headers=sv)
+    assert r.status_code == 409 and r.json()["error"]["code"] == "QUIZ_CLOSED"
+
+    # đang mở: hạn làm bài không vượt quá giờ đóng
+    soon = (utcnow() + timedelta(minutes=10)).isoformat().replace("+00:00", "Z")
+    client.patch(f"/ai/items/{quiz}", headers=teacher, json={"close_at": soon})
+    start = client.post(f"/ai/learn/items/{quiz}/quiz/start", headers=sv).json()
+    assert start["deadline_at"] and start["deadline_at"][:16] == soon[:16]
+
+    # đóng trước khi mở -> lỗi
+    r = client.patch(f"/ai/items/{quiz}", headers=teacher, json={"open_at": future, "close_at": past})
+    assert r.status_code == 400 and r.json()["error"]["code"] == "INVALID_WINDOW"
+
+
+def test_class_submissions_csv(client, teacher, admin, fake_llm):
+    _timed_quiz(client, teacher, "exam8", 0)
+    token(client, "sv-csv", "student", ["lop-a"])
+    r = client.get("/ai/classes/lop-a/submissions.csv", headers=teacher)
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/csv")
+    text = r.content.decode("utf-8")
+    assert text.startswith("﻿") and "Mã học viên" in text and "sv-csv" in text and "Chưa làm" in text
+    sv = token(client, "sv-csv2", "student", ["lop-a"])
+    assert client.get("/ai/classes/lop-a/submissions.csv", headers=sv).status_code == 403

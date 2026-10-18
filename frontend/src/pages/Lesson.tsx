@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Flame, Gem, Icon } from '../components/Icon';
+import { MindmapModal } from '../components/Mindmap';
 import { TutorPanel, type TutorContext } from '../components/TutorPanel';
 import { Button, CountUp, ErrorBox, IconButton, Progress, Spinner, useToast } from '../components/ui';
 import { api, errorText, storage, type ItemDetail, type LessonView, type Source, type Stats } from '../lib/api';
@@ -33,6 +34,7 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
   const me = useAsync((s) => api<{ stats: Stats }>('/ai/learn/me', { signal: s }), []);
   const activeId = itemId || lesson.data?.items.find((i) => i.status === 'current')?.item_id || lesson.data?.items[0]?.item_id;
   const item = useAsync((s) => (activeId ? api<ItemDetail>(`/ai/learn/items/${activeId}`, { signal: s }) : Promise.resolve(null)), [activeId]);
+  const [mindmapOpen, setMindmapOpen] = useState(false);
   const [tutorOpen, setTutorOpen] = useState(() => storage.get('mam.tutorOpen') !== '0' && window.innerWidth > 900);
   const [ctx, setCtx] = useState<TutorContext>({ label: '' });
   const [quote, setQuote] = useState<string | null>(null);
@@ -101,6 +103,7 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
           <span className="stat" style={{ fontSize: 16 }}><Flame size={22} dim={!stats?.studied_today} /><CountUp value={stats?.streak_days ?? 0} /></span>
           <span className="stat" style={{ fontSize: 16 }}><Gem size={20} /><CountUp value={stats?.total_xp ?? 0} /></span>
         </div>
+        <Button variant="ghost" icon="bulb" disabled={!lesson.data} onClick={() => setMindmapOpen(true)}>Sơ đồ tư duy</Button>
         <Button variant="ghost" icon="refresh" disabled={!lesson.data} onClick={() => navigate(`/flashcards/${encodeURIComponent(lesson.data?.code || '')}`)}>Ôn thẻ</Button>
         <Button variant={tutorOpen ? 'soft' : 'blue'} icon="sparkle" aria-pressed={tutorOpen} onClick={() => setTutorOpen((v) => !v)}>Hỏi Tutor AI</Button>
       </header>
@@ -149,6 +152,7 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
             quote={quote} onClearQuote={() => setQuote(null)} onSource={onSource} onClose={() => setTutorOpen(false)} />
         )}
       </div>
+      {mindmapOpen && lesson.data && <MindmapModal lessonCode={lesson.data.code} onClose={() => setMindmapOpen(false)} onSource={onSource} />}
     </div>
   );
 }

@@ -81,3 +81,41 @@ def test_ai_draft_is_teacher_only_and_refuses_without_material(client, teacher, 
     d = client.post(f"/ai/forum/threads/{tid}/ai-draft", headers=teacher).json()
     assert d["draft"] and d["refused"] is False
     assert client.get(f"/ai/forum/threads/{tid}", headers=teacher).json()["reply_count"] == 0
+
+
+def test_report_hide_and_dismiss(client, teacher):
+    a = token(client, "sv-rp-a", "student", ["lop-a"])
+    b = token(client, "sv-rp-b", "student", ["lop-a"])
+    tid = client.post("/ai/forum/classes/lop-a/threads", headers=a, json={"title": "Nội dung xấu", "body": "spam"}).json()["thread_id"]
+    rid = client.post(f"/ai/forum/threads/{tid}/replies", headers=a, json={"body": "spam nữa"}).json()["reply_id"]
+
+    # không tự báo cáo mình; người khác báo cáo được, báo cáo trùng không tạo thêm
+    assert client.post("/ai/forum/reports", headers=a, json={"thread_id": tid, "reason": "x"}).status_code == 400
+    r1 = client.post("/ai/forum/reports", headers=b, json={"thread_id": tid, "reason": "Quảng cáo"}).json()
+    assert r1["duplicate"] is False
+    assert client.post("/ai/forum/reports", headers=b, json={"thread_id": tid, "reason": "lần 2"}).json()["duplicate"] is True
+    client.post("/ai/forum/reports", headers=b, json={"reply_id": rid, "reason": "Spam"})
+
+    # học sinh không xem được danh sách báo cáo; giáo viên thấy 2 báo cáo
+    assert client.get("/ai/forum/classes/lop-a/reports", headers=b).status_code == 403
+    reps = client.get("/ai/forum/classes/lop-a/reports", headers=teacher).json()
+    mine = [x for x in reps if x["thread_id"] == tid]
+    assert {x["kind"] for x in mine} == {"thread", "reply"}
+
+    # ẩn câu trả lời: học sinh không thấy nữa, giáo viên vẫn thấy kèm cờ hidden
+    rep_reply = next(x for x in mine if x["kind"] == "reply")
+    assert client.post(f"/ai/forum/reports/{rep_reply['report_id']}/resolve", headers=teacher, json={"action": "hide"}).status_code == 200
+    assert all(r["reply_id"] != rid for r in client.get(f"/ai/forum/threads/{tid}", headers=b).json()["replies"])
+    assert any(r["reply_id"] == rid and r["hidden"] for r in client.get(f"/ai/forum/threads/{tid}", headers=teacher).json()["replies"])
+
+    # bỏ qua báo cáo bài đăng: bài vẫn hiện; ẩn bài bằng tay thì học sinh nhận 404
+    rep_thread = next(x for x in mine if x["kind"] == "thread")
+    client.post(f"/ai/forum/reports/{rep_thread['report_id']}/resolve", headers=teacher, json={"action": "dismiss"})
+    assert client.get(f"/ai/forum/threads/{tid}", headers=b).status_code == 200
+    assert all(x["thread_id"] != tid for x in client.get("/ai/forum/classes/lop-a/reports", headers=teacher).json())
+    client.patch(f"/ai/forum/threads/{tid}", headers=teacher, json={"hidden": True})
+    assert client.get(f"/ai/forum/threads/{tid}", headers=b).status_code == 404
+    assert all(t["thread_id"] != tid for t in client.get("/ai/forum/classes/lop-a/threads", headers=b).json())
+    # hiện lại
+    client.patch(f"/ai/forum/threads/{tid}", headers=teacher, json={"hidden": False})
+    assert client.get(f"/ai/forum/threads/{tid}", headers=b).status_code == 200

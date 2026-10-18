@@ -17,7 +17,7 @@ class FakeLLM:
 
     @staticmethod
     def kind_of(system: str) -> str:
-        table = [("Tutor AI giải thích đáp án", "explain"), ("Question Agent", "agent"), ("học tập qua video", "video_question"),
+        table = [("thẻ ghi nhớ", "flashcards"), ("sơ đồ tư duy", "mindmap"), ("Tutor AI giải thích đáp án", "explain"), ("Question Agent", "agent"), ("học tập qua video", "video_question"),
                  ("soạn câu hỏi", "teacher"), ("chuyên gia sư phạm", "suggest"), ("chấm câu trả lời", "grader"),
                  ("giám khảo", "judge"), ("ĐANG làm một câu hỏi", "hint"), ("Tóm tắt ngắn gọn", "summary"),
                  ("Tutor AI hỗ trợ học sinh", "tutor")]
@@ -61,6 +61,17 @@ class FakeLLM:
             return json.dumps({"suggestions": [{"timestamp": (a + b) / 2, "concept": "Khái niệm", "importance_score": 7,
                                                 "reason": "quan trọng", "sample_question": self.mcq()}]},
                               ensure_ascii=False)
+        if kind == "flashcards":
+            return json.dumps({"cards": [
+                {"front": "Đóng gói là gì?", "back": "Gom dữ liệu và phương thức vào lớp, che giấu chi tiết.", "sources": ["S1"]},
+                {"front": "Kế thừa là gì?", "back": "Lớp con dùng lại thuộc tính và phương thức của lớp cha.", "sources": ["S2"]},
+            ]}, ensure_ascii=False)
+        if kind == "mindmap":
+            return json.dumps({"title": "Lập trình hướng đối tượng", "children": [
+                {"title": "Đóng gói", "note": "Gom dữ liệu và phương thức", "sources": ["S1"],
+                 "children": [{"title": "Getter / setter", "note": "", "sources": ["S1"], "children": []}]},
+                {"title": "Kế thừa", "note": "Tái sử dụng lớp cha", "sources": ["S2", "S99"], "children": []},
+            ]}, ensure_ascii=False)
         if kind == "grader":
             return json.dumps({"verdict": "partial", "feedback": "Đúng một phần."}, ensure_ascii=False)
         if kind == "judge":

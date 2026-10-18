@@ -1,7 +1,7 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { PageHeader } from '../../components/AppShell';
 import { PasswordInput } from '../../components/PasswordInput';
-import { Badge, Button, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
+import { Badge, Button, confirmDialog, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
 import { api, errorText, type ClassInfo, type Role } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useAsync } from '../../lib/hooks';
@@ -58,14 +58,14 @@ function UsersTab({ classes, classFilter, setClassFilter }: { classes: ClassInfo
   const [secret, setSecret] = useState<{ user: string; password: string; title: string } | null>(null);
 
   const reset = async (u: UserRow) => {
-    if (!window.confirm(`Cấp mật khẩu tạm mới cho ${u.name}? Mật khẩu cũ và mọi phiên đăng nhập của tài khoản này sẽ mất hiệu lực.`)) return;
+    if (!await confirmDialog(`Cấp mật khẩu tạm mới cho ${u.name}? Mật khẩu cũ và mọi phiên đăng nhập của tài khoản này sẽ mất hiệu lực.`)) return;
     try {
       const r = await api<{ temporary_password: string }>(`/ai/users/${encodeURIComponent(u.user_id)}/reset-password`, { method: 'POST' });
       setSecret({ user: u.user_id, password: r.temporary_password, title: 'Mật khẩu tạm mới' }); list.reload();
     } catch (e) { toast(errorText(e), 'error'); }
   };
   const toggleActive = async (u: UserRow) => {
-    if (u.is_active && !window.confirm(`Khóa tài khoản ${u.name}? Người này sẽ bị đăng xuất và không đăng nhập được nữa.`)) return;
+    if (u.is_active && !await confirmDialog(`Khóa tài khoản ${u.name}? Người này sẽ bị đăng xuất và không đăng nhập được nữa.`, { danger: true, okLabel: 'Khóa' })) return;
     try { await api(`/ai/users/${encodeURIComponent(u.user_id)}`, { method: 'PATCH', json: { is_active: !u.is_active } }); list.reload(); }
     catch (e) { toast(errorText(e), 'error'); }
   };
@@ -314,7 +314,7 @@ function ImportDialog({ classes, defaultClass, onClose }: { classes: ClassInfo[]
             <div className="row" style={{ justifyContent: 'flex-end' }}>
               {!!res.created.length && <Button variant="blue" icon="arrowDown" onClick={download}>Tải danh sách (CSV)</Button>}
               <Button variant="ghost" onClick={() => { setRes(null); setText(''); }}>Nhập tiếp</Button>
-              <Button onClick={() => { if (!res.created.length || window.confirm('Đã lưu danh sách mật khẩu chưa? Đóng lại sẽ không xem được nữa.')) onClose(); }}>Xong</Button>
+              <Button onClick={async () => { if (!res.created.length || await confirmDialog('Đã lưu danh sách mật khẩu chưa? Đóng lại sẽ không xem được nữa.')) onClose(); }}>Xong</Button>
             </div>
           </>
         )}
@@ -355,7 +355,7 @@ function ClassesTab({ classes, onShowStudents }: { classes: ReturnType<typeof us
                   <td>
                     <span className="code-chip">{c.join_code}</span>
                     <IconButton icon="copy" label="Sao chép mã" onClick={() => copy(c.join_code || '', toast)} />
-                    <IconButton icon="refresh" label="Đổi mã mới" onClick={() => { if (window.confirm('Tạo mã vào lớp mới? Mã cũ sẽ không dùng được nữa.')) patch(c, { rotate_code: true }, 'Đã đổi mã vào lớp'); }} />
+                    <IconButton icon="refresh" label="Đổi mã mới" onClick={async () => { if (await confirmDialog('Tạo mã vào lớp mới? Mã cũ sẽ không dùng được nữa.')) patch(c, { rotate_code: true }, 'Đã đổi mã vào lớp'); }} />
                   </td>
                   <td><button className="linkbtn" onClick={() => onShowStudents(c.class_id)}>{c.students ?? 0} học sinh</button></td>
                   <td>{c.teachers ?? 0}</td>

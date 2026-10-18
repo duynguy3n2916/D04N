@@ -157,7 +157,8 @@ export interface ItemDetail extends ItemSummary {
   video?: { video_id: string; has_file: boolean; source_url: string | null; stream_path: string | null; duration_seconds: number | null; has_transcript: boolean; question_count: number };
   slide?: { document_id: string | null; source_type: string | null; title: string | null; status: string | null; file_path: string | null; notes?: string | null; pages?: number | null };
   reading?: { content_md: string; document_id: string | null };
-  quiz?: { count: number; pass_ratio: number; available: number; time_limit_minutes?: number | null };
+  quiz?: { count: number; pass_ratio: number; available: number; time_limit_minutes?: number | null;
+    open_at?: string | null; close_at?: string | null; window?: 'open' | 'not_yet' | 'closed' };
 }
 export interface Stats { total_xp: number; today_xp: number; week_xp: number; daily_goal_xp: number; streak_days: number; studied_today: boolean; last_7_days: { date: string; xp: number }[] }
 export interface PublicQuestion { question_id: string; video_id: string; timestamp: number; type: string; difficulty?: string; question: string; options: string[] | null; origin?: string }

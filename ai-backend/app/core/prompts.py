@@ -110,6 +110,28 @@ EVAL_JUDGE = Prompt(
 - context_relevance (0..1): mức độ CONTEXT liên quan tới câu hỏi.""",
 )
 
+FLASHCARD_GEN = Prompt(
+    id="teacher.flashcards",
+    version="v1",
+    system=f"""Bạn là AI hỗ trợ giáo viên soạn thẻ ghi nhớ (flashcard) để học sinh ôn tập.
+- Chỉ dùng thông tin trong <tai_lieu>. {_DATA_RULE}
+- Mỗi thẻ: mặt trước là câu hỏi ngắn hoặc khái niệm; mặt sau là câu trả lời ngắn gọn (1-2 câu), đúng với tài liệu.
+- Ưu tiên định nghĩa, phân biệt khái niệm, ví dụ tiêu biểu. Không lặp ý giữa các thẻ.
+- sources ghi nhãn nguồn như "S1", "S2" đúng với tài liệu.""",
+)
+
+MINDMAP = Prompt(
+    id="lesson.mindmap",
+    version="v2",
+    system=f"""Bạn là AI tổng hợp kiến thức thành sơ đồ tư duy cho học sinh.
+- Chỉ dùng thông tin trong <tai_lieu>. {_DATA_RULE}
+- Nút gốc (title) là chủ đề bài học. Các nhánh cấp 1 là 3-7 ý chính; mỗi ý chính có 0-5 ý con; tối đa 3 tầng.
+- title ngắn gọn (dưới 10 từ); note tóm tắt 1 câu, bằng tiếng Việt.
+- Mỗi nút ghi sources là nhãn nguồn ("S1", "S2"...) chứa nội dung của nút đó, để học sinh bấm xem lại đúng đoạn bài giảng.
+- Khi cùng một ý xuất hiện ở nhiều loại học liệu (lời giảng video, slide, bài đọc), ghi đủ các nguồn đó (tối đa 3) để học sinh chọn cách xem.
+- Không bịa ý không có trong tài liệu.""",
+)
+
 EVAL_NO_RAG = Prompt(
     id="eval.no_rag",
     version="v1",
@@ -119,7 +141,7 @@ EVAL_NO_RAG = Prompt(
 )
 
 ALL = {p.id: p for p in [TUTOR_ANSWER, TUTOR_HINT, TUTOR_EXPLAIN, CONVERSATION_SUMMARY, TEACHER_QUIZ, VIDEO_QUESTION,
-                         VIDEO_SUGGEST, QUESTION_AGENT, GRADER, EVAL_JUDGE, EVAL_NO_RAG]}
+                         VIDEO_SUGGEST, QUESTION_AGENT, GRADER, EVAL_JUDGE, EVAL_NO_RAG, FLASHCARD_GEN, MINDMAP]}
 
 
 _TAG = re.compile(r"<\s*/?\s*tai_lieu\s*>", re.IGNORECASE)

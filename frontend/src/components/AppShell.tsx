@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { isTeacher, useAuth } from '../lib/auth';
+import { useNotifications } from '../lib/notifications';
 import { Link } from '../lib/router';
 import { useState } from 'react';
 import { Icon, type IconName } from './Icon';
@@ -19,8 +20,8 @@ const TEACHER: NavItem[] = [
   { to: '/teach/questions', label: 'Câu hỏi', icon: 'question', match: '/teach/questions' },
   { to: '/teach/docs', label: 'Học liệu', icon: 'book', match: '/teach/docs' },
   { to: '/teach/users', label: 'Học sinh & lớp', icon: 'users', match: '/teach/users' },
+  { to: '/teach/flashcards', label: 'Thẻ ghi nhớ', icon: 'copy', match: '/teach/flashcards' },
   { to: '/teach/submissions', label: 'Bài nộp', icon: 'list', match: '/teach/submissions' },
-  { to: '/forum', label: 'Diễn đàn', icon: 'note', match: '/forum' },
   { to: '/teach/eval', label: 'Đánh giá', icon: 'chart', match: '/teach/eval' },
   { to: '/admin/system', label: 'Hệ thống', icon: 'settings', match: '/admin', admin: true },
 ];
@@ -30,6 +31,8 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
   const teacher = isTeacher(user);
   const [reduceFx, setReduce] = useState(() => document.documentElement.classList.contains('reduce-fx'));
   const toggleFx = () => { setReduce(!reduceFx); setReduceFx(!reduceFx); };
+  const noti = useNotifications();
+  const badge: Record<string, number> = { '/forum': noti?.forum_new || 0 };
   const nav = (items: NavItem[]) => items
     .filter((n) => !n.admin || user?.role === 'admin')
     .map((n) => (
@@ -37,6 +40,7 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
         aria-current={path.startsWith(n.match) ? 'page' : undefined}>
         <Icon name={n.icon} size={26} />
         <span>{n.label}</span>
+        {!!badge[n.to] && <span className="nav-badge" aria-label={`${badge[n.to]} mới`}>{badge[n.to] > 99 ? '99+' : badge[n.to]}</span>}
       </Link>
     ));
   return (

@@ -182,3 +182,41 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 }
 
 export const useToast = () => useContext(ToastCtx);
+
+
+// ---------------------------------------------------------------- Confirm
+
+type ConfirmOpts = { title?: string; okLabel?: string; danger?: boolean };
+type ConfirmState = ConfirmOpts & { message: string; resolve: (ok: boolean) => void };
+const ConfirmCtx = createContext<(message: string, opts?: ConfirmOpts) => Promise<boolean>>(async () => false);
+let globalAsk: ((message: string, opts?: ConfirmOpts) => Promise<boolean>) | null = null;
+
+/** Gọi được ở bất kỳ đâu (không cần hook): `if (!await confirmDialog('Xóa?', { danger: true })) return;` */
+export function confirmDialog(message: string, opts?: ConfirmOpts): Promise<boolean> {
+  return globalAsk ? globalAsk(message, opts) : Promise.resolve(window.confirm(message));
+}
+
+/** Hộp thoại xác nhận của app (thay cho window.confirm): await confirm('...') trả về true/false. */
+export function ConfirmProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<ConfirmState | null>(null);
+  const ask = useCallback((message: string, opts: ConfirmOpts = {}) =>
+    new Promise<boolean>((resolve) => setState({ message, resolve, ...opts })), []);
+  useEffect(() => { globalAsk = ask; return () => { globalAsk = null; }; }, [ask]);
+  const close = (ok: boolean) => { state?.resolve(ok); setState(null); };
+  return (
+    <ConfirmCtx.Provider value={ask}>
+      {children}
+      <Modal open={!!state} onClose={() => close(false)} title={state?.title || 'Xác nhận'}>
+        <div className="modal-body">
+          <p style={{ fontWeight: 700 }}>{state?.message}</p>
+          <div className="row" style={{ justifyContent: 'flex-end' }}>
+            <Button variant="ghost" onClick={() => close(false)}>Hủy</Button>
+            <Button variant={state?.danger ? 'red' : 'green'} autoFocus onClick={() => close(true)}>{state?.okLabel || 'Đồng ý'}</Button>
+          </div>
+        </div>
+      </Modal>
+    </ConfirmCtx.Provider>
+  );
+}
+
+export const useConfirm = () => useContext(ConfirmCtx);

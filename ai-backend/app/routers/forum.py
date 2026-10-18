@@ -23,6 +23,21 @@ class ReplyIn(BaseModel):
 class ModerateIn(BaseModel):
     pinned: bool | None = None
     locked: bool | None = None
+    hidden: bool | None = None
+
+
+class HiddenIn(BaseModel):
+    hidden: bool
+
+
+class ReportIn(BaseModel):
+    thread_id: str | None = None
+    reply_id: str | None = None
+    reason: str = Field(min_length=1, max_length=500)
+
+
+class ResolveIn(BaseModel):
+    action: str = Field(pattern="^(hide|dismiss)$")
 
 
 @router.get("/classes/{class_id}/threads")
@@ -48,7 +63,31 @@ def reply(thread_id: str, req: ReplyIn, user: Principal = Depends(get_current_us
 
 @router.patch("/threads/{thread_id}")
 def moderate(thread_id: str, req: ModerateIn, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
-    return forum.moderate(db, user, parse_uuid(thread_id, "thread_id"), req.pinned, req.locked)
+    return forum.moderate(db, user, parse_uuid(thread_id, "thread_id"), req.pinned, req.locked, req.hidden)
+
+
+@router.patch("/replies/{reply_id}")
+def hide_reply(reply_id: str, req: HiddenIn, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    return forum.set_reply_hidden(db, user, parse_uuid(reply_id, "reply_id"), req.hidden)
+
+
+@router.post("/reports", status_code=201)
+def report(req: ReportIn, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Học sinh báo cáo bài đăng hoặc câu trả lời không phù hợp."""
+    return forum.report(db, user, parse_uuid(req.thread_id, "thread_id", required=False),
+                        parse_uuid(req.reply_id, "reply_id", required=False), req.reason)
+
+
+@router.get("/classes/{class_id}/reports")
+def list_reports(class_id: str, status: str = "open", user: Principal = Depends(get_current_user),
+                 db: Session = Depends(get_db)):
+    return forum.list_reports(db, user, class_id, status)
+
+
+@router.post("/reports/{report_id}/resolve")
+def resolve_report(report_id: str, req: ResolveIn, user: Principal = Depends(get_current_user),
+                   db: Session = Depends(get_db)):
+    return forum.resolve_report(db, user, parse_uuid(report_id, "report_id"), req.action)
 
 
 @router.post("/replies/{reply_id}/accept")

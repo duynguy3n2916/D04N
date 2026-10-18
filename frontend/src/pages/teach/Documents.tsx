@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import { PageHeader } from '../../components/AppShell';
-import { Badge, Button, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
+import { Badge, Button, confirmDialog, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
 import { api, errorText, mediaUrl, pollJob } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { LessonSelect } from './QuestionBank';
@@ -39,7 +39,7 @@ export function Documents() {
     finally { setProgress(null); docs.reload(); if (fileRef.current) fileRef.current.value = ''; }
   };
   const remove = async (d: Doc) => {
-    if (!window.confirm(`Xóa “${d.title}” khỏi Knowledge Base?`)) return;
+    if (!await confirmDialog(`Xóa “${d.title}” khỏi Knowledge Base?`, { danger: true, okLabel: 'Xóa' })) return;
     try { await api(`/ai/documents/${d.document_id}`, { method: 'DELETE' }); docs.reload(); } catch (e) { toast(errorText(e), 'error'); }
   };
 

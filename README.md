@@ -21,7 +21,12 @@ thích đáp án; giáo viên dùng AI để soạn câu hỏi và quản lý l�
 - **Slide** (PDF xem trực tiếp, PPTX dạng chữ) và **bài đọc** Markdown có mục lục; bôi đen đoạn văn để hỏi Tutor.
 - **Tutor trả lời dạng streaming** (chữ hiện dần); hỏi nối tiếp kiểu “còn kế thừa thì sao?” vẫn hiểu ngữ cảnh. Khi đang làm
   câu hỏi trong video hoặc bài kiểm tra, Tutor chỉ gợi ý, không nói đáp án.
-- **Bài kiểm tra** cuối bài từ ngân hàng câu hỏi đã duyệt.
+- **Bài kiểm tra** cuối bài từ ngân hàng câu hỏi đã duyệt; có thể giới hạn thời gian (đếm ngược, tự nộp) và lịch mở / đóng.
+  Câu hay làm sai được ưu tiên xuất hiện lại ở lượt sau (luyện tập thích ứng).
+- **Sơ đồ tư duy** của bài: cây kiến thức do AI tổng hợp, giáo viên duyệt; mỗi ý có nút mở đúng đoạn video, trang slide hoặc bài đọc.
+- **Ôn thẻ ghi nhớ** theo lịch lặp lại ngắt quãng (SM-2): thẻ từ câu hỏi đã duyệt và thẻ AI soạn đã được giáo viên duyệt.
+- **Diễn đàn lớp:** đặt câu hỏi, trả lời, đánh dấu câu đúng, báo cáo nội dung không phù hợp; số bài / trả lời mới hiện trên menu.
+- **Báo cáo tiến độ** tải về dạng DOCX; nhắc học khi sắp mất chuỗi ngày học.
 - **XP, chuỗi ngày học, mục tiêu ngày, bảng xếp hạng tuần.**
 - **Quên mật khẩu:** nhận link đặt lại qua email (khi đã cấu hình SMTP).
 - Nguồn Tutor trích dẫn bấm được: tua video tới đúng giây, mở slide đúng trang.
@@ -34,6 +39,10 @@ thích đáp án; giáo viên dùng AI để soạn câu hỏi và quản lý l�
 - **Xuất đề kiểm tra** ra DOCX hoặc bản in / PDF, tối đa 4 mã đề (xáo câu và lựa chọn), kèm trang đáp án.
 - Quản lý học liệu (Knowledge Base), xem các đoạn đã chia để Tutor truy xuất.
 - **Tài khoản & lớp học:** tạo lớp có mã vào lớp, thêm học sinh hoặc nhập CSV, cấp lại mật khẩu, khóa tài khoản, phân quyền.
+  Một khóa học có thể gắn cho nhiều lớp.
+- **Bài nộp:** xem từng học viên đã làm / chưa làm / đạt bài kiểm tra nào, tải về Excel (CSV).
+- **AI theo bài:** tạo sơ đồ tư duy và thẻ ghi nhớ từ học liệu (đều lưu nháp, giáo viên sửa và duyệt trước khi học sinh thấy).
+- **Kiểm duyệt diễn đàn:** ghim, khóa, ẩn nội dung, xử lý báo cáo của học sinh; AI soạn nháp câu trả lời từ học liệu.
 - **Đánh giá Tutor** định lượng (Hit@K, MRR, độ bám nguồn, từ chối đúng, độ trễ) trên bộ 87 câu, có **baseline đối chứng**
   (không RAG / không lọc bài / chỉ vector) và so sánh các lần chạy; theo dõi chi phí / độ trễ các lượt gọi LLM.
 - **Truy xuất hybrid:** vector (pgvector) + từ khóa (Postgres full-text) hợp nhất bằng RRF, rerank cross-encoder tùy chọn.

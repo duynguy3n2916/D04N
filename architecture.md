@@ -636,14 +636,14 @@ erDiagram
     }
 ```
 
-### 9.2 Danh sách bảng (27) theo module
+### 9.2 Danh sách bảng (36) theo module
 
 Mỗi model nằm trong một file của `ai-backend/app/models/`. Schema được đồng bộ idempotent bởi `app/migrate.py` khi server khởi động.
 
 | Module (`app/models/`) | Bảng |
 |---|---|
 | `accounts.py` | `users`, `classes` |
-| `learning.py` | `courses`, `course_chapters`, `course_lessons`, `lesson_items`, `media_videos`, `item_progress`, `xp_events`, `user_profiles` |
+| `learning.py` | `courses`, `course_chapters`, `course_lessons`, `lesson_items`, `media_videos`, `item_progress`, `xp_events`, `user_profiles`, `course_class_links`, `quiz_answer_logs`, `flashcard_reviews`, `flashcard_cards`, `lesson_mindmaps`, `forum_threads`, `forum_replies`, `forum_reports`, `user_seen` |
 | `documents.py` | `ai_documents`, `ai_chunks` (vector, HNSW) |
 | `transcript.py` | `video_transcripts`, `transcript_segments` |
 | `conversation.py` | `ai_conversations`, `ai_messages` |
@@ -725,6 +725,12 @@ CREATE INDEX ix_vq_player ON video_questions (video_id, status, timestamp);
 | | `POST /ai/evaluation/samples` (nạp bộ test) | Admin | ✅ |
 | | `GET /ai/evaluation/compare` (so baseline) | GV | ✅ |
 | Tài khoản | `POST /ai/auth/forgot-password`, `POST /ai/auth/reset-password` | – | ✅ (gửi link qua SMTP) |
+| Học tập mở rộng | `GET /ai/learn/lessons/{code}/mindmap`, `POST /ai/lessons/{code}/mindmap/generate`, `PATCH /ai/mindmaps/{id}` | HS / GV | ✅ |
+| | `GET /ai/learn/flashcards/{code}/due`, `POST /ai/learn/flashcards/{card}/review`, `POST /ai/lessons/{code}/flashcards/generate` | HS / GV | ✅ |
+| | `GET /ai/classes/{id}/submissions` (+ `.csv`), `GET /ai/learn/progress-report` | GV / HS | ✅ |
+| | `POST /ai/courses/{id}/classes`, `DELETE /ai/courses/{id}/classes/{class_id}` (khóa học nhiều lớp) | GV | ✅ |
+| Diễn đàn | `/ai/forum/classes/{id}/threads`, `/ai/forum/threads/{id}`, `/ai/forum/reports` … | HS / GV | ✅ |
+| Thông báo | `GET /ai/notifications/summary`, `POST /ai/notifications/seen` | HS / GV | ✅ |
 | Hệ thống | `GET /health` | – | ✅ |
 
 ---
@@ -854,7 +860,7 @@ uvicorn app.main:app --reload --port 8000
 | P4 – Bảo mật | JWT + vai trò + phạm vi lớp; CORS whitelist; upload tên uuid, giới hạn dung lượng | ✅ Xong |
 | P5 – Mở rộng | Ngân hàng câu hỏi duyệt từng câu; phiên bản transcript + rollback; tóm tắt hội thoại; sinh bù câu thiếu; streaming Tutor; xuất đề DOCX / PDF; quên mật khẩu qua email | ✅ Xong |
 
-Kiểm thử: 55 bài pytest chạy trên một database Postgres + pgvector riêng trên cloud (`TEST_DATABASE_URL`, không bao giờ trên DB production), LLM giả lập; cộng kịch bản giao diện đầy đủ cho giáo viên, học sinh, admin.
+Kiểm thử: 78 bài pytest chạy trên một database Postgres + pgvector riêng trên cloud (`TEST_DATABASE_URL`, không bao giờ trên DB production), LLM giả lập; cộng kịch bản giao diện đầy đủ cho giáo viên, học sinh, admin.
 
 ---
 
@@ -883,6 +889,18 @@ thành lớp phủ toàn màn hình). Tutor nhận ngữ cảnh đang xem (`vide
 đoạn văn được bôi đen) và nguồn trích dẫn bấm được để tua video / mở đúng trang slide.
 
 ---
+
+## 15c. Tính năng học tập mở rộng (10/2026)
+
+| Tính năng | Thiết kế | Ghi chú |
+|---|---|---|
+| Sơ đồ tư duy | AI đọc toàn bộ học liệu của bài (theo thứ tự tài liệu, nhãn [S1]…), trả về cây JSON tối đa 3 tầng, validate bằng Pydantic (`MindmapOutput`). Nhãn nguồn được giải thành video + giây / tài liệu + trang để giao diện mở đúng đoạn bài giảng (dùng lại cơ chế nguồn của Tutor). | Giáo viên bấm tạo (kiểm soát chi phí), sửa tên nút, duyệt. Có phiên bản; bản duyệt mới thay bản cũ. Học sinh chỉ thấy bản đã duyệt. |
+| Thẻ ghi nhớ | Lịch SM-2 đơn giản (Lại / Khó / Được / Dễ). Nguồn thẻ: câu hỏi đã duyệt + thẻ AI soạn đã duyệt (`FlashcardsOutput`). | Thẻ AI lưu nháp, giáo viên duyệt từng thẻ. |
+| Bài kiểm tra có giờ | `time_limit_minutes`, `open_at`, `close_at` trong cấu hình mục; hạn nộp do server tính (không vượt giờ đóng), trả lời sau hạn bị chặn. | Giáo viên thử bài được ngoài lịch. |
+| Luyện tập thích ứng | `quiz_answer_logs` lưu từng câu trả lời; khi rút đề, câu sai gần đây trọng số ×4, chưa làm ×2, đã đúng ×1. | |
+| Diễn đàn lớp | Bài / trả lời theo lớp; giáo viên ghim, khóa, ẩn, đánh dấu câu đúng; học sinh báo cáo, giáo viên ẩn hoặc bỏ qua. AI soạn nháp trả lời từ học liệu, không tự đăng. | Nội dung ẩn không hiện với học sinh nhưng giáo viên vẫn thấy. |
+| Thông báo | `user_seen` lưu lần xem cuối theo khu vực; đếm bài / trả lời mới của người khác và thẻ đến hạn; giao diện hỏi lại mỗi 60 giây. | Dùng giờ của DB để không lệch đồng hồ. |
+| Khóa học nhiều lớp | `course_class_links`; mọi kiểm tra quyền khóa / bài / mục / tài liệu RAG đi qua `can_see_course`. | Lớp chính `courses.class_id` giữ để tương thích dữ liệu cũ. |
 
 ## 16. Quyết định kiến trúc (ADR tóm tắt)
 

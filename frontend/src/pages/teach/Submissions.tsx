@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PageHeader } from '../../components/AppShell';
-import { Badge, Empty, ErrorBox, Field, Spinner } from '../../components/ui';
-import { api, type ClassInfo } from '../../lib/api';
+import { Badge, Button, Empty, ErrorBox, Field, Spinner, useToast } from '../../components/ui';
+import { api, apiBlob, errorText, type ClassInfo } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 
 interface Row {
@@ -22,16 +22,27 @@ function fmtTime(iso: string | null) {
 
 /** Giáo viên: học viên trong lớp đã làm, chưa làm hoặc đạt bài kiểm tra nào. */
 export function Submissions() {
+  const toast = useToast();
   const classes = useAsync((s) => api<ClassInfo[]>('/ai/classes', { signal: s }), []);
   const [classId, setClassId] = useState('');
   const [status, setStatus] = useState('');
   const cid = classId || classes.data?.[0]?.class_id || '';
   const data = useAsync((s) => (cid ? api<Submissions>(`/ai/classes/${encodeURIComponent(cid)}/submissions`, { signal: s }) : Promise.resolve(null)), [cid]);
   const rows = (data.data?.rows || []).filter((r) => !status || r.status === status);
+  const downloadCsv = async () => {
+    try {
+      const { blob, filename } = await apiBlob(`/ai/classes/${encodeURIComponent(cid)}/submissions.csv`);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) { toast(errorText(e), 'error'); }
+  };
 
   return (
     <>
-      <PageHeader title="Bài nộp của học viên" sub="Xem học viên trong lớp đã làm bài kiểm tra nào, đạt hay chưa." />
+      <PageHeader title="Bài nộp của học viên" sub="Xem học viên trong lớp đã làm bài kiểm tra nào, đạt hay chưa."
+        actions={cid ? <Button variant="ghost" icon="doc" onClick={downloadCsv}>Tải Excel (CSV)</Button> : undefined} />
       <div className="row" style={{ marginBottom: 14, alignItems: 'flex-end' }}>
         <Field label="Lớp">
           <select value={cid} onChange={(e) => setClassId(e.target.value)}>

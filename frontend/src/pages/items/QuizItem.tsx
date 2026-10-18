@@ -9,6 +9,8 @@ interface QuizQ { question_id: string; type: string; question: string; options: 
 interface QAnswer { is_correct: boolean | null; verdict?: string; correct_answer: string; correct_index?: number | null; explanation?: string | null; feedback: string; xp_awarded?: number }
 interface QFinish { correct: number; total: number; score: number; pass_ratio: number; passed: boolean; xp_awarded: number; time_up?: boolean; unanswered?: number }
 
+const fmtWhen = (iso: string) => new Date(iso).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
+
 /** Bài kiểm tra cuối bài: từng câu một, chọn → Kiểm tra → phản hồi → Tiếp tục → màn hình kết quả. */
 export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: ItemProps) {
   const quiz = item.quiz || { count: 5, pass_ratio: 0.8, available: 0 };
@@ -110,6 +112,11 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
             Trong lúc làm, Tutor chỉ đưa gợi ý chứ không nói đáp án.
             {quiz.time_limit_minutes ? <> Bài có giới hạn <b>{quiz.time_limit_minutes} phút</b>; hết giờ bài sẽ tự nộp.</> : null}
           </p>
+          {(quiz.open_at || quiz.close_at) && (
+            <p className="muted small" style={{ fontWeight: 700 }}>
+              {quiz.open_at && <>Mở: {fmtWhen(quiz.open_at)}. </>}{quiz.close_at && <>Đóng: {fmtWhen(quiz.close_at)}.</>}
+            </p>
+          )}
           <div className="result-stats">
             <div className="result-stat"><strong>{quiz.available}</strong><span className="muted small">câu trong ngân hàng</span></div>
             <div className="result-stat"><strong>{best != null ? `${best}%` : '—'}</strong><span className="muted small">điểm cao nhất</span></div>
@@ -118,6 +125,8 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
           {error && <ErrorBox message={error} />}
           {quiz.available === 0
             ? <ErrorBox message="Giáo viên chưa duyệt câu hỏi nào cho bài kiểm tra này." />
+            : quiz.window === 'not_yet' ? <ErrorBox message="Bài kiểm tra chưa mở." />
+            : quiz.window === 'closed' ? <ErrorBox message="Bài kiểm tra đã đóng." />
             : <Button size="lg" loading={busy} onClick={start} style={{ minWidth: 240 }}>{item.completed ? 'Làm lại' : 'Bắt đầu'}</Button>}
         </div>
       </div>

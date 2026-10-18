@@ -135,6 +135,20 @@ def _index_reading(db: Session, user: Principal, item: LessonItem) -> None:
     jobs.submit(db, "ingest_document", {"document_id": str(doc.id), "text": content}, created_by=user.user_id)
 
 
+def _iso_or_none(value) -> str | None:
+    """Chuẩn hóa thời điểm ISO-8601 về UTC; nhận cả hậu tố 'Z' (Python 3.10 không tự hiểu)."""
+    if not value:
+        return None
+    from datetime import datetime, timezone
+    try:
+        dt = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except ValueError:
+        raise AppError(400, "INVALID_DATETIME", f"Thời điểm không hợp lệ: {value}")
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).isoformat()
+
+
 def _apply_item_fields(db: Session, item: LessonItem, data: dict) -> None:
     t = item.type
     if data.get("title") is not None:
@@ -177,6 +191,11 @@ def _apply_item_fields(db: Session, item: LessonItem, data: dict) -> None:
             meta["count"] = max(1, min(30, int(data["count"])))
         if data.get("pass_ratio") is not None:
             meta["pass_ratio"] = max(0.1, min(1.0, float(data["pass_ratio"])))
+        for key in ("open_at", "close_at"):  # lịch làm bài; chuỗi rỗng = bỏ lịch
+            if key in data:
+                meta[key] = _iso_or_none(data.get(key))
+        if meta.get("open_at") and meta.get("close_at") and meta["open_at"] >= meta["close_at"]:
+            raise AppError(400, "INVALID_WINDOW", "Thời điểm đóng phải sau thời điểm mở.")
         if "time_limit_minutes" in data:  # 0 hoặc None = không giới hạn thời gian (kiểu đề thi)
             tl = data.get("time_limit_minutes") or 0
             meta["time_limit_minutes"] = max(1, min(240, int(tl))) if tl else None

@@ -113,6 +113,80 @@ def flashcards_review(card_id: str, req: FlashcardReviewIn, user: Principal = De
     return flashcards.review(db, user, parse_uuid(card_id, "card_id"), req.rating)
 
 
+@router.get("/notifications/summary")
+def notifications_summary(user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Số nội dung mới chưa đọc trong diễn đàn các lớp và số thẻ flashcard đến hạn."""
+    from app.services import notifications
+    return notifications.summary(db, user)
+
+
+class SeenIn(BaseModel):
+    key: str = Field(min_length=1, max_length=160)  # vd "forum:<class_id>"
+
+
+@router.post("/notifications/seen")
+def notifications_seen(req: SeenIn, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.services import notifications
+    return notifications.mark_seen(db, user, req.key)
+
+
+class GenerateCardsIn(BaseModel):
+    count: int = Field(default=10, ge=1, le=20)
+
+
+@router.post("/lessons/{lesson_code}/flashcards/generate")
+def generate_flashcards(lesson_code: str, req: GenerateCardsIn, user: Principal = Depends(require_teacher),
+                        db: Session = Depends(get_db)):
+    """AI soạn thẻ ghi nhớ từ học liệu của bài (lưu nháp, giáo viên duyệt rồi học sinh mới ôn)."""
+    from app.services import flashcards
+    return flashcards.generate_cards(db, user, clean_id(lesson_code), req.count)
+
+
+@router.get("/lessons/{lesson_code}/flashcards")
+def list_flashcard_cards(lesson_code: str, status: str | None = None, user: Principal = Depends(require_teacher),
+                         db: Session = Depends(get_db)):
+    from app.services import flashcards
+    return flashcards.list_ai_cards(db, user, clean_id(lesson_code), status)
+
+
+class CardUpdateIn(BaseModel):
+    front: str | None = Field(default=None, max_length=300)
+    back: str | None = Field(default=None, max_length=600)
+    status: str | None = Field(default=None, pattern="^(draft|approved|rejected)$")
+
+
+@router.patch("/flashcard-cards/{card_id}")
+def update_flashcard_card(card_id: str, req: CardUpdateIn, user: Principal = Depends(require_teacher),
+                          db: Session = Depends(get_db)):
+    from app.services import flashcards
+    return flashcards.update_ai_card(db, user, parse_uuid(card_id, "card_id"), req.front, req.back, req.status)
+
+
+@router.post("/lessons/{lesson_code}/mindmap/generate")
+def generate_mindmap(lesson_code: str, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
+    """AI tổng hợp học liệu của bài thành sơ đồ tư duy (bản nháp mới, giáo viên duyệt)."""
+    from app.services import mindmap
+    return mindmap.generate(db, user, clean_id(lesson_code))
+
+
+@router.get("/learn/lessons/{lesson_code}/mindmap")
+def get_mindmap(lesson_code: str, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.services import mindmap
+    return mindmap.get_for_lesson(db, user, clean_id(lesson_code))
+
+
+class MindmapUpdateIn(BaseModel):
+    tree: dict | None = None
+    status: str | None = Field(default=None, pattern="^(draft|approved)$")
+
+
+@router.patch("/mindmaps/{mindmap_id}")
+def update_mindmap(mindmap_id: str, req: MindmapUpdateIn, user: Principal = Depends(require_teacher),
+                   db: Session = Depends(get_db)):
+    from app.services import mindmap
+    return mindmap.update(db, user, parse_uuid(mindmap_id, "mindmap_id"), req.tree, req.status)
+
+
 @router.get("/learn/progress-report")
 def progress_report(user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
     """Báo cáo tiến độ của chính học sinh, tải về dạng DOCX."""
@@ -123,6 +197,29 @@ def progress_report(user: Principal = Depends(get_current_user), db: Session = D
     name = quote(f"bao-cao-tien-do-{user.user_id}.docx")
     return Response(content, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                     headers={"Content-Disposition": f"attachment; filename=\"bao-cao-tien-do.docx\"; filename*=UTF-8''{name}"})
+
+
+@router.get("/classes/{class_id}/submissions.csv")
+def class_submissions_csv(class_id: str, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
+    """Bảng bài nộp của lớp dạng CSV (UTF-8 có BOM để Excel đọc đúng tiếng Việt)."""
+    import csv
+    import io
+    from urllib.parse import quote
+    from fastapi.responses import Response
+    data = learning.class_submissions(db, user, clean_id(class_id))
+    labels = {"passed": "Đạt", "failed": "Chưa đạt", "in_progress": "Đang làm", "not_started": "Chưa làm"}
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["Mã học viên", "Họ tên", "Khóa học", "Bài", "Bài kiểm tra", "Kết quả", "Số câu đúng", "Tổng câu",
+                "Điểm (%)", "Hết giờ", "Bắt đầu", "Nộp lúc"])
+    for r in data["rows"]:
+        w.writerow([r["student_id"], r["student_name"], r["course_title"], r["lesson_code"], r["quiz_title"],
+                    labels.get(r["status"], r["status"]), r["correct"] if r["correct"] is not None else "",
+                    r["total"] or "", round(r["score"] * 100) if r["score"] is not None else "",
+                    "Có" if r["time_up"] else "", r["started_at"] or "", r["finished_at"] or ""])
+    name = quote(f"bai-nop-{data['class_id']}.csv")
+    return Response("\ufeff" + buf.getvalue(), media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f"attachment; filename=\"bai-nop.csv\"; filename*=UTF-8''{name}"})
 
 
 @router.post("/learn/items/{item_id}/quiz/start")
@@ -383,6 +480,8 @@ class ItemIn(BaseModel):
     count: int | None = None
     pass_ratio: float | None = None
     time_limit_minutes: int | None = None  # bài kiểm tra có giờ: 0 = không giới hạn
+    open_at: str | None = None  # lịch làm bài (ISO-8601); "" = bỏ lịch
+    close_at: str | None = None
 
 
 @router.post("/lessons/{lesson_id}/items")

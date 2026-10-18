@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { PageHeader } from '../../components/AppShell';
 import { Icon } from '../../components/Icon';
 import { activeCaption, CaptionSettings, useVideoCaptions, VideoCaption } from '../../components/VideoCaptions';
-import { Badge, Button, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
+import { Badge, Button, confirmDialog, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
 import { api, errorText, fmtTime, mediaUrl, type Job, type TranscriptSegment } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { Link, navigate } from '../../lib/router';
@@ -232,7 +232,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
     try { await api(`/ai/video-questions/${q.question_id}`, { method: 'PATCH', json: { status } }); qs.reload(); info.reload(); } catch (e) { toast(errorText(e), 'error'); }
   };
   const archive = async (q: TQuestion) => {
-    if (!window.confirm('Xóa câu hỏi này?')) return;
+    if (!await confirmDialog('Xóa câu hỏi này?', { danger: true, okLabel: 'Xóa' })) return;
     try { await api(`/ai/video-questions/${q.question_id}`, { method: 'DELETE' }); qs.reload(); } catch (e) { toast(errorText(e), 'error'); }
   };
 

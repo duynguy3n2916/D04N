@@ -10,6 +10,7 @@ from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, St
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.sql import text as sa_text
 
 from app.database import Base
 
@@ -173,6 +174,7 @@ class ForumThread(Base):
     body = Column(Text, nullable=False)
     pinned = Column(Boolean, nullable=False, default=False)
     locked = Column(Boolean, nullable=False, default=False)
+    hidden = Column(Boolean, nullable=True, server_default=sa_text("false"))  # giáo viên ẩn sau khi xử lý báo cáo
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -186,6 +188,7 @@ class ForumReply(Base):
     author_is_teacher = Column(Boolean, nullable=False, default=False)
     body = Column(Text, nullable=False)
     accepted = Column(Boolean, nullable=False, default=False)
+    hidden = Column(Boolean, nullable=True, server_default=sa_text("false"))
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 
@@ -198,3 +201,61 @@ class CourseClass(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
     class_id = Column(String(128), nullable=False, index=True)
+
+
+
+class UserSeen(Base):
+    """Lần cuối người dùng xem một khu vực (vd. diễn đàn của một lớp), dùng để đếm nội dung mới chưa đọc."""
+    __tablename__ = "user_seen"
+    __table_args__ = (UniqueConstraint("user_id", "key", name="ux_user_seen_key"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(String(128), nullable=False, index=True)
+    key = Column(String(160), nullable=False)
+    seen_at = Column(DateTime(timezone=True), nullable=False)
+
+
+class ForumReport(Base):
+    """Báo cáo nội dung không phù hợp trong diễn đàn; giáo viên của lớp xử lý (ẩn hoặc bỏ qua)."""
+    __tablename__ = "forum_reports"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    class_id = Column(String(128), nullable=False, index=True)
+    thread_id = Column(UUID(as_uuid=True), ForeignKey("forum_threads.id", ondelete="CASCADE"), nullable=False, index=True)
+    reply_id = Column(UUID(as_uuid=True), ForeignKey("forum_replies.id", ondelete="CASCADE"), nullable=True)
+    reporter_id = Column(String(128), nullable=False)
+    reason = Column(String(500), nullable=False)
+    status = Column(String(16), nullable=False, default="open")  # open | hidden | dismissed
+    handled_by = Column(String(128), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    handled_at = Column(DateTime(timezone=True), nullable=True)
+
+
+
+class FlashcardCard(Base):
+    """Thẻ ghi nhớ AI soạn từ học liệu của bài; giáo viên duyệt rồi học sinh mới ôn được."""
+    __tablename__ = "flashcard_cards"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    lesson_code = Column(String(128), nullable=False, index=True)
+    front = Column(String(300), nullable=False)
+    back = Column(String(600), nullable=False)
+    sources = Column(JSONB, nullable=True)  # nguồn trích dẫn đã giải nhãn (video + giây, tài liệu + trang...)
+    status = Column(String(16), nullable=False, default="draft", index=True)  # draft | approved | rejected
+    created_by = Column(String(128), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class LessonMindmap(Base):
+    """Sơ đồ tư duy của một bài (cây JSON), có phiên bản; học sinh chỉ thấy bản đã duyệt mới nhất."""
+    __tablename__ = "lesson_mindmaps"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    lesson_code = Column(String(128), nullable=False, index=True)
+    version = Column(Integer, nullable=False, default=1)
+    status = Column(String(16), nullable=False, default="draft", index=True)  # draft | approved | archived
+    tree = Column(JSONB, nullable=False)
+    created_by = Column(String(128), nullable=True)
+    approved_by = Column(String(128), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    approved_at = Column(DateTime(timezone=True), nullable=True)

@@ -13,6 +13,7 @@ import { Documents } from './pages/teach/Documents';
 import { Evaluation } from './pages/teach/Evaluation';
 import { QuestionBank } from './pages/teach/QuestionBank';
 import { System } from './pages/teach/System';
+import { FlashcardBank } from './pages/teach/FlashcardBank';
 import { Submissions } from './pages/teach/Submissions';
 import { Users } from './pages/teach/Users';
 import { VideoDetail, Videos } from './pages/teach/Videos';
@@ -49,6 +50,7 @@ export function App() {
   else if (match('/teach/questions', path)) page = teacherOnly(<QuestionBank />);
   else if (match('/teach/docs', path)) page = teacherOnly(<Documents />);
   else if (match('/teach/submissions', path)) page = teacherOnly(<Submissions />);
+  else if (match('/teach/flashcards', path)) page = teacherOnly(<FlashcardBank />);
   else if (match('/teach/eval', path)) page = teacherOnly(<Evaluation />);
   else if (match('/teach/users', path)) page = teacherOnly(<Users />);
   else if (match('/admin/system', path)) page = user.role === 'admin' ? <System /> : <Learn path={path} />;

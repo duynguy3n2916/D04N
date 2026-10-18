@@ -2,15 +2,45 @@ import { Fragment, useMemo } from 'react';
 import { AppShell } from '../components/AppShell';
 import { Bolt, Flame, Gem, Icon, type IconName } from '../components/Icon';
 import { Mascot } from '../components/Mascot';
-import { Badge, CountUp, Empty, ErrorBox, Progress, Spinner } from '../components/ui';
-import { api, type CourseSummary, type CourseTree, type ItemSummary, type Stats } from '../lib/api';
+import { Badge, Button, CountUp, Empty, ErrorBox, Progress, Spinner, useToast } from '../components/ui';
+import { api, apiBlob, errorText, type CourseSummary, type CourseTree, type ItemSummary, type Stats } from '../lib/api';
 import { useAuth } from '../lib/auth';
+import { useNotifications } from '../lib/notifications';
 import { useAsync } from '../lib/hooks';
 import { Link, navigate } from '../lib/router';
 
 export const TYPE_ICON: Record<string, IconName> = { video: 'play', slide: 'slide', reading: 'book', quiz: 'star' };
 export const TYPE_LABEL: Record<string, string> = { video: 'Video', slide: 'Slide', reading: 'Bài đọc', quiz: 'Kiểm tra' };
 const OFFSETS = [0, -90, -130, -70, 30, 90, 50, -20];
+
+/** Lối tắt: diễn đàn lớp và tải báo cáo tiến độ (DOCX) cho học sinh / phụ huynh. */
+function StudyTools() {
+  const toast = useToast();
+  const noti = useNotifications();
+  const download = async () => {
+    try {
+      const { blob, filename } = await apiBlob('/ai/learn/progress-report');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) { toast(errorText(e), 'error'); }
+  };
+  return (
+    <section className="card col" style={{ gap: 8 }}>
+      {!!noti?.flashcards.length && (
+        <div className="col" style={{ gap: 4 }}>
+          <strong className="small">Thẻ cần ôn hôm nay</strong>
+          {noti.flashcards.map((f) => (
+            <Link key={f.lesson_code} to={`/flashcards/${encodeURIComponent(f.lesson_code)}`} className="small" style={{ fontWeight: 700 }}>{f.lesson_title} · {f.due} thẻ</Link>
+          ))}
+        </div>
+      )}
+      <Button variant="ghost" icon="note" onClick={() => navigate('/forum')}>Diễn đàn lớp{noti?.forum_new ? ` (${noti.forum_new} mới)` : ''}</Button>
+      <Button variant="ghost" icon="doc" onClick={download}>Tải báo cáo tiến độ</Button>
+    </section>
+  );
+}
 
 /** Nhắc học trong giao diện: sắp mất chuỗi ngày học hoặc chưa đạt mục tiêu hôm nay (chưa gửi email). */
 function StudyReminder({ stats }: { stats: Stats }) {
@@ -43,6 +73,7 @@ export function StatsAside({ stats, compact }: { stats: Stats | null; compact?: 
         </div>
       </section>
       {stats && <StudyReminder stats={stats} />}
+      <StudyTools />
       {!compact && (
         <section className="card col">
           <h2>Bảng xếp hạng tuần</h2>

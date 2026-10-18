@@ -7,7 +7,8 @@ from app.core.prompts import TUTOR_ANSWER, wrap_documents
 from app.core.security import Principal
 from app.core.utils import clean_id, redact_pii
 from app.models.accounts import User
-from app.models.learning import ForumReply, ForumThread, Lesson
+from app.core.utils import utcnow
+from app.models.learning import ForumReply, ForumReport, ForumThread, Lesson
 from app.services import llm
 from app.services.retrieval import RetrievalScope, build_context, retrieve
 
@@ -45,7 +46,8 @@ def _names(db: Session, user_ids: set[str]) -> dict[str, str]:
 def _thread_dict(t: ForumThread, names: dict[str, str], replies: int = 0, has_answer: bool = False) -> dict:
     return {"thread_id": str(t.id), "class_id": t.class_id, "lesson_code": t.lesson_code, "title": t.title,
             "body": t.body, "author_id": t.author_id, "author_name": names.get(t.author_id, t.author_id),
-            "pinned": bool(t.pinned), "locked": bool(t.locked), "reply_count": replies, "has_answer": has_answer,
+            "pinned": bool(t.pinned), "locked": bool(t.locked), "hidden": bool(t.hidden),
+            "reply_count": replies, "has_answer": has_answer,
             "created_at": t.created_at.isoformat() if t.created_at else None,
             "updated_at": t.updated_at.isoformat() if t.updated_at else None}
 
@@ -54,13 +56,16 @@ def list_threads(db: Session, user: Principal, class_id: str, lesson_code: str |
     class_id = clean_id(class_id) or ""
     _require_member(user, class_id)
     q = db.query(ForumThread).filter(ForumThread.class_id == class_id)
+    if not _is_moderator(user, class_id):
+        q = q.filter(ForumThread.hidden.isnot(True))
     if lesson_code:
         q = q.filter(ForumThread.lesson_code == lesson_code)
     threads = q.order_by(ForumThread.pinned.desc(), ForumThread.created_at.desc()).limit(200).all()
     if not threads:
         return []
     ids = [t.id for t in threads]
-    counts = dict(db.query(ForumReply.thread_id, func.count(ForumReply.id)).filter(ForumReply.thread_id.in_(ids))
+    counts = dict(db.query(ForumReply.thread_id, func.count(ForumReply.id))
+                  .filter(ForumReply.thread_id.in_(ids), ForumReply.hidden.isnot(True))
                   .group_by(ForumReply.thread_id).all())
     accepted = {r for (r,) in db.query(ForumReply.thread_id).filter(ForumReply.thread_id.in_(ids),
                                                                   ForumReply.accepted.is_(True)).all()}
@@ -87,14 +92,20 @@ def get_thread(db: Session, user: Principal, thread_id) -> dict:
     if t is None:
         raise AppError(404, "NOT_FOUND", "Không tìm thấy bài đăng.")
     _require_member(user, t.class_id)
+    moderator = _is_moderator(user, t.class_id)
+    if t.hidden and not moderator:
+        raise AppError(404, "NOT_FOUND", "Không tìm thấy bài đăng.")
     replies = db.query(ForumReply).filter(ForumReply.thread_id == t.id).order_by(ForumReply.created_at).all()
+    if not moderator:
+        replies = [r for r in replies if not r.hidden]
     names = _names(db, {t.author_id} | {r.author_id for r in replies})
     out = _thread_dict(t, names, len(replies), any(r.accepted for r in replies))
     out["replies"] = [{"reply_id": str(r.id), "body": r.body, "author_id": r.author_id,
                        "author_name": names.get(r.author_id, r.author_id), "author_is_teacher": bool(r.author_is_teacher),
-                       "accepted": bool(r.accepted), "created_at": r.created_at.isoformat() if r.created_at else None}
+                       "accepted": bool(r.accepted), "hidden": bool(r.hidden),
+                       "created_at": r.created_at.isoformat() if r.created_at else None}
                       for r in replies]
-    out["can_moderate"] = _is_moderator(user, t.class_id)
+    out["can_moderate"] = moderator
     return out
 
 
@@ -113,7 +124,8 @@ def reply(db: Session, user: Principal, thread_id, body: str) -> dict:
     return {"reply_id": str(r.id), "thread_id": str(t.id)}
 
 
-def moderate(db: Session, user: Principal, thread_id, pinned: bool | None, locked: bool | None) -> dict:
+def moderate(db: Session, user: Principal, thread_id, pinned: bool | None, locked: bool | None,
+             hidden: bool | None = None) -> dict:
     t = db.get(ForumThread, thread_id)
     if t is None:
         raise AppError(404, "NOT_FOUND", "Không tìm thấy bài đăng.")
@@ -123,8 +135,101 @@ def moderate(db: Session, user: Principal, thread_id, pinned: bool | None, locke
         t.pinned = pinned
     if locked is not None:
         t.locked = locked
+    if hidden is not None:
+        t.hidden = hidden
     db.commit()
-    return {"thread_id": str(t.id), "pinned": bool(t.pinned), "locked": bool(t.locked)}
+    return {"thread_id": str(t.id), "pinned": bool(t.pinned), "locked": bool(t.locked), "hidden": bool(t.hidden)}
+
+
+def set_reply_hidden(db: Session, user: Principal, reply_id, hidden: bool) -> dict:
+    r = db.get(ForumReply, reply_id)
+    if r is None:
+        raise AppError(404, "NOT_FOUND", "Không tìm thấy câu trả lời.")
+    t = db.get(ForumThread, r.thread_id)
+    if not _is_moderator(user, t.class_id):
+        raise AppError(403, "FORBIDDEN", "Chỉ giáo viên của lớp mới ẩn nội dung.")
+    r.hidden = hidden
+    db.commit()
+    return {"reply_id": str(r.id), "hidden": bool(r.hidden)}
+
+
+# ---------------------------------------------------------------- báo cáo nội dung
+
+def _same_target(thread_id, reply_id):
+    cond = ForumReport.reply_id == reply_id if reply_id else ForumReport.reply_id.is_(None)
+    return (ForumReport.thread_id == thread_id), cond
+
+
+def report(db: Session, user: Principal, thread_id, reply_id, reason: str) -> dict:
+    t = db.get(ForumThread, thread_id) if thread_id else None
+    r = db.get(ForumReply, reply_id) if reply_id else None
+    if r is not None:
+        t = db.get(ForumThread, r.thread_id)
+    if t is None:
+        raise AppError(404, "NOT_FOUND", "Không tìm thấy nội dung cần báo cáo.")
+    _require_member(user, t.class_id)
+    author = r.author_id if r is not None else t.author_id
+    if author == user.user_id:
+        raise AppError(400, "OWN_CONTENT", "Không thể báo cáo nội dung của chính bạn.")
+    by_thread, by_reply = _same_target(t.id, r.id if r is not None else None)
+    dup = db.query(ForumReport.id).filter(ForumReport.reporter_id == user.user_id, ForumReport.status == "open",
+                                          by_thread, by_reply).first()
+    if dup:
+        return {"report_id": str(dup[0]), "duplicate": True}
+    rp = ForumReport(class_id=t.class_id, thread_id=t.id, reply_id=r.id if r is not None else None,
+                     reporter_id=user.user_id, reason=_text(reason, "Lý do", 500))
+    db.add(rp)
+    db.commit()
+    return {"report_id": str(rp.id), "duplicate": False}
+
+
+def list_reports(db: Session, user: Principal, class_id: str, status: str = "open") -> list[dict]:
+    class_id = clean_id(class_id) or ""
+    if not _is_moderator(user, class_id):
+        raise AppError(403, "FORBIDDEN", "Chỉ giáo viên của lớp mới xem báo cáo.")
+    rows = (db.query(ForumReport).filter(ForumReport.class_id == class_id, ForumReport.status == status)
+            .order_by(ForumReport.created_at.desc()).limit(200).all())
+    out = []
+    for rp in rows:
+        t = db.get(ForumThread, rp.thread_id)
+        r = db.get(ForumReply, rp.reply_id) if rp.reply_id else None
+        target = r if r is not None else t
+        out.append({"report_id": str(rp.id), "thread_id": str(rp.thread_id),
+                    "reply_id": str(rp.reply_id) if rp.reply_id else None,
+                    "thread_title": t.title if t else "", "kind": "reply" if r is not None else "thread",
+                    "excerpt": (target.body if target else "")[:300],
+                    "author_id": target.author_id if target else None,
+                    "hidden": bool(target.hidden) if target else False, "reason": rp.reason,
+                    "reporter_id": rp.reporter_id, "status": rp.status,
+                    "created_at": rp.created_at.isoformat() if rp.created_at else None})
+    names = _names(db, {o["author_id"] for o in out if o["author_id"]} | {o["reporter_id"] for o in out})
+    for o in out:
+        o["author_name"] = names.get(o["author_id"], o["author_id"])
+        o["reporter_name"] = names.get(o["reporter_id"], o["reporter_id"])
+    return out
+
+
+def resolve_report(db: Session, user: Principal, report_id, action: str) -> dict:
+    """action = hide (ẩn nội dung bị báo cáo) | dismiss (bỏ qua, nội dung giữ nguyên)."""
+    rp = db.get(ForumReport, report_id)
+    if rp is None:
+        raise AppError(404, "NOT_FOUND", "Không tìm thấy báo cáo.")
+    if not _is_moderator(user, rp.class_id):
+        raise AppError(403, "FORBIDDEN", "Chỉ giáo viên của lớp mới xử lý báo cáo.")
+    if action not in ("hide", "dismiss"):
+        raise AppError(400, "INVALID_ACTION", "action phải là hide hoặc dismiss.")
+    if action == "hide":
+        target = db.get(ForumReply, rp.reply_id) if rp.reply_id else db.get(ForumThread, rp.thread_id)
+        if target is not None:
+            target.hidden = True
+    # các báo cáo khác cùng nội dung cũng được đóng
+    by_thread, by_reply = _same_target(rp.thread_id, rp.reply_id)
+    same = db.query(ForumReport).filter(ForumReport.status == "open", by_thread, by_reply).all()
+    for x in same:
+        x.status = "hidden" if action == "hide" else "dismissed"
+        x.handled_by, x.handled_at = user.user_id, utcnow()
+    db.commit()
+    return {"report_id": str(rp.id), "status": rp.status, "closed": len(same)}
 
 
 def accept_reply(db: Session, user: Principal, reply_id) -> dict:
