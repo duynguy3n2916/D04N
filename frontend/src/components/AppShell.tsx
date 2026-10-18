@@ -11,6 +11,7 @@ type NavItem = { to: string; label: string; icon: IconName; match: string; admin
 const STUDENT: NavItem[] = [
   { to: '/learn', label: 'Học', icon: 'home', match: '/learn' },
   { to: '/profile', label: 'Hồ sơ', icon: 'user', match: '/profile' },
+  { to: '/forum', label: 'Diễn đàn', icon: 'note', match: '/forum' },
 ];
 const TEACHER: NavItem[] = [
   { to: '/teach/courses', label: 'Khóa học', icon: 'list', match: '/teach/courses' },
@@ -18,6 +19,8 @@ const TEACHER: NavItem[] = [
   { to: '/teach/questions', label: 'Câu hỏi', icon: 'question', match: '/teach/questions' },
   { to: '/teach/docs', label: 'Học liệu', icon: 'book', match: '/teach/docs' },
   { to: '/teach/users', label: 'Học sinh & lớp', icon: 'users', match: '/teach/users' },
+  { to: '/teach/submissions', label: 'Bài nộp', icon: 'list', match: '/teach/submissions' },
+  { to: '/forum', label: 'Diễn đàn', icon: 'note', match: '/forum' },
   { to: '/teach/eval', label: 'Đánh giá', icon: 'chart', match: '/teach/eval' },
   { to: '/admin/system', label: 'Hệ thống', icon: 'settings', match: '/admin', admin: true },
 ];

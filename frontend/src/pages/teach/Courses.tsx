@@ -3,14 +3,14 @@ import { PageHeader } from '../../components/AppShell';
 import { Icon } from '../../components/Icon';
 import { Markdown } from '../../components/Markdown';
 import { Badge, Button, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
-import { api, errorText, mediaUrl, pollJob, type ItemType } from '../../lib/api';
+import { api, errorText, mediaUrl, pollJob, type ClassInfo, type ItemType } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { Link, navigate } from '../../lib/router';
 import { TYPE_ICON, TYPE_LABEL } from '../Learn';
 
 interface AdminItem { item_id: string; type: ItemType; title: string; position: number; video_id: string | null; document_id: string | null; meta: any; has_content: boolean }
 interface AdminLesson { lesson_id: string; code: string; title: string; description?: string; items: AdminItem[] }
-interface AdminCourse { course_id: string; code: string; title: string; description?: string; class_id: string | null; cover_url?: string | null; chapters: { chapter_id: string; title: string; lessons: AdminLesson[] }[] }
+interface AdminCourse { course_id: string; code: string; title: string; description?: string; class_id: string | null; class_ids?: string[]; cover_url?: string | null; chapters: { chapter_id: string; title: string; lessons: AdminLesson[] }[] }
 interface CourseRow { course_id: string; code: string; title: string; class_id: string | null; cover_url?: string | null; chapters: number; items: number }
 interface VideoRow { video_id: string; title: string; has_file: boolean; transcript: { version: number } | null; questions: { approved: number; draft: number } }
 interface DocRow { document_id: string; title: string; source_type: string; status: string; lesson_id: string | null }
@@ -172,6 +172,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
           <Button icon="plus" onClick={() => setDlg({ kind: 'chapter' })}>Thêm chương</Button>
         </>} />
       {c && <CoverEditor course={c} onChanged={tree.setData} />}
+      {c && <CourseClasses course={c} onChanged={tree.setData} />}
       {tree.loading && !c && <Spinner />}
       {tree.error && <ErrorBox message={tree.error} onRetry={tree.reload} />}
       {c && !c.chapters.length &&<Empty title="Khóa học chưa có chương nào">Thêm chương, sau đó thêm bài và các mục học.</Empty>}
@@ -266,7 +267,7 @@ function itemMeta(it: AdminItem) {
   if (it.type === 'video') return it.video_id || 'chưa gắn video';
   if (it.type === 'slide') return it.document_id ? `${it.meta?.pages ? `${it.meta.pages} trang` : 'tài liệu'}` : 'chưa gắn file';
   if (it.type === 'reading') return it.has_content ? 'đã có nội dung' : 'chưa có nội dung';
-  return `${it.meta?.count ?? 5} câu · qua ${Math.round((it.meta?.pass_ratio ?? 0.8) * 100)}%`;
+  return `${it.meta?.count ?? 5} câu · qua ${Math.round((it.meta?.pass_ratio ?? 0.8) * 100)}%${it.meta?.time_limit_minutes ? ` · ${it.meta.time_limit_minutes} phút` : ''}`;
 }
 
 function Reorder({ onUp, onDown, first, last }: { onUp: () => void; onDown: () => void; first: boolean; last: boolean }) {
@@ -310,6 +311,47 @@ function TitleDialog({ title, initial, onClose, onSave }: { title: string; initi
   );
 }
 
+/** Gắn một khóa học cho nhiều lớp: giáo viên chỉ thêm được lớp mình phụ trách. */
+function CourseClasses({ course, onChanged }: { course: AdminCourse; onChanged: (c: AdminCourse) => void }) {
+  const toast = useToast();
+  const mine = useAsync((s) => api<ClassInfo[]>('/ai/classes', { signal: s }), []);
+  const [pick, setPick] = useState('');
+  const linked = course.class_ids?.length ? course.class_ids : (course.class_id ? [course.class_id] : []);
+  const addable = (mine.data || []).filter((c) => !linked.includes(c.class_id));
+  const add = async () => {
+    if (!pick) return;
+    try { onChanged(await api<AdminCourse>(`/ai/courses/${course.course_id}/classes`, { json: { class_id: pick } })); setPick(''); toast('Đã thêm lớp', 'success'); }
+    catch (e) { toast(errorText(e), 'error'); }
+  };
+  const remove = async (cid: string) => {
+    try { onChanged(await api<AdminCourse>(`/ai/courses/${course.course_id}/classes/${encodeURIComponent(cid)}`, { method: 'DELETE' })); toast('Đã gỡ lớp', 'success'); }
+    catch (e) { toast(errorText(e), 'error'); }
+  };
+  return (
+    <section className="card col" style={{ gap: 10, marginBottom: 14 }}>
+      <strong>Lớp được học khóa này</strong>
+      <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+        {linked.length === 0 && <span className="muted small">Khóa học dùng chung cho mọi lớp.</span>}
+        {linked.map((cid) => (
+          <span key={cid} className="chip">
+            {cid}{cid === course.class_id ? ' (lớp chính)' : ''}
+            {cid !== course.class_id && <button className="iconbtn" style={{ marginLeft: 6 }} aria-label={`Gỡ lớp ${cid}`} onClick={() => remove(cid)}>×</button>}
+          </span>
+        ))}
+      </div>
+      {!!addable.length && (
+        <div className="row" style={{ gap: 8 }}>
+          <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Chọn lớp để thêm">
+            <option value="">— Chọn lớp của bạn —</option>
+            {addable.map((c) => <option key={c.class_id} value={c.class_id}>{c.class_id} · {c.name}</option>)}
+          </select>
+          <Button size="sm" variant="soft" disabled={!pick} onClick={add}>Thêm lớp</Button>
+        </div>
+      )}
+    </section>
+  );
+}
+
 function CourseDialog({ course, onClose, onSaved, onCoverChanged }: { course: AdminCourse; onClose: () => void; onSaved: (c: AdminCourse) => void; onCoverChanged: (c: AdminCourse) => void }) {
   const [f, setF] = useState({ title: course.title, description: course.description || '', class_id: course.class_id || '' });
   return (
@@ -317,7 +359,7 @@ function CourseDialog({ course, onClose, onSaved, onCoverChanged }: { course: Ad
       onSave={async () => onSaved(await api<AdminCourse>(`/ai/courses/${course.course_id}`, { method: 'PATCH', json: f }))}>
       <CoverEditor course={course} onChanged={onCoverChanged} />
       <Field label="Tên khóa học"><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></Field>
-      <Field label="Lớp" hint="Chỉ học sinh thuộc lớp này thấy khóa học"><input value={f.class_id} onChange={(e) => setF({ ...f, class_id: e.target.value })} /></Field>
+      <Field label="Lớp chính" hint="Để trống = mọi lớp. Gắn thêm lớp khác ở phần 'Lớp được học khóa này'."><input value={f.class_id} onChange={(e) => setF({ ...f, class_id: e.target.value })} /></Field>
       <Field label="Mô tả"><textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field>
     </FormModal>
   );
@@ -344,6 +386,7 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
   const [notes, setNotes] = useState(item?.meta?.notes || '');
   const [count, setCount] = useState<number>(item?.meta?.count ?? 5);
   const [passPct, setPassPct] = useState<number>(Math.round((item?.meta?.pass_ratio ?? 0.8) * 100));
+  const [timeLimit, setTimeLimit] = useState<number>(item?.meta?.time_limit_minutes ?? 0);
   const [preview, setPreview] = useState(false);
   const full = useAsync((s) => (item ? api<{ content_md: string | null }>(`/ai/items/${item.item_id}`, { signal: s }) : Promise.resolve({ content_md: '' })), [item?.item_id]);
   const [md, setMd] = useState<string | null>(null);
@@ -375,7 +418,7 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
     if (type === 'video') body.video_id = videoId;
     if (type === 'slide') { body.document_id = docId; body.notes = notes; }
     if (type === 'reading') body.content_md = content;
-    if (type === 'quiz') { body.count = count; body.pass_ratio = passPct / 100; }
+    if (type === 'quiz') { body.count = count; body.pass_ratio = passPct / 100; body.time_limit_minutes = timeLimit; }
     onSaved(item
       ? await api<AdminCourse>(`/ai/items/${item.item_id}`, { method: 'PATCH', json: body })
       : await api<AdminCourse>(`/ai/lessons/${lesson.lesson_id}/items`, { json: body }));
@@ -449,6 +492,7 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
           <div className="form-grid">
             <Field label="Số câu mỗi lượt"><input type="number" min={1} max={20} value={count} onChange={(e) => setCount(Number(e.target.value))} /></Field>
             <Field label="Ngưỡng qua bài (%)"><input type="number" min={10} max={100} step={5} value={passPct} onChange={(e) => setPassPct(Number(e.target.value))} /></Field>
+            <Field label="Giới hạn thời gian (phút)" hint="0 = không giới hạn. Hết giờ bài tự nộp."><input type="number" min={0} max={240} value={timeLimit} onChange={(e) => setTimeLimit(Number(e.target.value))} /></Field>
           </div>
           <p className="muted small" style={{ fontWeight: 700 }}>
             Câu hỏi lấy ngẫu nhiên từ ngân hàng câu hỏi <b>đã duyệt</b> của bài {lesson.code}. Sinh và duyệt câu hỏi ở mục <Link to="/teach/questions">Câu hỏi</Link>.

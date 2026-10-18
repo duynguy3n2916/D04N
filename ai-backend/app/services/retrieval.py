@@ -10,7 +10,7 @@ from app.config import settings
 from app.core.security import Principal
 from app.core.utils import fmt_ts
 from app.models.documents import AIChunk, AIDocument
-from app.models.learning import Lesson, LessonItem
+from app.models.learning import Chapter, Course, CourseClass, Lesson, LessonItem
 from app.models.transcript import TranscriptSegment, VideoTranscript
 from app.services.embedding import embed_query
 from app.services.hybrid import lexical_accept, query_terms, rerank, rrf, tsquery_text
@@ -50,7 +50,14 @@ def _apply_scope(stmt, scope: RetrievalScope):
     stmt = stmt.where(or_(~managed_lesson, ~AIDocument.source_type.in_(["pdf", "pptx", "lesson", "video"]),
                           attached_source))
     if scope.allowed_class_ids is not None:
-        stmt = stmt.where(or_(AIDocument.class_id.is_(None), AIDocument.class_id.in_(scope.allowed_class_ids or [""])))
+        allowed = scope.allowed_class_ids or [""]
+        # tài liệu của lớp chính, hoặc tài liệu thuộc bài của khóa học được gắn cho một lớp người dùng thuộc về
+        shared_codes = (select(Lesson.code).join(Chapter, Lesson.chapter_id == Chapter.id)
+                        .join(Course, Chapter.course_id == Course.id)
+                        .where(or_(Course.class_id.in_(allowed),
+                                   Course.id.in_(select(CourseClass.course_id).where(CourseClass.class_id.in_(allowed))))))
+        stmt = stmt.where(or_(AIDocument.class_id.is_(None), AIDocument.class_id.in_(allowed),
+                              AIDocument.lesson_id.in_(shared_codes)))
     if scope.course_id:
         stmt = stmt.where(AIDocument.course_id == scope.course_id)
     if scope.class_id:

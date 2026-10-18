@@ -5,17 +5,18 @@ from pathlib import Path
 from types import SimpleNamespace
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func
+from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.core.errors import AppError
 from app.core.security import Principal
-from app.core.utils import as_aware, utcnow
+from app.core.utils import as_aware, parse_uuid, utcnow
 from app.models.documents import AIDocument
-from app.models.learning import (Chapter, Course, ItemProgress, Lesson, LessonItem, MediaVideo, UserProfile,
-                                 XPEvent)
+from app.models.accounts import ClassRoom
+from app.models.learning import (Chapter, Course, CourseClass, ItemProgress, Lesson, LessonItem, MediaVideo,
+                                 QuizAnswerLog, UserProfile, XPEvent)
 from app.models.transcript import VideoTranscript
 from app.models.video_question import QuestionBankItem, VideoQuestion
 from app.services import grading
@@ -126,32 +127,74 @@ def leaderboard(db: Session, user: Principal, limit: int = 10) -> dict:
 # Khóa học
 # ----------------------------------------------------------------------------
 
+def course_class_ids(db: Session, course: Course) -> list[str]:
+    """Mọi lớp được dùng khóa học này (lớp chính đứng đầu)."""
+    linked = [cid for (cid,) in db.query(CourseClass.class_id).filter(CourseClass.course_id == course.id).all()]
+    if course.class_id and course.class_id not in linked:
+        linked.insert(0, course.class_id)
+    return linked
+
+
+def can_see_course(db: Session, user: Principal, course: Course) -> bool:
+    """Khóa không gắn lớp: ai cũng thấy. Khóa gắn lớp: thấy nếu thuộc lớp chính hoặc một lớp được gắn thêm."""
+    if user.is_admin or course.class_id is None:
+        return True
+    if user.can_access_class(course.class_id):
+        return True
+    return db.query(CourseClass.id).filter(CourseClass.course_id == course.id,
+                                           CourseClass.class_id.in_(user.class_ids or [""])).first() is not None
+
+
 def visible_courses(db: Session, user: Principal) -> list[Course]:
     q = db.query(Course)
     if not user.is_admin:
-        q = q.filter((Course.class_id.is_(None)) | (Course.class_id.in_(user.class_ids or [""])))
+        classes = user.class_ids or [""]
+        linked = select(CourseClass.course_id).where(CourseClass.class_id.in_(classes))
+        q = q.filter(or_(Course.class_id.is_(None), Course.class_id.in_(classes), Course.id.in_(linked)))
     return q.order_by(Course.created_at).all()
 
 
 def get_course(db: Session, user: Principal, course_id) -> Course:
     c = db.get(Course, course_id)
-    if not c or not user.can_access_class(c.class_id):
+    if not c or not can_see_course(db, user, c):
         raise AppError(404, "NOT_FOUND", "Không tìm thấy khóa học.")
     return c
 
 
 def get_lesson(db: Session, user: Principal, lesson_id) -> Lesson:
     lesson = db.get(Lesson, lesson_id)
-    if not lesson or not user.can_access_class(lesson.chapter.course.class_id):
+    if not lesson or not can_see_course(db, user, lesson.chapter.course):
         raise AppError(404, "NOT_FOUND", "Không tìm thấy bài học.")
     return lesson
 
 
 def get_item(db: Session, user: Principal, item_id) -> LessonItem:
     item = db.get(LessonItem, item_id)
-    if not item or not user.can_access_class(item.lesson.chapter.course.class_id):
+    if not item or not can_see_course(db, user, item.lesson.chapter.course):
         raise AppError(404, "NOT_FOUND", "Không tìm thấy mục học.")
     return item
+
+
+def set_course_class(db: Session, user: Principal, course_id, class_id: str, add: bool) -> Course:
+    """Gắn thêm / gỡ một lớp khỏi khóa học. Giáo viên phải thuộc lớp đó và thấy được khóa học."""
+    course = db.get(Course, course_id)
+    if course is None or not can_see_course(db, user, course):
+        raise AppError(404, "NOT_FOUND", "Không tìm thấy khóa học.")
+    if not user.can_access_class(class_id):
+        raise AppError(403, "CLASS_FORBIDDEN", f"Bạn không có quyền với lớp {class_id}.")
+    if not db.query(ClassRoom.class_id).filter(ClassRoom.class_id == class_id).first():
+        raise AppError(404, "NOT_FOUND", f"Không tìm thấy lớp {class_id}.")
+    link = db.query(CourseClass).filter(CourseClass.course_id == course.id, CourseClass.class_id == class_id).first()
+    if add:
+        if class_id != course.class_id and link is None:
+            db.add(CourseClass(course_id=course.id, class_id=class_id))
+    else:
+        if class_id == course.class_id:
+            raise AppError(409, "PRIMARY_CLASS", "Không gỡ được lớp chính của khóa học. Hãy gắn thêm lớp khác trước.")
+        if link is not None:
+            db.delete(link)
+    db.commit()
+    return course
 
 
 def _progress_map(db: Session, user: Principal, item_ids: list) -> dict:
@@ -224,7 +267,8 @@ def course_tree(db: Session, user: Principal, course: Course) -> dict:
     done_count = sum(1 for s in status_of.values() if s == "done")
     return {
         "course_id": str(course.id), "code": course.code, "title": course.title, "description": course.description,
-        "class_id": course.class_id, "cover_url": cover_url(course), "items_total": len(items), "items_done": done_count,
+        "class_id": course.class_id, "class_ids": course_class_ids(db, course), "cover_url": cover_url(course),
+        "items_total": len(items), "items_done": done_count,
         "current_item_id": str(current_id) if current_id else None,
         "chapters": [{
             "chapter_id": str(ch.id), "title": ch.title, "position": ch.position,
@@ -276,7 +320,7 @@ def item_detail(db: Session, user: Principal, item: LessonItem) -> dict:
     else:
         m = item.meta or {}
         out["quiz"] = {"count": m.get("count", 5), "pass_ratio": m.get("pass_ratio", 0.8),
-                       "available": _quiz_pool_size(db, item)}
+                       "time_limit_minutes": m.get("time_limit_minutes"), "available": _quiz_pool_size(db, item)}
     return out
 
 
@@ -327,7 +371,7 @@ def locate(db: Session, user: Principal, lesson: Lesson | None, video_id: str | 
     if lesson is not None:
         items.sort(key=lambda i: 0 if i.lesson_id == lesson.id else 1)
     for it in items:
-        if user.can_access_class(it.lesson.chapter.course.class_id):
+        if can_see_course(db, user, it.lesson.chapter.course):
             return {"lesson_id": str(it.lesson_id), "item_id": str(it.id), "type": it.type}
     return None
 
@@ -347,6 +391,32 @@ def _quiz_pool_size(db: Session, item: LessonItem) -> int:
                                                             QuestionBankItem.status == "approved").scalar() or 0
 
 
+def _question_weights(db: Session, user: Principal, pool: list[QuestionBankItem]) -> list[float]:
+    """Câu sai gần đây được ưu tiên xuất hiện (x4), câu chưa từng làm (x2), câu đã đúng (x1)."""
+    since = utcnow() - timedelta(days=60)
+    logs = (db.query(QuizAnswerLog.question_id, QuizAnswerLog.correct)
+            .filter(QuizAnswerLog.student_id == user.user_id, QuizAnswerLog.created_at >= since,
+                    QuizAnswerLog.question_id.in_([q.id for q in pool])).all())
+    wrong = {str(q) for q, ok in logs if not ok}
+    seen = {str(q) for q, _ in logs}
+    out = []
+    for q in pool:
+        k = str(q.id)
+        out.append(4.0 if k in wrong else 1.0 if k in seen else 2.0)
+    return out
+
+
+def _adaptive_sample(db: Session, user: Principal, pool: list[QuestionBankItem], k: int, rnd: random.Random) -> list[QuestionBankItem]:
+    """Lấy k câu không lặp theo trọng số (ưu tiên câu hay sai). Không có lịch sử thì giống lấy ngẫu nhiên."""
+    items, weights = list(pool), _question_weights(db, user, pool)
+    chosen: list[QuestionBankItem] = []
+    for _ in range(k):
+        pick = rnd.choices(range(len(items)), weights=weights, k=1)[0]
+        chosen.append(items.pop(pick))
+        weights.pop(pick)
+    return chosen
+
+
 def start_quiz(db: Session, user: Principal, item: LessonItem) -> dict:
     if item.type != "quiz":
         raise AppError(400, "NOT_QUIZ", "Mục này không phải bài kiểm tra.")
@@ -355,14 +425,24 @@ def start_quiz(db: Session, user: Principal, item: LessonItem) -> dict:
     if not pool:
         raise AppError(409, "QUIZ_EMPTY", "Giáo viên chưa duyệt câu hỏi nào cho bài này.")
     count = int((item.meta or {}).get("count", 5))
-    rnd = random.Random(f"{user.user_id}:{item.id}:{utcnow().date()}")
-    chosen = rnd.sample(pool, min(count, len(pool)))
+    rnd = random.Random(f"{user.user_id}:{item.id}:{utcnow().timestamp()}")
+    chosen = _adaptive_sample(db, user, pool, min(count, len(pool)), rnd)
+    limit = (item.meta or {}).get("time_limit_minutes")
+    now = utcnow()
+    deadline = now + timedelta(minutes=limit) if limit else None
     p = _get_progress(db, user, item)
-    p.meta = {"question_ids": [str(q.id) for q in chosen], "answers": {}, "started_at": utcnow().isoformat()}
+    p.meta = {"question_ids": [str(q.id) for q in chosen], "answers": {}, "started_at": now.isoformat(),
+              "deadline_at": deadline.isoformat() if deadline else None}
     db.commit()
     return {"item_id": str(item.id), "pass_ratio": (item.meta or {}).get("pass_ratio", 0.8),
+            "time_limit_minutes": limit, "deadline_at": deadline.isoformat() if deadline else None,
             "questions": [{"question_id": str(q.id), "type": q.payload.get("type"), "question": q.payload.get("question"),
                            "options": q.payload.get("options"), "difficulty": q.payload.get("difficulty")} for q in chosen]}
+
+
+def _deadline_passed(meta: dict) -> bool:
+    dl = meta.get("deadline_at")
+    return bool(dl) and utcnow() > as_aware(datetime.fromisoformat(dl))
 
 
 def answer_quiz(db: Session, user: Principal, item: LessonItem, question_id: str, selected_index: int | None,
@@ -371,11 +451,15 @@ def answer_quiz(db: Session, user: Principal, item: LessonItem, question_id: str
     meta = dict(p.meta or {})
     if question_id not in (meta.get("question_ids") or []):
         raise AppError(409, "QUIZ_NOT_STARTED", "Câu hỏi không thuộc lượt làm bài hiện tại. Hãy bắt đầu lại.")
+    if _deadline_passed(meta):
+        raise AppError(409, "QUIZ_TIME_UP", "Đã hết giờ làm bài. Bài sẽ được chấm theo các câu đã trả lời.")
     q = _bank_as_question(db.get(QuestionBankItem, question_id))
     result = grading.grade(q, answer, selected_index, user_id=user.user_id)
     answers = dict(meta.get("answers") or {})
     if question_id not in answers:  # chỉ tính lần trả lời đầu tiên
         answers[question_id] = bool(result["is_correct"])
+        db.add(QuizAnswerLog(student_id=user.user_id, item_id=item.id, question_id=parse_uuid(question_id, "question_id"),
+                             correct=bool(result["is_correct"])))
     meta["answers"] = answers
     p.meta = meta
     db.commit()
@@ -400,7 +484,8 @@ def finish_quiz(db: Session, user: Principal, item: LessonItem) -> dict:
     pass_ratio = float((item.meta or {}).get("pass_ratio", 0.8))
     passed = ratio >= pass_ratio
     p.score = max(p.score or 0, ratio)
-    p.meta = {**meta, "finished_at": utcnow().isoformat()}  # kết thúc lượt làm: Tutor hết chế độ gợi ý
+    time_up = _deadline_passed(meta)
+    p.meta = {**meta, "finished_at": utcnow().isoformat(), "time_up": time_up}  # kết thúc lượt làm: Tutor hết chế độ gợi ý
     xp = 0
     if passed:
         first = p.status != "completed"
@@ -411,7 +496,8 @@ def finish_quiz(db: Session, user: Principal, item: LessonItem) -> dict:
     else:
         db.commit()
     return {"item_id": str(item.id), "correct": correct, "total": len(qids), "score": round(ratio, 4),
-            "pass_ratio": pass_ratio, "passed": passed, "xp_awarded": xp}
+            "pass_ratio": pass_ratio, "passed": passed, "xp_awarded": xp, "time_up": time_up,
+            "unanswered": len(qids) - len(answers)}
 
 
 def _bank_as_question(bank: QuestionBankItem) -> SimpleNamespace:
@@ -445,3 +531,54 @@ def active_quiz_questions(db: Session, user: Principal) -> list[SimpleNamespace]
     if not pending:
         return []
     return [_bank_as_question(b) for b in db.query(QuestionBankItem).filter(QuestionBankItem.id.in_(pending)).all()]
+
+
+# ----------------------------------------------------------------------------
+# Giáo viên: lịch sử làm bài kiểm tra của học viên trong lớp
+# ----------------------------------------------------------------------------
+
+def class_submissions(db: Session, user: Principal, class_id: str) -> dict:
+    """Mỗi học viên × mỗi bài kiểm tra của lớp: đã nộp / đang làm / chưa làm, kèm kết quả lượt làm gần nhất."""
+    from app.models.accounts import User
+    if not user.is_teacher or not user.can_access_class(class_id):
+        raise AppError(403, "FORBIDDEN", "Chỉ giáo viên của lớp mới xem được bài nộp.")
+    items = (db.query(LessonItem).join(Lesson, LessonItem.lesson_id == Lesson.id)
+             .join(Chapter, Lesson.chapter_id == Chapter.id).join(Course, Chapter.course_id == Course.id)
+             .filter(LessonItem.type == "quiz",
+                     or_(Course.class_id == class_id,
+                         Course.id.in_(select(CourseClass.course_id).where(CourseClass.class_id == class_id))))
+             .order_by(Course.title, Lesson.position, LessonItem.position).all())
+    students = (db.query(User).filter(User.role == "student", User.class_ids.contains([class_id]))
+                .order_by(User.user_id).all())
+    progress: dict[tuple[str, str], ItemProgress] = {}
+    if items and students:
+        for p in db.query(ItemProgress).filter(ItemProgress.item_id.in_([i.id for i in items]),
+                                               ItemProgress.student_id.in_([s.user_id for s in students])).all():
+            progress[(p.student_id, str(p.item_id))] = p
+    rows = []
+    for s in students:
+        for it in items:
+            p = progress.get((s.user_id, str(it.id)))
+            meta = (p.meta or {}) if p else {}
+            qids = meta.get("question_ids") or []
+            answers = meta.get("answers") or {}
+            correct = sum(1 for q in qids if answers.get(q))
+            total = len(qids)
+            pass_ratio = float((it.meta or {}).get("pass_ratio", 0.8))
+            if not meta.get("started_at"):
+                status, passed = "not_started", None
+            elif meta.get("finished_at"):
+                passed = total > 0 and correct / total >= pass_ratio
+                status = "passed" if passed else "failed"
+            else:
+                status, passed = "in_progress", None
+            rows.append({
+                "student_id": s.user_id, "student_name": s.display_name or s.user_id,
+                "item_id": str(it.id), "quiz_title": it.title, "lesson_code": it.lesson.code,
+                "course_title": it.lesson.chapter.course.title, "status": status, "passed": passed,
+                "correct": correct if total else None, "total": total or None,
+                "score": round(correct / total, 4) if total else None,
+                "time_up": bool(meta.get("time_up")), "started_at": meta.get("started_at"),
+                "finished_at": meta.get("finished_at"),
+            })
+    return {"class_id": class_id, "quizzes": len(items), "students": len(students), "rows": rows}

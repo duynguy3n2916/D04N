@@ -12,6 +12,17 @@ export const TYPE_ICON: Record<string, IconName> = { video: 'play', slide: 'slid
 export const TYPE_LABEL: Record<string, string> = { video: 'Video', slide: 'Slide', reading: 'Bài đọc', quiz: 'Kiểm tra' };
 const OFFSETS = [0, -90, -130, -70, 30, 90, 50, -20];
 
+/** Nhắc học trong giao diện: sắp mất chuỗi ngày học hoặc chưa đạt mục tiêu hôm nay (chưa gửi email). */
+function StudyReminder({ stats }: { stats: Stats }) {
+  const left = Math.max(0, stats.daily_goal_xp - stats.today_xp);
+  if (left === 0) return null;
+  let text: string;
+  if (!stats.studied_today && stats.streak_days > 0) text = `Chuỗi ${stats.streak_days} ngày sẽ mất nếu hôm nay bạn chưa học. Hoàn thành một mục để giữ chuỗi.`;
+  else if (!stats.studied_today) text = 'Hôm nay bạn chưa học. Hoàn thành một mục để bắt đầu chuỗi ngày mới.';
+  else text = `Còn ${left} XP nữa để đạt mục tiêu hôm nay.`;
+  return <div className="notice" role="status" style={{ fontWeight: 700 }}>{text}</div>;
+}
+
 export function StatsAside({ stats, compact }: { stats: Stats | null; compact?: boolean }) {
   const { data: board } = useAsync((s) => api<{ scope: string; rows: { rank: number; name: string; xp: number; me: boolean }[] }>('/ai/learn/leaderboard', { signal: s }), []);
   return (
@@ -31,6 +42,7 @@ export function StatsAside({ stats, compact }: { stats: Stats | null; compact?: 
           </div>
         </div>
       </section>
+      {stats && <StudyReminder stats={stats} />}
       {!compact && (
         <section className="card col">
           <h2>Bảng xếp hạng tuần</h2>
@@ -145,6 +157,7 @@ export function Learn({ path, courseId }: { path: string; courseId?: string }) {
         )}
         {(courses.loading || tree.loading) && !tree.data && <Spinner />}
         {courses.error && <ErrorBox message={courses.error} onRetry={courses.reload} />}
+        {tree.error && <ErrorBox message={tree.error} onRetry={tree.reload} />}
         {courses.data && !courses.data.length && (
           <Empty title="Chưa có khóa học nào">
             {user?.role === 'student' ? 'Giáo viên chưa mở khóa học cho lớp của bạn.' : <Link to="/teach/courses">Tạo khóa học đầu tiên</Link>}

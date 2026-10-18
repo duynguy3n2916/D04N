@@ -2,12 +2,12 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 're
 import { Icon } from '../../components/Icon';
 import { Mascot } from '../../components/Mascot';
 import { Button, celebrate, ErrorBox, Progress } from '../../components/ui';
-import { api, errorText } from '../../lib/api';
+import { api, ApiError, errorText } from '../../lib/api';
 import type { ItemProps } from '../Lesson';
 
 interface QuizQ { question_id: string; type: string; question: string; options: string[] | null; difficulty?: string }
 interface QAnswer { is_correct: boolean | null; verdict?: string; correct_answer: string; correct_index?: number | null; explanation?: string | null; feedback: string; xp_awarded?: number }
-interface QFinish { correct: number; total: number; score: number; pass_ratio: number; passed: boolean; xp_awarded: number }
+interface QFinish { correct: number; total: number; score: number; pass_ratio: number; passed: boolean; xp_awarded: number; time_up?: boolean; unanswered?: number }
 
 /** Bài kiểm tra cuối bài: từng câu một, chọn → Kiểm tra → phản hồi → Tiếp tục → màn hình kết quả. */
 export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: ItemProps) {
@@ -22,8 +22,18 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
   const [final, setFinal] = useState<QFinish | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [deadline, setDeadline] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const boxRef = useRef<HTMLDivElement>(null);
   const q = qs[i];
+  const remaining = deadline ? Math.max(0, Math.floor((deadline - now) / 1000)) : null;
+
+  // đồng hồ đếm ngược của bài kiểm tra có giờ (thời hạn do server quyết định, không tin đồng hồ máy)
+  useEffect(() => {
+    if (phase !== 'run' || !deadline) return;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [phase, deadline]);
 
   useEffect(() => {
     // Khi đang làm bài, Tutor tự chuyển sang chế độ gợi ý (backend nhận biết qua lesson).
@@ -36,13 +46,30 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
   const start = async () => {
     setBusy(true); setError(null);
     try {
-      const r = await api<{ questions: QuizQ[] }>(`/ai/learn/items/${item.item_id}/quiz/start`, { method: 'POST' });
+      const r = await api<{ questions: QuizQ[]; deadline_at: string | null }>(`/ai/learn/items/${item.item_id}/quiz/start`, { method: 'POST' });
       setQs(r.questions); setI(0); setSelected(null); setText(''); setAnswer(null); setXp(0); setFinal(null);
+      setDeadline(r.deadline_at ? new Date(r.deadline_at).getTime() : null); setNow(Date.now());
       setPhase('run');
     } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
   };
 
   const hasOptions = !!q?.options?.length;
+  const finish = useCallback(async () => {
+    setBusy(true); setError(null);
+    try {
+      const r = await api<QFinish>(`/ai/learn/items/${item.item_id}/quiz/finish`, { method: 'POST' });
+      setFinal(r); setPhase('done'); setDeadline(null);
+      if (r.passed) celebrate();
+      onCompleted((r.xp_awarded || 0) + xp || undefined);
+    } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+  }, [item.item_id, onCompleted, xp]);
+
+  // hết giờ: nộp ngay, câu chưa trả lời tính là sai
+  useEffect(() => {
+    if (phase === 'run' && remaining === 0) finish();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [remaining, phase]);
+
   const check = useCallback(async () => {
     if (!q || busy || answer) return;
     if (hasOptions ? selected === null : !text.trim()) return;
@@ -52,19 +79,16 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
         question_id: q.question_id, selected_index: hasOptions ? selected : null, answer: hasOptions ? null : text.trim() } });
       setAnswer(r);
       if (r.xp_awarded) setXp((n) => n + (r.xp_awarded || 0));
-    } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
-  }, [q, busy, answer, hasOptions, selected, text, item.item_id]);
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'QUIZ_TIME_UP') { setBusy(false); finish(); return; }
+      setError(errorText(e));
+    } finally { setBusy(false); }
+  }, [q, busy, answer, hasOptions, selected, text, item.item_id, finish]);
 
   const next = useCallback(async () => {
     if (i < qs.length - 1) { setI(i + 1); setSelected(null); setText(''); setAnswer(null); return; }
-    setBusy(true); setError(null);
-    try {
-      const r = await api<QFinish>(`/ai/learn/items/${item.item_id}/quiz/finish`, { method: 'POST' });
-      setFinal(r); setPhase('done');
-      if (r.passed) celebrate();
-      onCompleted((r.xp_awarded || 0) + xp || undefined);
-    } catch (e) { setError(errorText(e)); } finally { setBusy(false); }
-  }, [i, qs.length, item.item_id, onCompleted, xp]);
+    finish();
+  }, [i, qs.length, finish]);
 
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).tagName === 'TEXTAREA') return;
@@ -84,6 +108,7 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
           <p className="muted" style={{ fontWeight: 700, maxWidth: 520 }}>
             {Math.min(quiz.count, quiz.available || quiz.count)} câu hỏi · cần đúng {Math.round(quiz.pass_ratio * 100)}% để qua bài.
             Trong lúc làm, Tutor chỉ đưa gợi ý chứ không nói đáp án.
+            {quiz.time_limit_minutes ? <> Bài có giới hạn <b>{quiz.time_limit_minutes} phút</b>; hết giờ bài sẽ tự nộp.</> : null}
           </p>
           <div className="result-stats">
             <div className="result-stat"><strong>{quiz.available}</strong><span className="muted small">câu trong ngân hàng</span></div>
@@ -108,6 +133,7 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
           <h2>{final.passed ? 'Xuất sắc, bạn đã qua bài!' : 'Chưa đạt lần này'}</h2>
           <p className="muted" style={{ fontWeight: 700 }}>
             {final.passed ? 'Bài tiếp theo đã được mở khóa.' : `Cần đúng ít nhất ${Math.round(final.pass_ratio * 100)}%. Ôn lại rồi thử lần nữa nhé.`}
+            {final.time_up ? ` Hết giờ: ${final.unanswered || 0} câu chưa trả lời được tính là sai.` : ''}
           </p>
           <div className="result-stats">
             <div className="result-stat" style={{ borderColor: 'var(--yellow)' }}><strong style={{ color: 'var(--yellow-text)' }}>+{xp + final.xp_awarded}</strong><span className="muted small">XP nhận được</span></div>
@@ -131,6 +157,11 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
     <div className="quiz-page" tabIndex={-1} ref={boxRef} onKeyDown={onKey} style={{ outline: 'none', flex: 1 }}>
       <div className="row" style={{ gap: 14 }}>
         <div style={{ flex: 1 }}><Progress value={(i + (answer ? 1 : 0)) / qs.length} label="Tiến độ bài kiểm tra" height={16} /></div>
+        {remaining !== null && (
+          <span style={{ fontWeight: 900, color: remaining <= 60 ? 'var(--red)' : undefined }} aria-live="off" title="Thời gian còn lại">
+            ⏱ {String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}
+          </span>
+        )}
         <span style={{ fontWeight: 900 }}>{i + 1}/{qs.length}</span>
       </div>
       <span className="qkicker"><Icon name="star" size={18} />Câu {i + 1}{q.difficulty ? ` · ${q.difficulty === 'easy' ? 'Dễ' : q.difficulty === 'hard' ? 'Khó' : 'Vừa'}` : ''}</span>

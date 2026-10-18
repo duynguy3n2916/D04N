@@ -82,6 +82,49 @@ def complete(item_id: str, user: Principal = Depends(get_current_user), db: Sess
     return learning.complete_item(db, user, learning.get_item(db, user, parse_uuid(item_id, "item_id")))
 
 
+@router.get("/classes/{class_id}/submissions")
+def class_submissions(class_id: str, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
+    """Giáo viên xem bài kiểm tra từng học viên trong lớp đã làm, chưa làm, đạt hay chưa."""
+    return learning.class_submissions(db, user, clean_id(class_id))
+
+
+@router.get("/learn/flashcards/{lesson_code}/summary")
+def flashcards_summary(lesson_code: str, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.services import flashcards
+    return flashcards.summary(db, user, clean_id(lesson_code))
+
+
+@router.get("/learn/flashcards/{lesson_code}/due")
+def flashcards_due(lesson_code: str, limit: int = 20, user: Principal = Depends(get_current_user),
+                   db: Session = Depends(get_db)):
+    """Các thẻ đến hạn ôn (thẻ mới xếp sau thẻ đã đến hạn lâu nhất)."""
+    from app.services import flashcards
+    return flashcards.due_cards(db, user, clean_id(lesson_code), limit=max(1, min(50, limit)))
+
+
+class FlashcardReviewIn(BaseModel):
+    rating: str = Field(pattern="^(again|hard|good|easy)$")
+
+
+@router.post("/learn/flashcards/{card_id}/review")
+def flashcards_review(card_id: str, req: FlashcardReviewIn, user: Principal = Depends(get_current_user),
+                      db: Session = Depends(get_db)):
+    from app.services import flashcards
+    return flashcards.review(db, user, parse_uuid(card_id, "card_id"), req.rating)
+
+
+@router.get("/learn/progress-report")
+def progress_report(user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Báo cáo tiến độ của chính học sinh, tải về dạng DOCX."""
+    from fastapi.responses import Response
+    from urllib.parse import quote
+    from app.services import progress_report as pr
+    content = pr.to_docx(pr.collect(db, user))
+    name = quote(f"bao-cao-tien-do-{user.user_id}.docx")
+    return Response(content, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    headers={"Content-Disposition": f"attachment; filename=\"bao-cao-tien-do.docx\"; filename*=UTF-8''{name}"})
+
+
 @router.post("/learn/items/{item_id}/quiz/start")
 def quiz_start(item_id: str, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
     return learning.start_quiz(db, user, learning.get_item(db, user, parse_uuid(item_id, "item_id")))
@@ -130,7 +173,7 @@ def _course(db, user, cid) -> Course:
 
 def _chapter(db, user, cid) -> Chapter:
     ch = db.get(Chapter, parse_uuid(cid, "chapter_id"))
-    if not ch or not user.can_access_class(ch.course.class_id):
+    if not ch or not learning.can_see_course(db, user, ch.course):
         raise AppError(404, "NOT_FOUND", "Không tìm thấy chương.")
     return ch
 
@@ -138,7 +181,28 @@ def _chapter(db, user, cid) -> Chapter:
 def _tree(db: Session, course) -> dict:
     """Cây khóa học sau khi sửa. Session dùng expire_on_commit=False nên phải làm mới các quan hệ đã nạp."""
     db.expire_all()
-    return course_admin.admin_tree(course)
+    out = course_admin.admin_tree(course)
+    out["class_ids"] = learning.course_class_ids(db, course)
+    return out
+
+
+class CourseClassIn(BaseModel):
+    class_id: str = Field(min_length=1, max_length=64)
+
+
+@router.post("/courses/{course_id}/classes", status_code=201)
+def add_course_class(course_id: str, req: CourseClassIn, user: Principal = Depends(require_teacher),
+                     db: Session = Depends(get_db)):
+    """Cho một lớp (mà giáo viên phụ trách) học khóa này."""
+    course = learning.set_course_class(db, user, parse_uuid(course_id, "course_id"), clean_id(req.class_id), add=True)
+    return _tree(db, course)
+
+
+@router.delete("/courses/{course_id}/classes/{class_id}")
+def remove_course_class(course_id: str, class_id: str, user: Principal = Depends(require_teacher),
+                        db: Session = Depends(get_db)):
+    course = learning.set_course_class(db, user, parse_uuid(course_id, "course_id"), clean_id(class_id), add=False)
+    return _tree(db, course)
 
 
 class CourseIn(BaseModel):
@@ -156,6 +220,7 @@ def list_courses_admin(user: Principal = Depends(require_teacher), db: Session =
         n_items = (db.query(func.count(LessonItem.id)).join(Lesson).join(Chapter)
                    .filter(Chapter.course_id == c.id).scalar())
         out.append({"course_id": str(c.id), "code": c.code, "title": c.title, "class_id": c.class_id,
+                    "class_ids": learning.course_class_ids(db, c),
                     "cover_url": learning.cover_url(c), "chapters": len(c.chapters), "items": int(n_items or 0)})
     return out
 
@@ -317,6 +382,7 @@ class ItemIn(BaseModel):
     notes: str | None = None
     count: int | None = None
     pass_ratio: float | None = None
+    time_limit_minutes: int | None = None  # bài kiểm tra có giờ: 0 = không giới hạn
 
 
 @router.post("/lessons/{lesson_id}/items")

@@ -177,6 +177,9 @@ def _apply_item_fields(db: Session, item: LessonItem, data: dict) -> None:
             meta["count"] = max(1, min(30, int(data["count"])))
         if data.get("pass_ratio") is not None:
             meta["pass_ratio"] = max(0.1, min(1.0, float(data["pass_ratio"])))
+        if "time_limit_minutes" in data:  # 0 hoặc None = không giới hạn thời gian (kiểu đề thi)
+            tl = data.get("time_limit_minutes") or 0
+            meta["time_limit_minutes"] = max(1, min(240, int(tl))) if tl else None
         item.meta = meta
 
 

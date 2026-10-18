@@ -6,7 +6,7 @@ Course -> Chapter -> Lesson -> LessonItem (video | slide | reading | quiz)
 """
 import uuid
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
@@ -129,3 +129,72 @@ class UserProfile(Base):
     class_ids = Column(JSONB, nullable=True)
     daily_goal_xp = Column(Integer, nullable=False, default=50)
     last_seen_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class QuizAnswerLog(Base):
+    """Lịch sử trả lời từng câu của học sinh (qua mọi lượt làm bài), dùng để ưu tiên câu hay sai khi luyện tập."""
+    __tablename__ = "quiz_answer_logs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_id = Column(String(128), nullable=False, index=True)
+    item_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    question_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    correct = Column(Boolean, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+class FlashcardReview(Base):
+    """Lịch ôn của học sinh với một thẻ (câu trong ngân hàng đã duyệt), theo thuật toán SM-2 đơn giản."""
+    __tablename__ = "flashcard_reviews"
+    __table_args__ = (UniqueConstraint("student_id", "card_id", name="ux_flashcard_student_card"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    student_id = Column(String(128), nullable=False, index=True)
+    card_id = Column(UUID(as_uuid=True), nullable=False, index=True)
+    lesson_code = Column(String(128), nullable=False, index=True)
+    ease = Column(Float, nullable=False, default=2.5)
+    interval_days = Column(Float, nullable=False, default=0.0)
+    reps = Column(Integer, nullable=False, default=0)
+    lapses = Column(Integer, nullable=False, default=0)
+    due_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    last_reviewed_at = Column(DateTime(timezone=True), nullable=True)
+
+
+
+class ForumThread(Base):
+    """Bài đăng trong diễn đàn của một lớp. Có thể gắn với một bài học."""
+    __tablename__ = "forum_threads"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    class_id = Column(String(128), nullable=False, index=True)
+    lesson_code = Column(String(128), nullable=True, index=True)
+    author_id = Column(String(128), nullable=False)
+    title = Column(String(200), nullable=False)
+    body = Column(Text, nullable=False)
+    pinned = Column(Boolean, nullable=False, default=False)
+    locked = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class ForumReply(Base):
+    __tablename__ = "forum_replies"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    thread_id = Column(UUID(as_uuid=True), ForeignKey("forum_threads.id", ondelete="CASCADE"), nullable=False, index=True)
+    author_id = Column(String(128), nullable=False)
+    author_is_teacher = Column(Boolean, nullable=False, default=False)
+    body = Column(Text, nullable=False)
+    accepted = Column(Boolean, nullable=False, default=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+
+
+class CourseClass(Base):
+    """Một khóa học có thể dùng cho nhiều lớp. Lớp chính vẫn là Course.class_id (tương thích dữ liệu cũ)."""
+    __tablename__ = "course_class_links"
+    __table_args__ = (UniqueConstraint("course_id", "class_id", name="ux_course_class"),)
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    course_id = Column(UUID(as_uuid=True), ForeignKey("courses.id", ondelete="CASCADE"), nullable=False, index=True)
+    class_id = Column(String(128), nullable=False, index=True)

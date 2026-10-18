@@ -47,7 +47,8 @@ def build_teacher_context(db: Session, user: Principal, *, lesson_id=None, cours
 
 def teaching_sources(db: Session, user: Principal, lesson_id: str) -> list[dict]:
     lesson = db.query(Lesson).filter(Lesson.code == lesson_id).first()
-    if lesson and not user.can_access_class(lesson.chapter.course.class_id):
+    from app.services import learning  # import muộn: tránh vòng import
+    if lesson and not learning.can_see_course(db, user, lesson.chapter.course):
         raise AppError(404, "NOT_FOUND", "Không tìm thấy bài học.")
     scope = RetrievalScope.for_user(user, lesson_id=lesson_id)
     docs = db.execute(_apply_scope(select(AIDocument), scope).order_by(AIDocument.created_at)).scalars().all()

@@ -101,6 +101,7 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
           <span className="stat" style={{ fontSize: 16 }}><Flame size={22} dim={!stats?.studied_today} /><CountUp value={stats?.streak_days ?? 0} /></span>
           <span className="stat" style={{ fontSize: 16 }}><Gem size={20} /><CountUp value={stats?.total_xp ?? 0} /></span>
         </div>
+        <Button variant="ghost" icon="refresh" disabled={!lesson.data} onClick={() => navigate(`/flashcards/${encodeURIComponent(lesson.data?.code || '')}`)}>Ôn thẻ</Button>
         <Button variant={tutorOpen ? 'soft' : 'blue'} icon="sparkle" aria-pressed={tutorOpen} onClick={() => setTutorOpen((v) => !v)}>Hỏi Tutor AI</Button>
       </header>
 

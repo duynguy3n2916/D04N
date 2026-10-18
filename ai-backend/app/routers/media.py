@@ -32,7 +32,8 @@ def _target_lesson(db: Session, user: Principal, target_lesson_id: str | None) -
         return None
     lesson = (db.query(Lesson).filter(Lesson.id == parse_uuid(target_lesson_id, "target_lesson_id"))
               .with_for_update().first())
-    if not lesson or not user.can_access_class(lesson.chapter.course.class_id):
+    from app.services import learning
+    if not lesson or not learning.can_see_course(db, user, lesson.chapter.course):
         raise AppError(404, "NOT_FOUND", "Không tìm thấy bài học để gắn video.")
     return lesson
 
