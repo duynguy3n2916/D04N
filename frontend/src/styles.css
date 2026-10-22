@@ -714,17 +714,3 @@ html.reduce-fx .grad-word, html.reduce-fx .course-banner { animation: none !impo
 /* số chưa đọc trên thanh menu */
 .nav-badge { margin-left: auto; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 999px; background: var(--red, #e5484d); color: #fff; font-size: 12px; font-weight: 900; display: inline-grid; place-items: center; line-height: 1; }
 
-/* sơ đồ tư duy dạng cây: đường nối dọc + nhánh ngang */
-.mindmap { overflow-x: auto; }
-.mm-root { display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 16px; background: var(--green, #58cc02); color: #fff; font-size: 18px; }
-.mm-children { list-style: none; margin: 0; padding-left: 26px; position: relative; }
-.mm-children::before { content: ''; position: absolute; left: 10px; top: 0; bottom: 18px; border-left: 2px solid var(--line, #e5e5e5); }
-.mm-top { margin-top: 10px; }
-.mm-node { position: relative; margin: 8px 0; }
-.mm-node::before { content: ''; position: absolute; left: -16px; top: 22px; width: 16px; border-top: 2px solid var(--line, #e5e5e5); }
-.mm-card { display: flex; gap: 8px; align-items: flex-start; padding: 10px 12px; border: 2px solid var(--line, #e5e5e5); border-radius: 14px; background: var(--card, #fff); }
-.mm-d1 > .mm-card { border-color: var(--blue-line, #84d8ff); }
-.mm-d2 > .mm-card { border-color: var(--line, #e5e5e5); }
-.mm-title { font-size: 15px; overflow-wrap: anywhere; }
-.mm-toggle { border: none; background: none; padding: 2px; cursor: pointer; color: inherit; flex: none; }
-@media (max-width: 600px) { .mm-children { padding-left: 16px; } .mm-children::before { left: 4px; } .mm-node::before { left: -12px; width: 12px; } }

@@ -162,31 +162,6 @@ def update_flashcard_card(card_id: str, req: CardUpdateIn, user: Principal = Dep
     return flashcards.update_ai_card(db, user, parse_uuid(card_id, "card_id"), req.front, req.back, req.status)
 
 
-@router.post("/lessons/{lesson_code}/mindmap/generate")
-def generate_mindmap(lesson_code: str, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
-    """AI tổng hợp học liệu của bài thành sơ đồ tư duy (bản nháp mới, giáo viên duyệt)."""
-    from app.services import mindmap
-    return mindmap.generate(db, user, clean_id(lesson_code))
-
-
-@router.get("/learn/lessons/{lesson_code}/mindmap")
-def get_mindmap(lesson_code: str, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.services import mindmap
-    return mindmap.get_for_lesson(db, user, clean_id(lesson_code))
-
-
-class MindmapUpdateIn(BaseModel):
-    tree: dict | None = None
-    status: str | None = Field(default=None, pattern="^(draft|approved)$")
-
-
-@router.patch("/mindmaps/{mindmap_id}")
-def update_mindmap(mindmap_id: str, req: MindmapUpdateIn, user: Principal = Depends(require_teacher),
-                   db: Session = Depends(get_db)):
-    from app.services import mindmap
-    return mindmap.update(db, user, parse_uuid(mindmap_id, "mindmap_id"), req.tree, req.status)
-
-
 @router.get("/learn/progress-report")
 def progress_report(user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
     """Báo cáo tiến độ của chính học sinh, tải về dạng DOCX."""

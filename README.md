@@ -23,7 +23,6 @@ thích đáp án; giáo viên dùng AI để soạn câu hỏi và quản lý l�
   câu hỏi trong video hoặc bài kiểm tra, Tutor chỉ gợi ý, không nói đáp án.
 - **Bài kiểm tra** cuối bài từ ngân hàng câu hỏi đã duyệt; có thể giới hạn thời gian (đếm ngược, tự nộp) và lịch mở / đóng.
   Câu hay làm sai được ưu tiên xuất hiện lại ở lượt sau (luyện tập thích ứng).
-- **Sơ đồ tư duy** của bài: cây kiến thức do AI tổng hợp, giáo viên duyệt; mỗi ý có nút mở đúng đoạn video, trang slide hoặc bài đọc.
 - **Ôn thẻ ghi nhớ** theo lịch lặp lại ngắt quãng (SM-2): thẻ từ câu hỏi đã duyệt và thẻ AI soạn đã được giáo viên duyệt.
 - **Diễn đàn lớp:** đặt câu hỏi, trả lời, đánh dấu câu đúng, báo cáo nội dung không phù hợp; số bài / trả lời mới hiện trên menu.
 - **Báo cáo tiến độ** tải về dạng DOCX; nhắc học khi sắp mất chuỗi ngày học.
@@ -41,7 +40,7 @@ thích đáp án; giáo viên dùng AI để soạn câu hỏi và quản lý l�
 - **Tài khoản & lớp học:** tạo lớp có mã vào lớp, thêm học sinh hoặc nhập CSV, cấp lại mật khẩu, khóa tài khoản, phân quyền.
   Một khóa học có thể gắn cho nhiều lớp.
 - **Bài nộp:** xem từng học viên đã làm / chưa làm / đạt bài kiểm tra nào, tải về Excel (CSV).
-- **AI theo bài:** tạo sơ đồ tư duy và thẻ ghi nhớ từ học liệu (đều lưu nháp, giáo viên sửa và duyệt trước khi học sinh thấy).
+- **AI soạn thẻ ghi nhớ** từ học liệu của bài (lưu nháp, giáo viên sửa và duyệt trước khi học sinh ôn).
 - **Kiểm duyệt diễn đàn:** ghim, khóa, ẩn nội dung, xử lý báo cáo của học sinh; AI soạn nháp câu trả lời từ học liệu.
 - **Đánh giá Tutor** định lượng (Hit@K, MRR, độ bám nguồn, từ chối đúng, độ trễ) trên bộ 87 câu, có **baseline đối chứng**
   (không RAG / không lọc bài / chỉ vector) và so sánh các lần chạy; theo dõi chi phí / độ trễ các lượt gọi LLM.

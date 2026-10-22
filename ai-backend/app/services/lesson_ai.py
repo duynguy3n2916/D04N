@@ -1,4 +1,4 @@
-"""Dùng chung cho các tác vụ AI theo bài học (sơ đồ tư duy, flashcard): lấy học liệu của bài và giải nhãn nguồn."""
+"""Dùng chung cho các tác vụ AI theo bài học (thẻ ghi nhớ): lấy học liệu của bài và giải nhãn nguồn."""
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -31,7 +31,7 @@ def lesson_context(db: Session, lesson: Lesson, max_chars: int = 12000, max_chun
     if not rows:
         raise AppError(400, "NO_CONTEXT", "Bài này chưa có học liệu đã nạp (bài đọc, slide hoặc phụ đề video).")
     # Xen kẽ giữa các tài liệu (bài đọc, slide, video) để tài liệu nạp trước không chiếm hết giới hạn ký tự:
-    # nhờ vậy sơ đồ / thẻ có nguồn từ mọi loại học liệu của bài.
+    # nhờ vậy thẻ có nguồn từ mọi loại học liệu của bài.
     by_doc: dict[str, list[dict]] = {}
     for r in rows:
         by_doc.setdefault(r["document_id"], []).append(r)

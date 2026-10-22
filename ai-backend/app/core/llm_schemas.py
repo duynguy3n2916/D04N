@@ -103,33 +103,6 @@ class FlashcardsOutput(BaseModel):
     cards: list[FlashcardItem] = Field(min_length=1, max_length=30)
 
 
-class MindmapNode(BaseModel):
-    title: str = Field(min_length=1, max_length=120)
-    note: str = Field(default="", max_length=300)
-    sources: list[str] = Field(default_factory=list)
-    children: list["MindmapNode"] = Field(default_factory=list, max_length=12)
-
-    @field_validator("sources", mode="before")
-    @classmethod
-    def _norm_sources(cls, v):
-        if not v:
-            return []
-        return [v] if isinstance(v, str) else [str(x) for x in v]
-
-
-class MindmapOutput(BaseModel):
-    title: str = Field(min_length=1, max_length=120)
-    children: list[MindmapNode] = Field(min_length=1, max_length=12)
-
-    @model_validator(mode="after")
-    def _depth(self):
-        def depth(n: MindmapNode) -> int:
-            return 1 + max((depth(c) for c in n.children), default=0)
-        if max(depth(c) for c in self.children) > 3:
-            raise ValueError("Sơ đồ tối đa 3 tầng dưới chủ đề gốc.")
-        return self
-
-
 def schema_hint(model: type[BaseModel]) -> str:
     """Ví dụ JSON ngắn gọn gửi kèm prompt (dễ đọc cho model hơn JSON Schema đầy đủ)."""
     examples = {
@@ -146,8 +119,6 @@ def schema_hint(model: type[BaseModel]) -> str:
         "GradeOutput": '{"verdict": "correct | partial | incorrect", "feedback": "..."}',
         "JudgeOutput": '{"groundedness": 0.9, "correctness": 0.8, "context_relevance": 0.7, "reason": "..."}',
         "FlashcardsOutput": '{"cards": [{"front": "Câu hỏi / khái niệm ngắn", "back": "Câu trả lời ngắn gọn", "sources": ["S1"]}]}',
-        "MindmapOutput": '{"title": "Chủ đề bài học", "children": [{"title": "Ý chính", "note": "Tóm tắt 1 câu", '
-                         '"sources": ["S1"], "children": [{"title": "Ý con", "note": "...", "sources": ["S2"], "children": []}]}]}',
     }
     if model is AgentQuestionItem:
         return "Trả về DUY NHẤT một JSON hợp lệ theo mẫu, không kèm markdown:\n" + examples["QuestionItem"]

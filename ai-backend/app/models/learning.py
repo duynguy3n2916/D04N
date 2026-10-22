@@ -244,18 +244,3 @@ class FlashcardCard(Base):
     status = Column(String(16), nullable=False, default="draft", index=True)  # draft | approved | rejected
     created_by = Column(String(128), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-
-
-class LessonMindmap(Base):
-    """Sơ đồ tư duy của một bài (cây JSON), có phiên bản; học sinh chỉ thấy bản đã duyệt mới nhất."""
-    __tablename__ = "lesson_mindmaps"
-
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    lesson_code = Column(String(128), nullable=False, index=True)
-    version = Column(Integer, nullable=False, default=1)
-    status = Column(String(16), nullable=False, default="draft", index=True)  # draft | approved | archived
-    tree = Column(JSONB, nullable=False)
-    created_by = Column(String(128), nullable=True)
-    approved_by = Column(String(128), nullable=True)
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    approved_at = Column(DateTime(timezone=True), nullable=True)

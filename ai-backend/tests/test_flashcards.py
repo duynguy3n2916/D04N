@@ -76,3 +76,35 @@ def test_flashcard_access_and_due_order(client, teacher, fake_llm):
     finally:
         db.close()
     assert client.get("/ai/learn/flashcards/lesson-fc2/summary", headers=sv).json()["due"] == 0
+
+
+def _ai_lesson(client, teacher, code):
+    cid = client.post("/ai/courses", headers=teacher, json={"code": f"course-{code}", "title": "AI theo bài", "class_id": "lop-a"}).json()["course_id"]
+    tree = client.post(f"/ai/courses/{cid}/chapters", headers=teacher, json={"title": "C1"}).json()
+    ch = tree["chapters"][0]["chapter_id"]
+    client.post(f"/ai/chapters/{ch}/lessons", headers=teacher, json={"code": code, "title": "Bài OOP"})
+    upload(client, teacher, f"{code}.md", LESSON_TEXT, lesson_id=code, class_id="lop-a")
+
+
+def test_ai_flashcards_need_approval(client, teacher, fake_llm):
+    _ai_lesson(client, teacher, "lesson-fcai")
+    sv = token(client, "sv-fcai", "student", ["lop-a"])
+    assert client.post("/ai/lessons/lesson-fcai/flashcards/generate", headers=sv, json={"count": 2}).status_code == 403
+
+    cards = client.post("/ai/lessons/lesson-fcai/flashcards/generate", headers=teacher, json={"count": 2}).json()
+    assert len(cards) == 2 and all(c["status"] == "draft" for c in cards)
+    assert cards[0]["sources"] and cards[0]["sources"][0]["label"] == "S1"  # nhãn đã được giải thành nguồn đầy đủ
+
+    # chưa duyệt: học sinh chưa có thẻ để ôn
+    assert client.get("/ai/learn/flashcards/lesson-fcai/summary", headers=sv).json()["total"] == 0
+    r = client.patch(f"/ai/flashcard-cards/{cards[0]['card_id']}", headers=teacher,
+                     json={"front": "Tính đóng gói là gì?", "status": "approved"}).json()
+    assert r["status"] == "approved" and r["front"] == "Tính đóng gói là gì?"
+    client.patch(f"/ai/flashcard-cards/{cards[1]['card_id']}", headers=teacher, json={"status": "rejected"})
+
+    due = client.get("/ai/learn/flashcards/lesson-fcai/due", headers=sv).json()
+    assert [c["front"] for c in due["cards"]] == ["Tính đóng gói là gì?"] and due["cards"][0]["type"] == "flashcard"
+    rv = client.post(f"/ai/learn/flashcards/{cards[0]['card_id']}/review", headers=sv, json={"rating": "good"})
+    assert rv.status_code == 200 and rv.json()["reps"] == 1
+    # thẻ bị từ chối không ôn được
+    assert client.post(f"/ai/learn/flashcards/{cards[1]['card_id']}/review", headers=sv, json={"rating": "good"}).status_code == 404
