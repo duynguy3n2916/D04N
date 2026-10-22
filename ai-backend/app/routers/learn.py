@@ -124,6 +124,22 @@ class SeenIn(BaseModel):
     key: str = Field(min_length=1, max_length=160)  # vd "forum:<class_id>"
 
 
+@router.get("/notifications/inbox")
+def notifications_inbox(user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.services import notifications
+    return notifications.inbox(db, user)
+
+
+class InboxReadIn(BaseModel):
+    notification_id: str | None = None  # bỏ trống = đánh dấu tất cả đã đọc
+
+
+@router.post("/notifications/inbox/read")
+def notifications_inbox_read(req: InboxReadIn, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.services import notifications
+    return notifications.mark_inbox_read(db, user, parse_uuid(req.notification_id, "notification_id", required=False))
+
+
 @router.post("/notifications/seen")
 def notifications_seen(req: SeenIn, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
     from app.services import notifications

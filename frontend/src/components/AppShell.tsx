@@ -13,6 +13,8 @@ const STUDENT: NavItem[] = [
   { to: '/learn', label: 'Học', icon: 'home', match: '/learn' },
   { to: '/profile', label: 'Hồ sơ', icon: 'user', match: '/profile' },
   { to: '/forum', label: 'Diễn đàn', icon: 'note', match: '/forum' },
+  { to: '/messages', label: 'Tin nhắn', icon: 'chat', match: '/messages' },
+  { to: '/inbox', label: 'Thông báo', icon: 'bell', match: '/inbox' },
 ];
 const TEACHER: NavItem[] = [
   { to: '/teach/courses', label: 'Khóa học', icon: 'list', match: '/teach/courses' },
@@ -32,7 +34,7 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
   const [reduceFx, setReduce] = useState(() => document.documentElement.classList.contains('reduce-fx'));
   const toggleFx = () => { setReduce(!reduceFx); setReduceFx(!reduceFx); };
   const noti = useNotifications();
-  const badge: Record<string, number> = { '/forum': noti?.forum_new || 0 };
+  const badge: Record<string, number> = { '/forum': noti?.forum_new || 0, '/messages': noti?.dm_unread || 0, '/inbox': noti?.inbox_unread || 0 };
   const nav = (items: NavItem[]) => items
     .filter((n) => !n.admin || user?.role === 'admin')
     .map((n) => (

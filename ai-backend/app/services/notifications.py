@@ -11,6 +11,7 @@ from app.core.errors import AppError
 from app.core.security import Principal
 from app.core.utils import utcnow
 from app.models.learning import FlashcardReview, ForumReply, ForumThread, Lesson, UserSeen
+from app.models.social import UserNotification
 
 DEFAULT_LOOKBACK_DAYS = 7  # chưa từng xem: chỉ tính nội dung 7 ngày gần nhất để không báo quá nhiều
 
@@ -57,5 +58,28 @@ def summary(db: Session, user: Principal) -> dict:
                 .group_by(FlashcardReview.lesson_code).all())
     titles = dict(db.query(Lesson.code, Lesson.title).filter(Lesson.code.in_([c for c, _ in due_rows])).all()) if due_rows else {}
     flashcards = [{"lesson_code": code, "lesson_title": titles.get(code, code), "due": int(n)} for code, n in due_rows]
-    return {"forum_new": sum(forum.values()), "forum_by_class": forum,
+    from app.services import messages
+    inbox = (db.query(func.count(UserNotification.id))
+             .filter(UserNotification.user_id == user.user_id, UserNotification.read_at.is_(None)).scalar() or 0)
+    return {"forum_new": sum(forum.values()), "forum_by_class": forum, "inbox_unread": int(inbox),
+            "dm_unread": messages.unread_total(db, user),
             "flashcards_due": sum(f["due"] for f in flashcards), "flashcards": flashcards}
+
+
+def inbox(db: Session, user: Principal, limit: int = 50) -> list[dict]:
+    """Hộp thông báo: được nhắc tên, có người trả lời bài / bình luận của mình."""
+    rows = (db.query(UserNotification).filter(UserNotification.user_id == user.user_id)
+            .order_by(UserNotification.created_at.desc()).limit(min(limit, 200)).all())
+    return [{"notification_id": str(n.id), "kind": n.kind, "text": n.text, "actor_id": n.actor_id,
+             "class_id": n.class_id, "thread_id": str(n.thread_id) if n.thread_id else None,
+             "read": n.read_at is not None, "created_at": n.created_at.isoformat() if n.created_at else None}
+            for n in rows]
+
+
+def mark_inbox_read(db: Session, user: Principal, notification_id=None) -> dict:
+    q = db.query(UserNotification).filter(UserNotification.user_id == user.user_id, UserNotification.read_at.is_(None))
+    if notification_id is not None:
+        q = q.filter(UserNotification.id == notification_id)
+    n = q.update({"read_at": func.now()}, synchronize_session=False)
+    db.commit()
+    return {"marked": int(n)}

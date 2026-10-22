@@ -636,7 +636,7 @@ erDiagram
     }
 ```
 
-### 9.2 Danh sách bảng (35) theo module
+### 9.2 Danh sách bảng (43) theo module
 
 Mỗi model nằm trong một file của `ai-backend/app/models/`. Schema được đồng bộ idempotent bởi `app/migrate.py` khi server khởi động.
 
@@ -651,6 +651,7 @@ Mỗi model nằm trong một file của `ai-backend/app/models/`. Schema đư�
 | `workflow.py` | `video_sessions`, `session_transitions` |
 | `observability.py` | `ai_llm_calls`, `ai_jobs` |
 | `evaluation.py` | `ai_evaluations`, `eval_samples`, `eval_results` |
+| `social.py` | `forum_reactions`, `forum_images`, `user_notifications`, `direct_conversations`, `direct_messages`, `direct_reads`, `direct_blocks`, `direct_reports` |
 
 ### 9.3 Index & ràng buộc
 
@@ -728,8 +729,9 @@ CREATE INDEX ix_vq_player ON video_questions (video_id, status, timestamp);
 | Học tập mở rộng | `GET /ai/learn/flashcards/{code}/due`, `POST /ai/learn/flashcards/{card}/review`, `POST /ai/lessons/{code}/flashcards/generate` | HS / GV | ✅ |
 | | `GET /ai/classes/{id}/submissions` (+ `.csv`), `GET /ai/learn/progress-report` | GV / HS | ✅ |
 | | `POST /ai/courses/{id}/classes`, `DELETE /ai/courses/{id}/classes/{class_id}` (khóa học nhiều lớp) | GV | ✅ |
-| Diễn đàn | `/ai/forum/classes/{id}/threads`, `/ai/forum/threads/{id}`, `/ai/forum/reports` … | HS / GV | ✅ |
-| Thông báo | `GET /ai/notifications/summary`, `POST /ai/notifications/seen` | HS / GV | ✅ |
+| Diễn đàn | `/ai/forum/classes/{id}/threads?sort=&tag=&q=&kind=&lesson_code=`, `/ai/forum/threads/{id}`, `/ai/forum/likes`, `/ai/forum/classes/{id}/members`, `/ai/forum/classes/{id}/lessons`, `/ai/forum/classes/{id}/images`, `/ai/forum/images/{id}`, `/ai/forum/reports` … | HS / GV | ✅ |
+| Tin nhắn riêng | `/ai/messages/conversations`, `/ai/messages/conversations/{id}`, `/ai/messages/blocks`, `/ai/messages/{id}/report`, `/ai/messages/reports/{class_id}` | HS / GV | ✅ |
+| Thông báo | `GET /ai/notifications/summary`, `POST /ai/notifications/seen`, `GET /ai/notifications/inbox`, `POST /ai/notifications/inbox/read` | HS / GV | ✅ |
 | Hệ thống | `GET /health` | – | ✅ |
 
 ---
@@ -859,7 +861,7 @@ uvicorn app.main:app --reload --port 8000
 | P4 – Bảo mật | JWT + vai trò + phạm vi lớp; CORS whitelist; upload tên uuid, giới hạn dung lượng | ✅ Xong |
 | P5 – Mở rộng | Ngân hàng câu hỏi duyệt từng câu; phiên bản transcript + rollback; tóm tắt hội thoại; sinh bù câu thiếu; streaming Tutor; xuất đề DOCX / PDF; quên mật khẩu qua email | ✅ Xong |
 
-Kiểm thử: 76 bài pytest chạy trên một database Postgres + pgvector riêng trên cloud (`TEST_DATABASE_URL`, không bao giờ trên DB production), LLM giả lập; cộng kịch bản giao diện đầy đủ cho giáo viên, học sinh, admin.
+Kiểm thử: 81 bài pytest chạy trên một database Postgres + pgvector riêng trên cloud (`TEST_DATABASE_URL`, không bao giờ trên DB production), LLM giả lập; cộng kịch bản giao diện đầy đủ cho giáo viên, học sinh, admin.
 
 ---
 
@@ -898,6 +900,9 @@ thành lớp phủ toàn màn hình). Tutor nhận ngữ cảnh đang xem (`vide
 | Luyện tập thích ứng | `quiz_answer_logs` lưu từng câu trả lời; khi rút đề, câu sai gần đây trọng số ×4, chưa làm ×2, đã đúng ×1. | |
 | Diễn đàn lớp | Bài / trả lời theo lớp; giáo viên ghim, khóa, ẩn, đánh dấu câu đúng; học sinh báo cáo, giáo viên ẩn hoặc bỏ qua. AI soạn nháp trả lời từ học liệu, không tự đăng. | Nội dung ẩn không hiện với học sinh nhưng giáo viên vẫn thấy. |
 | Thông báo | `user_seen` lưu lần xem cuối theo khu vực; đếm bài / trả lời mới của người khác và thẻ đến hạn; giao diện hỏi lại mỗi 60 giây. | Dùng giờ của DB để không lệch đồng hồ. |
+| Mạng xã hội học tập | `forum_threads.kind` (question / post / announcement — chỉ giáo viên đăng thông báo), `tags` (tối đa 5, chuẩn hóa chữ thường), `lesson_code` (thẻ bài học), `images` (tối đa 4 ảnh, phải do chính người đăng tải lên trong cùng lớp). `forum_reactions` (một lượt thích / người / mục, ràng buộc unique). Bình luận lồng 1 tầng qua `forum_replies.parent_id` (trả lời bình luận con được gắn về bình luận gốc). | Thông báo và bài ghim luôn ở đầu; “Nổi bật” = nhiều thích trong 30 ngày. |
+| @nhắc tên & hộp thông báo | Regex `@user_id` trong bài / bình luận; chỉ thành viên đang hoạt động cùng lớp nhận `user_notifications` (mention / reply). | Người ngoài lớp được nhắc không nhận gì. |
+| Tin nhắn riêng | `direct_conversations` (cặp người dùng duy nhất, phải cùng ít nhất một lớp), `direct_messages`, `direct_reads`, `direct_blocks` (chặn hai chiều), `direct_reports` (chỉ người nhận báo cáo được). | Giáo viên chỉ thấy tin bị báo cáo, không đọc được hội thoại. Tin nhắn và thông báo xóa theo `CHAT_RETENTION_DAYS`. |
 | Khóa học nhiều lớp | `course_class_links`; mọi kiểm tra quyền khóa / bài / mục / tài liệu RAG đi qua `can_see_course`. | Lớp chính `courses.class_id` giữ để tương thích dữ liệu cũ. |
 
 ## 16. Quyết định kiến trúc (ADR tóm tắt)

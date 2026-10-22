@@ -1,4 +1,4 @@
-// Thông báo chưa đọc (diễn đàn, thẻ flashcard đến hạn): một nguồn dữ liệu dùng chung, hỏi lại mỗi 60 giây.
+// Thông báo chưa đọc (diễn đàn, hộp thông báo, tin nhắn riêng, thẻ flashcard đến hạn): một nguồn dữ liệu dùng chung, hỏi lại mỗi 60 giây.
 import { useEffect, useState } from 'react';
 import { api, getToken } from './api';
 
@@ -7,6 +7,8 @@ export interface NotiSummary {
   forum_by_class: Record<string, number>;
   flashcards_due: number;
   flashcards: { lesson_code: string; lesson_title: string; due: number }[];
+  inbox_unread: number;
+  dm_unread: number;
 }
 
 let current: NotiSummary | null = null;

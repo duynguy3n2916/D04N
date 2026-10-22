@@ -175,6 +175,9 @@ class ForumThread(Base):
     pinned = Column(Boolean, nullable=False, default=False)
     locked = Column(Boolean, nullable=False, default=False)
     hidden = Column(Boolean, nullable=True, server_default=sa_text("false"))  # giáo viên ẩn sau khi xử lý báo cáo
+    kind = Column(String(16), nullable=True, server_default=sa_text("'question'"))  # question | post | announcement
+    tags = Column(JSONB, nullable=True)  # thẻ chủ đề (chữ thường); thẻ bài học là lesson_code
+    images = Column(JSONB, nullable=True)  # id ảnh trong forum_images
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -189,6 +192,8 @@ class ForumReply(Base):
     body = Column(Text, nullable=False)
     accepted = Column(Boolean, nullable=False, default=False)
     hidden = Column(Boolean, nullable=True, server_default=sa_text("false"))
+    parent_id = Column(UUID(as_uuid=True), nullable=True, index=True)  # trả lời một bình luận (lồng 1 tầng)
+    images = Column(JSONB, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 
 

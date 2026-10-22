@@ -6,6 +6,8 @@ import { Learn } from './pages/Learn';
 import { LessonPage } from './pages/Lesson';
 import { Flashcards } from './pages/Flashcards';
 import { Forum } from './pages/Forum';
+import { Inbox } from './pages/Inbox';
+import { Messages } from './pages/Messages';
 import { ForceChangePassword, Login, ResetPassword } from './pages/Login';
 import { Profile } from './pages/Profile';
 import { CourseEditor, Courses } from './pages/teach/Courses';
@@ -36,6 +38,7 @@ export function App() {
   if ((m = match('/lesson/:lessonId/:itemId?', path))) return <LessonPage lessonId={m.lessonId} itemId={m.itemId} />;
   if ((m = match('/flashcards/:lessonCode', path))) return <AppShell path={path}><Flashcards lessonCode={m.lessonCode} /></AppShell>;
   if ((m = match('/forum/:threadId', path))) return <AppShell path={path}><Forum threadId={m.threadId} /></AppShell>;
+  if ((m = match('/messages/:conversationId?', path))) return <AppShell path={path}><Messages conversationId={m.conversationId} /></AppShell>;
 
   const teacherOnly = (el: ReactElement) => (isTeacher(user) ? el : <Learn path={path} />);
 
@@ -43,6 +46,7 @@ export function App() {
   if ((m = match('/learn/:courseId?', path))) page = <Learn path={path} courseId={m.courseId} />;
   else if (match('/profile', path)) page = <Profile />;
   else if (match('/forum', path)) page = <Forum />;
+  else if (match('/inbox', path)) page = <Inbox />;
   else if (match('/teach/courses', path)) page = teacherOnly(<Courses />);
   else if ((m = match('/teach/courses/:courseId', path))) page = teacherOnly(<CourseEditor courseId={m.courseId} />);
   else if (match('/teach/videos', path)) page = teacherOnly(<Videos />);

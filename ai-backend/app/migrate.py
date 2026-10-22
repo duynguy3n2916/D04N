@@ -36,6 +36,8 @@ INDEXES = [
     "CREATE UNIQUE INDEX IF NOT EXISTS ux_users_email ON users (lower(email)) WHERE email IS NOT NULL",
     "CREATE INDEX IF NOT EXISTS ix_users_classes ON users USING gin (class_ids)",
     "CREATE INDEX IF NOT EXISTS ix_sessions_waiting ON video_sessions (current_state, question_deadline_at)",
+    # cột thêm sau vào bảng đã có: create_all không tạo index cho cột mới (tên trùng index create_all tự đặt)
+    "CREATE INDEX IF NOT EXISTS ix_forum_replies_parent_id ON forum_replies (parent_id)",
     # tìm từ khóa (hybrid search): khớp đúng biểu thức to_tsvector('simple', content) trong retrieval
     "CREATE INDEX IF NOT EXISTS ix_chunks_fts ON ai_chunks USING gin (to_tsvector('simple', content))",
 ]

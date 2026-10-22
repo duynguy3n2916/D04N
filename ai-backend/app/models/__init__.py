@@ -5,6 +5,7 @@ from app.models.evaluation import AIEvaluation, EvalResult, EvalSample
 from app.models.learning import (Chapter, Course, ItemProgress, Lesson, LessonItem, MediaVideo, UserProfile,
                                  XPEvent)
 from app.models.observability import AIJob, AILLMCall
+from app.models import social  # noqa: F401  (bảng mạng xã hội học tập)
 from app.models.transcript import TranscriptSegment, VideoTranscript
 from app.models.video_question import AIGeneration, AIInteraction, QuestionBankItem, VideoQuestion
 from app.models.workflow import SessionTransition, VideoSession

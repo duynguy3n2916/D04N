@@ -18,7 +18,7 @@ from app.core.context import setup_logging
 from app.core.errors import RequestContextMiddleware, install_error_handlers
 from app.database import SessionLocal, engine
 from app.routers import (admin, auth, chat, documents, evaluation, jobs as jobs_router, learn, media, teacher, videos,
-                         users, workflow, forum)
+                         users, workflow, forum, messages)
 from app.services import evaluation as _ev, ingestion as _ing, jobs, transcription as _tr  # noqa: F401 (đăng ký job)
 from app.services import tutor_explain as _te  # noqa: F401 (đăng ký job tutor_explain)
 from app.services.retention import purge_expired
@@ -109,7 +109,7 @@ app.add_middleware(
 )
 install_error_handlers(app)
 
-for r in (auth, users, documents, chat, teacher, videos, workflow, evaluation, jobs_router, admin, learn, media, forum):
+for r in (auth, users, documents, chat, teacher, videos, workflow, evaluation, jobs_router, admin, learn, media, forum, messages):
     app.include_router(r.router)
 
 
