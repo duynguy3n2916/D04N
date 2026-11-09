@@ -7,6 +7,7 @@ import { api, errorText, mediaUrl, pollJob, type ClassInfo, type ItemType } from
 import { useAsync } from '../../lib/hooks';
 import { Link, navigate } from '../../lib/router';
 import { TYPE_ICON, TYPE_LABEL } from '../Learn';
+import { ManualCreateDialog } from '../../components/ManualCreateDialog';
 
 interface AdminItem { item_id: string; type: ItemType; title: string; position: number; video_id: string | null; document_id: string | null; meta: any; has_content: boolean }
 interface AdminLesson { lesson_id: string; code: string; title: string; description?: string; items: AdminItem[] }
@@ -14,6 +15,18 @@ interface AdminCourse { course_id: string; code: string; title: string; descript
 interface CourseRow { course_id: string; code: string; title: string; class_id: string | null; cover_url?: string | null; chapters: number; items: number }
 interface VideoRow { video_id: string; title: string; has_file: boolean; transcript: { version: number } | null; questions: { approved: number; draft: number } }
 interface DocRow { document_id: string; title: string; source_type: string; status: string; lesson_id: string | null }
+
+// Kiểu dữ liệu câu hỏi trong ngân hàng đề thi
+interface BankQuestionItem {
+  item_id: string;
+  question: string;
+  options: string[];
+  answer?: string;
+  explanation?: string;
+  difficulty?: string | null;
+  status: string;
+  lesson_id: string | null;
+}
 
 // ---------------------------------------------------------------- Ảnh bìa
 
@@ -146,6 +159,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
   const toast = useToast();
   const tree = useAsync((s) => api<AdminCourse>(`/ai/courses/${courseId}`, { signal: s }), [courseId]);
   const [dlg, setDlg] = useState<Dialog | null>(null);
+  const [addQuizLesson, setAddQuizLesson] = useState<string | null>(null);
 
   const run = async (p: Promise<AdminCourse>, msg?: string) => {
     try { tree.setData(await p); if (msg) toast(msg, 'success'); } catch (e) { toast(errorText(e), 'error'); }
@@ -194,17 +208,36 @@ export function CourseEditor({ courseId }: { courseId: string }) {
                   <IconButton icon="edit" label="Sửa bài" onClick={() => setDlg({ kind: 'lesson', chapterId: ch.chapter_id, lesson: ls })} />
                   <IconButton icon="trash" label="Xóa bài" onClick={() => del('lessons', ls.lesson_id, `bài “${ls.title}”`)} />
                 </div>
-                {ls.items.map((it, ii) => (
-                  <div key={it.item_id} className="tree-item">
-                    <span className={`type-ico type-${it.type}`}><Icon name={TYPE_ICON[it.type]} size={18} /></span>
-                    <strong>{it.title}</strong>
-                    <span className="muted small">{itemMeta(it)}</span>
-                    <Reorder onUp={() => move('items', it.item_id, -1)} onDown={() => move('items', it.item_id, 1)} first={ii === 0} last={ii === ls.items.length - 1} />
-                    {it.type === 'video' && it.video_id && <IconButton icon="question" label="Quản lý câu hỏi video" onClick={() => navigate(`/teach/videos/${encodeURIComponent(it.video_id!)}`)} />}
-                    <IconButton icon="edit" label="Sửa mục" onClick={() => setDlg({ kind: 'item', lesson: ls, item: it })} />
-                    <IconButton icon="trash" label="Xóa mục" onClick={() => del('items', it.item_id, `mục “${it.title}”`)} />
-                  </div>
-                ))}
+                {ls.items.map((it, ii) => {
+                  const isQuiz = it.type === 'quiz';
+                  const requiredCount = it.meta?.count ?? 5;
+                  const currentCount = it.meta?.bank_count ?? 0; 
+                  const isQuizFull = currentCount >= requiredCount;
+
+                  return (
+                    <div key={it.item_id} className="tree-item">
+                      <span className={`type-ico type-${it.type}`}><Icon name={TYPE_ICON[it.type]} size={18} /></span>
+                      <strong>{it.title}</strong>
+                      <span className="muted small">{itemMeta(it)}</span>
+                      
+                      {isQuiz && (
+                        <span title={isQuizFull ? "Số lượng câu hỏi của bài kiểm tra đã đủ" : `Thêm câu hỏi (${currentCount}/${requiredCount})`}>
+                          <IconButton 
+                            icon="plus" 
+                            label="Thêm câu hỏi" 
+                            disabled={isQuizFull} 
+                            onClick={() => setAddQuizLesson(ls.code)}  
+                          />
+                        </span>
+                      )}
+
+                      <Reorder onUp={() => move('items', it.item_id, -1)} onDown={() => move('items', it.item_id, 1)} first={ii === 0} last={ii === ls.items.length - 1} />
+                      {it.type === 'video' && it.video_id && <IconButton icon="question" label="Quản lý câu hỏi video" onClick={() => navigate(`/teach/videos/${encodeURIComponent(it.video_id!)}`)} />}
+                      <IconButton icon="edit" label="Sửa mục" onClick={() => setDlg({ kind: 'item', lesson: ls, item: it })} />
+                      <IconButton icon="trash" label="Xóa mục" onClick={() => del('items', it.item_id, `mục “${it.title}”`)} />
+                    </div>
+                  );
+                })}
                 <div><Button size="sm" variant="ghost" icon="plus" onClick={() => setDlg({ kind: 'item', lesson: ls })}>Thêm mục học</Button></div>
               </div>
             ))}
@@ -226,6 +259,18 @@ export function CourseEditor({ courseId }: { courseId: string }) {
       )}
       {c && dlg?.kind === 'lesson' && <LessonDialog chapterId={dlg.chapterId} lesson={dlg.lesson} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); }} />}
       {c && dlg?.kind === 'item' && <ItemDialog course={c} lesson={dlg.lesson} item={dlg.item} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); toast('Đã lưu mục học', 'success'); }} />}
+    
+      {addQuizLesson && (
+          <ManualCreateDialog 
+            defaultLesson={addQuizLesson} 
+            onClose={() => setAddQuizLesson(null)} 
+            onSaved={() => { 
+              setAddQuizLesson(null); 
+              tree.reload(); 
+              toast('Đã thêm câu hỏi vào ngân hàng đề thi!', 'success'); 
+            }} 
+          />
+        )}
     </>
   );
 }
@@ -387,6 +432,7 @@ function LessonDialog({ chapterId, lesson, onClose, onSaved }: { chapterId: stri
 }
 
 function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminCourse; lesson: AdminLesson; item?: AdminItem; onClose: () => void; onSaved: (c: AdminCourse) => void }) {
+  const toast = useToast();
   const [type, setType] = useState<ItemType>(item?.type || 'video');
   const [title, setTitle] = useState(item?.title || '');
   const [videoId, setVideoId] = useState(item?.video_id || '');
@@ -404,6 +450,62 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
   const videos = useAsync((s) => (type === 'video' ? api<VideoRow[]>('/ai/media/videos', { signal: s }) : Promise.resolve([] as VideoRow[])), [type]);
   const docs = useAsync((s) => (type === 'slide' ? api<DocRow[]>(`/ai/documents?lesson_id=${encodeURIComponent(lesson.code)}`, { signal: s }) : Promise.resolve([] as DocRow[])), [type]);
   const [upload, setUpload] = useState<string | null>(null);
+
+  const [quizTab, setQuizTab] = useState<'general' | 'questions'>('general');
+  const bank = useAsync((s) => (type === 'quiz' ? api<BankQuestionItem[]>('/ai/teacher/question-bank', { signal: s }) : Promise.resolve([] as BankQuestionItem[])), [type]);
+
+  // Lọc ra danh sách câu hỏi đã duyệt thuộc bài học hiện tại (khớp theo mã code hoặc lesson_id)
+  const approvedQuestions = bank.data?.filter(
+    (q) => (q.lesson_id === lesson.code || q.lesson_id === lesson.lesson_id) && q.status === 'approved'
+  ) || [];
+
+  const [uploadingVideo, setUploadingVideo] = useState(false); 
+  const videoFileRef = useRef<HTMLInputElement>(null); 
+
+  const mdFileRef = useRef<HTMLInputElement>(null);
+  const [uploadingMd, setUploadingMd] = useState(false);
+
+  const uploadVideoInline = async (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (course.class_id) fd.append('class_id', course.class_id);
+    if (title) fd.append('title', title);
+    
+    setUploadingVideo(true);
+    setUpload('Đang tải video lên Cloudflare R2…');
+    try {
+      const res = await api<VideoRow>('/ai/media/videos/inline-upload', { method: 'POST', form: fd });
+      toast('Tải video lên thành công!', 'success');
+      await videos.reload();
+      setVideoId(res.video_id);
+      if (!title) setTitle(file.name.replace(/\.[^.]+$/, ''));
+      setUpload(null);
+    } catch (e) {
+      toast('Lỗi tải video: ' + errorText(e), 'error');
+      setUpload('Lỗi tải lên.');
+    } finally {
+      setUploadingVideo(false);
+      if (videoFileRef.current) videoFileRef.current.value = '';
+    }
+  };
+
+  const uploadMarkdownInline = async (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    setUploadingMd(true);
+    try {
+      const res = await api<{ content_md: string }>('/ai/media/parse-markdown', { method: 'POST', form: fd });
+      setMd(res.content_md);
+      setPreview(false);
+      toast('Đã nạp nội dung từ file Markdown', 'success');
+      if (!title) setTitle(file.name.replace(/\.[^.]+$/, ''));
+    } catch (e) {
+      toast('Lỗi đọc file: ' + errorText(e), 'error');
+    } finally {
+      setUploadingMd(false);
+      if (mdFileRef.current) mdFileRef.current.value = '';
+    }
+  };
 
   const uploadSlide = async (file: File) => {
     const fd = new FormData();
@@ -435,7 +537,7 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
   };
 
   return (
-    <FormModal title={item ? `Sửa mục · ${TYPE_LABEL[type]}` : `Thêm mục vào “${lesson.title}”`} onClose={onClose} onSave={save} canSave={valid} wide={type === 'reading'}>
+    <FormModal title={item ? `Sửa mục · ${TYPE_LABEL[type]}` : `Thêm mục vào “${lesson.title}”`} onClose={onClose} onSave={save} canSave={valid} wide={type === 'reading' || (type === 'quiz' && quizTab === 'questions')}>
       {!item && (
         <div className="seg" role="group" aria-label="Loại mục" style={{ alignSelf: 'flex-start' }}>
           {(['video', 'slide', 'reading', 'quiz'] as ItemType[]).map((t) => (
@@ -445,7 +547,40 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
           ))}
         </div>
       )}
-      <Field label="Tiêu đề"><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="VD: Video bài giảng — Lớp và đối tượng" /></Field>
+
+      {/* Nút Toggle giữa Tổng quát và Danh sách câu hỏi cho Quiz */}
+      {type === 'quiz' && (
+        <div 
+          className="seg" 
+          role="group" 
+          style={{ 
+            alignSelf: 'flex-start', 
+            width: 'fit-content', 
+            display: 'inline-flex',
+            marginBottom: 8 
+          }}
+        >
+          <button 
+            type="button" 
+            className={quizTab === 'general' ? 'on' : ''} 
+            onClick={() => setQuizTab('general')}
+          >
+            Tổng quát
+          </button>
+          <button 
+            type="button" 
+            className={quizTab === 'questions' ? 'on' : ''} 
+            onClick={() => setQuizTab('questions')}
+          >
+            Danh sách câu hỏi ({approvedQuestions.length})
+          </button>
+        </div>
+      )}
+
+      {/* Hiển thị tiêu đề khi không ở tab danh sách câu hỏi */}
+      {(type !== 'quiz' || quizTab === 'general') && (
+        <Field label="Tiêu đề"><input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="VD: Video bài giảng — Lớp và đối tượng" /></Field>
+      )}
 
       {type === 'video' && (
         <Field label="Video" hint="Tải video mới ở mục Video, rồi chọn ở đây. Câu hỏi giữa video quản lý theo video.">
@@ -497,21 +632,95 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
         </>
       )}
 
-      {type === 'quiz' && (
+      {/* QUIZ - TAB TỔNG QUÁT */}
+      {type === 'quiz' && quizTab === 'general' && (
         <>
           <div className="form-grid">
             <Field label="Số câu mỗi lượt"><input type="number" min={1} max={20} value={count} onChange={(e) => setCount(Number(e.target.value))} /></Field>
             <Field label="Ngưỡng qua bài (%)"><input type="number" min={10} max={100} step={5} value={passPct} onChange={(e) => setPassPct(Number(e.target.value))} /></Field>
             <Field label="Giới hạn thời gian (phút)" hint="0 = không giới hạn. Hết giờ bài tự nộp."><input type="number" min={0} max={240} value={timeLimit} onChange={(e) => setTimeLimit(Number(e.target.value))} /></Field>
           </div>
-          <div className="form-grid">
-            <Field label="Mở lúc (tùy chọn)"><input type="datetime-local" value={openAt} onChange={(e) => setOpenAt(e.target.value)} /></Field>
-            <Field label="Đóng lúc (tùy chọn)" hint="Để trống = luôn mở."><input type="datetime-local" value={closeAt} onChange={(e) => setCloseAt(e.target.value)} /></Field>
-          </div>
           <p className="muted small" style={{ fontWeight: 700 }}>
             Câu hỏi lấy ngẫu nhiên từ ngân hàng câu hỏi <b>đã duyệt</b> của bài {lesson.code}. Sinh và duyệt câu hỏi ở mục <Link to="/teach/questions">Câu hỏi</Link>.
           </p>
         </>
+      )}
+
+      {/* QUIZ - TAB DANH SÁCH CÂU HỎI */}
+      {type === 'quiz' && quizTab === 'questions' && (
+        <div className="col" style={{ gap: 12, minHeight: 250, maxHeight: 420, overflowY: 'auto', padding: '4px' }}>
+          {bank.loading && <Spinner />}
+          {bank.error && <ErrorBox message={bank.error} onRetry={bank.reload} />}
+          {!bank.loading && approvedQuestions.length === 0 && (
+            <Empty title="Chưa có câu hỏi nào">
+              Bài học này chưa có câu hỏi nào được duyệt vào bài kiểm tra. Hãy bấm biểu tượng dấu cộng (+) ở mục học này ngoài giao diện để thêm câu hỏi.
+            </Empty>
+          )}
+          {approvedQuestions.map((q, idx) => (
+            <div 
+              key={q.item_id} 
+              className="col" // Gỡ bỏ class "card" ở đây để sửa lỗi cắt chữ
+              style={{ 
+                padding: 16, 
+                gap: 8, 
+                background: 'var(--bg-soft)',
+                border: '1px solid var(--border)', // Thêm viền thay cho card
+                borderRadius: 8,
+                cursor: 'pointer', // Đổi con trỏ chuột thành hình bàn tay
+                transition: 'border-color 0.2s, background 0.2s'
+              }}
+              title="Nhấn để xem và sửa chi tiết trong Ngân hàng câu hỏi"
+              // Hiệu ứng hover đơn giản
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--green)'; e.currentTarget.style.background = 'var(--bg)'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.background = 'var(--bg-soft)'; }}
+              // Sự kiện click điều hướng và truyền dữ liệu qua URL
+              onClick={() => {
+                const targetLesson = lesson.code || lesson.lesson_id;
+                navigate(`/teach/questions?lesson=${targetLesson}&focus=${q.item_id}`);
+                onClose(); // Đóng modal hiện tại
+              }}
+            >
+              <div className="row" style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <strong style={{ fontSize: 14, lineHeight: 1.5 }}>
+                  Câu {idx + 1}: {q.question}
+                </strong>
+                {q.difficulty && (
+                  <Badge tone={q.difficulty === 'easy' ? 'green' : q.difficulty === 'hard' ? 'red' : 'blue'}>
+                    {q.difficulty === 'easy' ? 'Dễ' : q.difficulty === 'hard' ? 'Khó' : 'Vừa'}
+                  </Badge>
+                )}
+              </div>
+
+              {Array.isArray(q.options) && q.options.length > 0 && (
+                <div className="col" style={{ gap: 6, paddingLeft: 8, marginTop: 4 }}>
+                  {q.options.map((opt, oIdx) => {
+                    const isCorrect = opt === q.answer;
+                    return (
+                      <div 
+                        key={oIdx} 
+                        className="row" 
+                        style={{ 
+                          fontSize: 13, 
+                          color: isCorrect ? 'var(--green)' : undefined, 
+                          fontWeight: isCorrect ? 700 : 400 
+                        }}
+                      >
+                        <span style={{ minWidth: 24 }}>{String.fromCharCode(65 + oIdx)}.</span>
+                        <span>{opt} {isCorrect && '✓ (Đáp án đúng)'}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {q.explanation && (
+                <div className="small muted" style={{ fontStyle: 'italic', borderTop: '1px dashed var(--border)', paddingTop: 8, marginTop: 4 }}>
+                  Giải thích: {q.explanation}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       )}
     </FormModal>
   );

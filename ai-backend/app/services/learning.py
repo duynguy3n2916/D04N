@@ -568,7 +568,8 @@ def class_submissions(db: Session, user: Principal, class_id: str) -> dict:
              .join(Chapter, Lesson.chapter_id == Chapter.id).join(Course, Chapter.course_id == Course.id)
              .filter(LessonItem.type == "quiz",
                      or_(Course.class_id == class_id,
-                         Course.id.in_(select(CourseClass.course_id).where(CourseClass.class_id == class_id))))
+                         Course.id.in_(select(CourseClass.course_id).where(CourseClass.class_id == class_id)),
+                         Course.class_id.is_(None)))
              .order_by(Course.title, Lesson.position, LessonItem.position).all())
     students = (db.query(User).filter(User.role == "student", User.class_ids.contains([class_id]))
                 .order_by(User.user_id).all())
