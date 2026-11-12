@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PageHeader } from '../../components/AppShell';
 import { Badge, Button, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
 import { api, apiBlob, errorText } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
+import { ManualCreateDialog } from '../../components/ManualCreateDialog';
 
 interface BankItem {
   item_id: string; generation_id: string | null; status: string; edited: boolean; lesson_id: string | null; created_at: string;
@@ -36,11 +37,36 @@ const TYPE: Record<string, string> = { multiple_choice: 'Trắc nghiệm', true_
 
 export function QuestionBank() {
   const toast = useToast();
-  const [lesson, setLesson] = useState('');
+
+  const getUrlParams = () => {
+    const hash = window.location.hash;
+    const query = hash.includes('?') ? hash.substring(hash.indexOf('?')) : '';
+    return new URLSearchParams(query);
+  };
+
+  const [lesson, setLesson] = useState(() => getUrlParams().get('lesson') || '');
   const [status, setStatus] = useState('');
+
   const bank = useAsync((s) => api<BankItem[]>(`/ai/teacher/question-bank?${new URLSearchParams({ ...(lesson && { lesson_id: lesson }), ...(status && { status }) })}`, { signal: s }), [lesson, status]);
   const stats = useAsync((s) => api<Stats>('/ai/teacher/stats', { signal: s }), []);
+
+  useEffect(() => {
+    const focusId = getUrlParams().get('focus');
+    if (focusId && bank.data && bank.data.length > 0) {
+      setTimeout(() => {
+        const element = document.getElementById(`question-${focusId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.style.transition = 'background-color 0.8s ease';
+          element.style.backgroundColor = 'var(--yellow-light, #fffbe6)'; 
+          setTimeout(() => { element.style.backgroundColor = ''; }, 2500);
+        }
+      }, 100);
+    }
+  }, [bank.data]);
+
   const [genOpen, setGenOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [edit, setEdit] = useState<BankItem | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
 
@@ -56,11 +82,20 @@ export function QuestionBank() {
   const st = stats.data;
   return (
     <>
-      <PageHeader title="Ngân hàng câu hỏi" sub="AI soạn câu hỏi từ tài liệu của bài; giáo viên sửa và duyệt. Bài kiểm tra cuối bài lấy từ các câu đã duyệt."
-        actions={<>
-          <Button variant="ghost" icon="doc" onClick={() => setExportOpen(true)}>Xuất đề</Button>
-          <Button icon="wand" onClick={() => setGenOpen(true)}>AI soạn câu hỏi</Button>
-        </>} />
+      <PageHeader title="Ngân hàng câu hỏi" sub={
+          <>
+            AI soạn câu hỏi từ tài liệu của bài, giáo viên sửa và duyệt.
+            <br />
+            Bài kiểm tra cuối bài lấy từ các câu đã duyệt.
+          </>
+        }
+        actions={
+          <div className="row" style={{ gap: 8 }}>
+            <Button variant="ghost" icon="doc" onClick={() => setExportOpen(true)}>Xuất đề</Button>
+            <Button variant="soft" icon="plus" onClick={() => setCreateOpen(true)}>Tạo câu hỏi</Button>
+            <Button icon="wand" onClick={() => setGenOpen(true)}>AI soạn câu hỏi</Button>
+          </div>
+        } />
       {st && (
         <div className="stat-tiles">
           <div className="tile"><strong>{st.approved}</strong><span>Đã duyệt</span></div>
@@ -84,7 +119,11 @@ export function QuestionBank() {
       {bank.data && !bank.data.length && <Empty title="Chưa có câu hỏi">Bấm “AI soạn câu hỏi” và chọn bài học.</Empty>}
       <div className="col" style={{ gap: 12 }}>
         {bank.data?.map((q) => (
-          <div key={q.item_id} className="qcard">
+          <div 
+            key={q.item_id} 
+            id={`question-${q.item_id}`}
+            className="qcard"
+          >
             <div className="row" style={{ gap: 6 }}>
               <Badge tone={q.status === 'approved' ? 'green' : q.status === 'rejected' ? 'red' : 'yellow'}>{q.status === 'approved' ? 'Đã duyệt' : q.status === 'rejected' ? 'Từ chối' : 'Nháp'}</Badge>
               <Badge>{TYPE[q.type] || q.type}</Badge>
@@ -109,6 +148,7 @@ export function QuestionBank() {
       {genOpen && <GenerateDialog defaultLesson={lesson} onClose={() => setGenOpen(false)} onDone={(code) => { setGenOpen(false); setLesson(code); setStatus('draft'); bank.reload(); stats.reload(); }} />}
       {exportOpen && <ExportDialog defaultLesson={lesson} onClose={() => setExportOpen(false)} />}
       {edit && <BankEditor item={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); bank.reload(); stats.reload(); }} />}
+      {createOpen && <ManualCreateDialog defaultLesson={lesson} onClose={() => setCreateOpen(false)} onSaved={() => { setCreateOpen(false); bank.reload(); stats.reload(); toast('Đã tạo và duyệt câu hỏi mới', 'success'); }} />}
     </>
   );
 }
@@ -203,7 +243,9 @@ function BankEditor({ item, onClose, onSaved }: { item: BankItem; onClose: () =>
               <div key={i} className="row" style={{ flexWrap: 'nowrap' }}>
                 <input type="radio" name="bank-correct" aria-label={`Đáp án đúng là lựa chọn ${i + 1}`} checked={f.correct_answer === o} onChange={() => setF({ ...f, correct_answer: o })} style={{ width: 20, height: 20, accentColor: 'var(--green)' }} />
                 <input className="input" value={o} aria-label={`Lựa chọn ${i + 1}`} onChange={(e) => {
-                  const n = [...f.options]; const wasCorrect = f.correct_answer === n[i]; n[i] = e.target.value;
+                  const n = [...f.options]; 
+                  const wasCorrect = f.correct_answer === n[i]; 
+                  n[i] = e.target.value;
                   setF({ ...f, options: n, correct_answer: wasCorrect ? e.target.value : f.correct_answer });
                 }} />
               </div>
