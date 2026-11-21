@@ -819,3 +819,15 @@ html.reduce-fx .grad-word, html.reduce-fx .course-banner { animation: none !impo
 .sn-compose-closed:hover .muted { border-color: var(--blue-line); }
 .dm-compose textarea.input { min-height: 46px; resize: none; line-height: 1.4; padding: 11px 12px; }
 .dm-compose .btn { flex: none; }
+
+/* ---------- Trợ lý học tập (Study Coach) ---------- */
+.coach-page { display: flex; flex-direction: column; height: calc(100vh - 48px); min-height: 480px; }
+.coach { flex: 1; min-height: 0; display: flex; flex-direction: column; background: #fff; border: 2px solid var(--line); border-radius: 18px; overflow: hidden; }
+.coach .tutor-msgs { background: var(--bg-soft); }
+.coach .bubble-user, .coach .bubble-bot { max-width: min(760px, 92%); }
+.coach .bubble-bot { align-self: flex-start; }
+.coach-steps { display: flex; gap: 6px; flex-wrap: wrap; }
+.coach-step { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 800; padding: 3px 8px; border-radius: 99px; background: var(--grape-soft); color: var(--grape-dark); }
+.coach-step-fail { background: var(--red-soft); color: var(--red-text); }
+.coach-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+@media (max-width: 720px) { .coach-page { height: calc(100vh - 120px); } }

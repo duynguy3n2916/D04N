@@ -5,6 +5,7 @@ import { match, navigate, useLocation } from './lib/router';
 import { Learn } from './pages/Learn';
 import { LessonPage } from './pages/Lesson';
 import { Flashcards } from './pages/Flashcards';
+import { Coach } from './pages/Coach';
 import { Forum } from './pages/Forum';
 import { Inbox } from './pages/Inbox';
 import { Messages } from './pages/Messages';
@@ -44,6 +45,7 @@ export function App() {
 
   let page: ReactElement;
   if ((m = match('/learn/:courseId?', path))) page = <Learn path={path} courseId={m.courseId} />;
+  else if (match('/coach', path)) page = <Coach />;
   else if (match('/profile', path)) page = <Profile />;
   else if (match('/forum', path)) page = <Forum />;
   else if (match('/inbox', path)) page = <Inbox />;

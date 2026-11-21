@@ -11,6 +11,7 @@ type NavItem = { to: string; label: string; icon: IconName; match: string; admin
 
 const STUDENT: NavItem[] = [
   { to: '/learn', label: 'Học', icon: 'home', match: '/learn' },
+  { to: '/coach', label: 'Trợ lý học tập', icon: 'sparkle', match: '/coach' },
   { to: '/profile', label: 'Hồ sơ', icon: 'user', match: '/profile' },
   { to: '/forum', label: 'Diễn đàn', icon: 'note', match: '/forum' },
   { to: '/messages', label: 'Tin nhắn', icon: 'chat', match: '/messages' },
