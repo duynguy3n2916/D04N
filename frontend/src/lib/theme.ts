@@ -1,5 +1,6 @@
-// Màu chủ đạo của giao diện: người dùng chọn một màu, mọi sắc độ khác (nền, viền, chữ nhấn...) được suy ra từ màu đó.
-// Lựa chọn lưu trong trình duyệt (localStorage), áp lên :root bằng biến CSS mà theme.css dùng.
+// Màu chủ đạo của giao diện, cố định là Đỏ đô (DEFAULT_THEME). Mọi sắc độ khác (nền, viền, chữ nhấn...) được suy ra từ màu đó
+// và áp lên :root bằng biến CSS mà theme.css dùng. Muốn đổi màu cả app: sửa DEFAULT_THEME.
+
 
 export type ThemePreset = { id: string; name: string; color: string };
 
@@ -12,8 +13,6 @@ export const THEME_PRESETS: ThemePreset[] = [
   { id: 'tim', name: 'Tím', color: '#6741D9' },
 ];
 export const DEFAULT_THEME = THEME_PRESETS[0].color;
-
-const KEY = 'mam.theme.color';
 
 type RGB = [number, number, number];
 const hexToRgb = (hex: string): RGB => {
@@ -70,15 +69,4 @@ export function applyTheme(color: string) {
   for (const [k, v] of Object.entries(themeVars(color))) root.style.setProperty(k, v);
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', themeVars(color)['--brand']);
-}
-
-export function getSavedTheme(): string {
-  try { const v = localStorage.getItem(KEY); if (v && isValidColor(v)) return v; } catch { /* trình duyệt chặn lưu trữ */ }
-  return DEFAULT_THEME;
-}
-
-export function saveTheme(color: string) {
-  try { localStorage.setItem(KEY, color); } catch { /* bỏ qua */ }
-  applyTheme(color);
-  window.dispatchEvent(new CustomEvent('mam-theme', { detail: color }));
 }

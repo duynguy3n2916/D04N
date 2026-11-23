@@ -6,7 +6,6 @@ import { useState } from 'react';
 import { Icon, type IconName } from './Icon';
 import { Logo } from './Mascot';
 import { IconButton, setReduceFx } from './ui';
-import { ThemeQuickPicker } from './ThemePicker';
 
 type NavItem = { to: string; label: string; icon: IconName; match: string; admin?: boolean };
 
@@ -66,7 +65,6 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
             <strong>{user?.name || user?.user_id}</strong>
             <span>{user?.role === 'student' ? 'Học sinh' : user?.role === 'teacher' ? 'Giáo viên' : 'Quản trị'}{user?.class_ids?.length ? ` · ${user.class_ids.join(', ')}` : ''}</span>
           </span>
-          <ThemeQuickPicker />
           <IconButton icon="sparkle" label={reduceFx ? 'Bật hiệu ứng' : 'Giảm hiệu ứng'} active={reduceFx} onClick={toggleFx} />
           <button className="iconbtn" onClick={() => logout()} aria-label="Đăng xuất" title="Đăng xuất"><Icon name="logout" size={20} /></button>
         </div>
