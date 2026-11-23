@@ -129,37 +129,80 @@ function Feed({ classId, moderator }: { classId: string; moderator: boolean }) {
     } catch (e) { toast(errorText(e), 'error'); }
   };
   const filtered = !!(kind || tag || lesson || q);
+  // Cột phải: chủ đề và bài học được nhắc nhiều trong bảng tin đang xem.
+  const rows = list.data || [];
+  const topTags = useMemo(() => {
+    const m = new Map<string, number>();
+    rows.forEach((t) => t.tags.forEach((g) => m.set(g, (m.get(g) || 0) + 1)));
+    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
+  }, [rows]);
+  const openQuestions = rows.filter((t) => t.kind === 'question' && !t.has_answer);
   return (
-    <>
-      <Composer classId={classId} moderator={moderator} members={members.data || []} lessons={lessons.data || []} onPosted={list.reload} />
-      <div className="sn-toolbar">
-        <div className="sn-tabs" role="tablist" aria-label="Sắp xếp">
-          {SORTS.map((s) => <button key={s.id} role="tab" aria-selected={sort === s.id} className={sort === s.id ? 'on' : ''} onClick={() => setSort(s.id)}>{s.label}</button>)}
-        </div>
-        <label className="sn-search">
-          <Icon name="search" size={18} />
-          <span className="sr-only">Tìm bài đăng</span>
-          <input value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="Tìm trong diễn đàn…" />
-        </label>
-      </div>
-      <div className="row" style={{ gap: 6, marginBottom: 12 }}>
+    <div className="forum-layout">
+      <aside className="forum-filters" aria-label="Bộ lọc diễn đàn">
+        <span className="oc-kicker">Sắp xếp</span>
+        {SORTS.map((s) => <button key={s.id} className={`fl-item ${sort === s.id ? 'on' : ''}`} aria-pressed={sort === s.id} onClick={() => setSort(s.id)}>{s.label}</button>)}
+        <span className="oc-kicker">Loại bài</span>
         {(['', 'question', 'post', 'announcement'] as const).map((k) => (
-          <button key={k || 'all'} className={`sn-pill ${kind === k ? 'on' : ''}`} onClick={() => setKind(k)}>{k ? KIND_LABEL[k] : 'Tất cả'}</button>
+          <button key={k || 'all'} className={`fl-item ${kind === k ? 'on' : ''}`} aria-pressed={kind === k} onClick={() => setKind(k)}>{k ? KIND_LABEL[k] : 'Tất cả'}</button>
         ))}
-        {tag && <button className="sn-pill on" onClick={() => setTag('')}>#{tag} <Icon name="x" size={12} /></button>}
-        {lesson && <button className="sn-pill on" onClick={() => setLesson('')}><Icon name="book" size={14} /> {lessonTitle[lesson] || lesson} <Icon name="x" size={12} /></button>}
-      </div>
-      {list.loading && !list.data ? <Spinner /> : list.error ? <ErrorBox message={list.error} onRetry={list.reload} /> : !list.data?.length ? (
-        <Empty title={filtered ? 'Không có bài nào khớp bộ lọc' : 'Bảng tin còn trống'}>{filtered ? 'Thử bỏ bớt bộ lọc hoặc từ khóa.' : 'Hãy là người đầu tiên đăng bài cho lớp.'}</Empty>
-      ) : (
-        <div className="col" style={{ gap: 12 }}>
-          {list.data.map((t) => (
-            <PostCard key={t.thread_id} t={t} mine={t.author_id === user?.user_id} lessonTitle={t.lesson_code ? lessonTitle[t.lesson_code] : undefined}
-              onLike={() => like(t)} onTag={setTag} onLesson={setLesson} onMessage={() => openDirect(t.author_id, toast)} />
+        {!!lessons.data?.length && <>
+          <span className="oc-kicker">Bài học</span>
+          {lessons.data.slice(0, 8).map((l) => (
+            <button key={l.code} className={`fl-item ${lesson === l.code ? 'on' : ''}`} aria-pressed={lesson === l.code} onClick={() => setLesson(lesson === l.code ? '' : l.code)}>
+              <span className="fl-code">{l.code}</span>{l.title}
+            </button>
           ))}
+        </>}
+      </aside>
+
+      <div className="forum-feed">
+        <Composer classId={classId} moderator={moderator} members={members.data || []} lessons={lessons.data || []} onPosted={list.reload} />
+        <div className="sn-toolbar">
+          <label className="sn-search">
+            <Icon name="search" size={18} />
+            <span className="sr-only">Tìm bài đăng</span>
+            <input value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="Tìm trong diễn đàn…" />
+          </label>
+          <div className="forum-mobile-sorts sn-tabs" role="tablist" aria-label="Sắp xếp">
+            {SORTS.map((s) => <button key={s.id} role="tab" aria-selected={sort === s.id} className={sort === s.id ? 'on' : ''} onClick={() => setSort(s.id)}>{s.label}</button>)}
+          </div>
         </div>
-      )}
-    </>
+        {(tag || lesson) && (
+          <div className="row" style={{ gap: 6, marginBottom: 12 }}>
+            {tag && <button className="sn-pill on" onClick={() => setTag('')}>#{tag} <Icon name="x" size={12} /></button>}
+            {lesson && <button className="sn-pill on" onClick={() => setLesson('')}><Icon name="book" size={14} /> {lessonTitle[lesson] || lesson} <Icon name="x" size={12} /></button>}
+          </div>
+        )}
+        {list.loading && !list.data ? <Spinner /> : list.error ? <ErrorBox message={list.error} onRetry={list.reload} /> : !list.data?.length ? (
+          <Empty title={filtered ? 'Không có bài nào khớp bộ lọc' : 'Bảng tin còn trống'}>{filtered ? 'Thử bỏ bớt bộ lọc hoặc từ khóa.' : 'Hãy là người đầu tiên đăng bài cho lớp.'}</Empty>
+        ) : (
+          <div className="col" style={{ gap: 12 }}>
+            {list.data.map((t) => (
+              <PostCard key={t.thread_id} t={t} mine={t.author_id === user?.user_id} lessonTitle={t.lesson_code ? lessonTitle[t.lesson_code] : undefined}
+                onLike={() => like(t)} onTag={setTag} onLesson={setLesson} onMessage={() => openDirect(t.author_id, toast)} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      <aside className="forum-side" aria-label="Tóm tắt diễn đàn">
+        <section className="card forum-side-card forum-side-brand">
+          <span className="oc-kicker">Đang chờ trả lời</span>
+          <strong className="forum-big">{openQuestions.length}</strong>
+          <span>câu hỏi chưa có câu trả lời đúng</span>
+          {openQuestions.length > 0 && sort !== 'unanswered' && <button className="linkbtn" onClick={() => setSort('unanswered')}>Xem các câu này</button>}
+        </section>
+        {topTags.length > 0 && (
+          <section className="card forum-side-card">
+            <span className="oc-kicker">Chủ đề nổi bật</span>
+            <div className="forum-tags">
+              {topTags.map(([g, n]) => <button key={g} className={`sn-tag ${tag === g ? 'on' : ''}`} onClick={() => setTag(tag === g ? '' : g)}>#{g} <span className="muted">{n}</span></button>)}
+            </div>
+          </section>
+        )}
+      </aside>
+    </div>
   );
 }
 
@@ -427,7 +470,8 @@ function ThreadView({ threadId }: { threadId: string }) {
   if (!t) return null;
   const mine = user?.user_id === t.author_id;
   const canWrite = !t.locked || t.can_moderate;
-  const roots = t.replies.filter((r) => !r.parent_id);
+  // Câu trả lời được đánh dấu đúng (thường của giáo viên) ghim lên ngay dưới câu hỏi.
+  const roots = t.replies.filter((r) => !r.parent_id).sort((a, b) => Number(b.accepted) - Number(a.accepted));
   const children = (id: string) => t.replies.filter((r) => r.parent_id === id);
   const lessonTitle = lessons.data?.find((l) => l.code === t.lesson_code)?.title;
 
@@ -459,7 +503,7 @@ function ThreadView({ threadId }: { threadId: string }) {
   );
 
   return (
-    <>
+    <div className="thread-page">
       <PageHeader title={t.title} sub={<button className="linkbtn" onClick={() => navigate('/forum')}>← Về bảng tin</button>}
         actions={t.can_moderate ? <>
           <Button variant="ghost" size="sm" disabled={busy} onClick={() => toggle('pinned', !t.pinned)}>{t.pinned ? 'Bỏ ghim' : 'Ghim'}</Button>
@@ -529,6 +573,6 @@ function ThreadView({ threadId }: { threadId: string }) {
         ))}
       </div>
       {reporting && <ReportDialog onSend={reportForum(reporting)} onClose={() => setReporting(null)} />}
-    </>
+    </div>
   );
 }

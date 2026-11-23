@@ -8,13 +8,14 @@ import { useToast } from './ui';
 
 export interface Member { user_id: string; name: string; role: string }
 
-const COLORS = ['#58cc02', '#1cb0f6', '#ff9600', '#ce82ff', '#ff4b4b', '#2b70c9'];
+// Ảnh đại diện chỉ dùng các sắc của màu chủ đạo và màu chữ đậm.
+const COLORS = [['var(--brand)', '#fff'], ['var(--t-ink)', '#fff'], ['var(--brand-mid)', '#fff'], ['var(--brand-tint)', 'var(--brand-strong)'], ['var(--brand-strong)', '#fff']];
 
 export function Avatar({ name, id, size = 36 }: { name: string; id: string; size?: number }) {
-  const color = COLORS[[...id].reduce((s, c) => s + c.charCodeAt(0), 0) % COLORS.length];
+  const [color, fg] = COLORS[[...id].reduce((s, c) => s + c.charCodeAt(0), 0) % COLORS.length];
   return (
-    <span aria-hidden="true" style={{ width: size, height: size, borderRadius: '50%', background: color, color: '#fff', flex: 'none',
-      display: 'inline-grid', placeItems: 'center', fontWeight: 900, fontSize: size * 0.42 }}>
+    <span aria-hidden="true" style={{ width: size, height: size, borderRadius: '50%', background: color, color: fg, flex: 'none',
+      display: 'inline-grid', placeItems: 'center', fontWeight: 800, fontSize: size * 0.42 }}>
       {(name || id || '?').trim().slice(0, 1).toUpperCase()}
     </span>
   );
