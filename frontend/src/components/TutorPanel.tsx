@@ -2,8 +2,7 @@ import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { api, ApiError, apiStream, errorText, fmtTime, storage, type ChatResponse, type Source, type TutorQuota } from '../lib/api';
 import { Icon } from './Icon';
 import { Markdown } from './Markdown';
-import { Mascot } from './Mascot';
-import { IconButton } from './ui';
+import { IconButton, MarkIcon } from './ui';
 
 export interface TutorContext {
   label: string;
@@ -125,7 +124,7 @@ export function TutorPanel({ lessonCode, context, quote, onClearQuote, onSource,
   return (
     <aside className="tutor" aria-label="Tutor AI">
       <div className="tutor-head">
-        <Mascot size={34} />
+        <MarkIcon icon="sparkle" size={34} />
         <strong>Tutor AI</strong>
         <IconButton icon="plus" label="Cuộc trò chuyện mới" onClick={newChat} />
         <IconButton icon="history" label="Lịch sử trò chuyện" onClick={openHistory} active={!!history} />
@@ -150,7 +149,7 @@ export function TutorPanel({ lessonCode, context, quote, onClearQuote, onSource,
       <div className="tutor-msgs" ref={listRef}>
         {msgs.length === 0 && !busy && (
           <div className="empty" style={{ padding: '24px 8px' }}>
-            <Mascot size={88} mood="wave" />
+            <MarkIcon icon="sparkle" size={64} tone="soft" />
             <strong>Hỏi mình bất cứ điều gì về bài này</strong>
             <span>Mình trả lời dựa trên video, slide và bài đọc của bài, kèm nguồn để bạn xem lại.</span>
           </div>

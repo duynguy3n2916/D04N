@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { PageHeader } from '../components/AppShell';
 import { Flame, Gem } from '../components/Icon';
-import { Mascot } from '../components/Mascot';
 import { ErrorBox, Spinner, useToast } from '../components/ui';
 import { api, errorText, type Stats } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -66,7 +65,7 @@ export function Profile() {
               ))}
             </div>
           </section>
-          <div className="row"><Mascot size={80} /><p className="muted">Mỗi ngày học một chút, chuỗi ngày sẽ dài ra. Cố lên!</p></div>
+          <p className="muted">Mỗi ngày học một chút, chuỗi ngày sẽ dài ra. Cố lên!</p>
           </div>
           <div className="col" style={{ gap: 20 }}>
             <AccountSection />

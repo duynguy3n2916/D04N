@@ -10,11 +10,11 @@ interface Card { card_id: string; front: string; back: string; explanation: stri
 interface Summary { lesson_code: string; total: number; new: number; due: number; learned: number }
 interface Due { lesson_code: string; cards: Card[]; remaining: number }
 
-const RATINGS: { key: string; label: string; hint: string; variant: 'red' | 'soft' | 'green' | 'blue' }[] = [
-  { key: 'again', label: 'Lại', hint: 'Hỏi lại sau 10 phút', variant: 'red' },
-  { key: 'hard', label: 'Khó', hint: 'Ôn sớm hơn', variant: 'soft' },
-  { key: 'good', label: 'Được', hint: 'Ôn theo lịch', variant: 'green' },
-  { key: 'easy', label: 'Dễ', hint: 'Giãn khoảng cách', variant: 'blue' },
+const RATINGS: { key: string; label: string; hint: string; tone: string }[] = [
+  { key: 'again', label: 'Quên', hint: 'hỏi lại sau 10 phút', tone: 'again' },
+  { key: 'hard', label: 'Khó', hint: 'ôn sớm hơn', tone: 'hard' },
+  { key: 'good', label: 'Nhớ', hint: 'ôn theo lịch', tone: 'good' },
+  { key: 'easy', label: 'Dễ', hint: 'giãn khoảng cách', tone: 'easy' },
 ];
 
 /** Ôn thẻ ngắt quãng: lật thẻ, tự chấm mức nhớ, hệ thống tự lên lịch lần ôn tiếp theo. */
@@ -57,48 +57,56 @@ export function Flashcards({ lessonCode }: { lessonCode: string }) {
 
   const loading = (summary.loading && !summary.data) || (due.loading && !due.data);
   const error = summary.error || due.error;
+  const total = done + queue.length;
   return (
-    <>
-      <PageHeader title="Ôn thẻ ghi nhớ" sub="Lật thẻ, tự chấm mức nhớ. Thẻ bạn quên sẽ quay lại sớm; thẻ nhớ tốt sẽ giãn ra."
+    <div className="fc-page">
+      <PageHeader title="Ôn thẻ ghi nhớ" sub={`Bài ${lessonCode} · lật thẻ, tự chấm mức nhớ. Thẻ bạn quên sẽ quay lại sớm, thẻ nhớ tốt sẽ giãn ra.`}
         actions={<Button variant="ghost" icon="chevronLeft" onClick={() => navigate('/learn')}>Về trang học</Button>} />
       {loading && <Spinner />}
       {error && <ErrorBox message={error} onRetry={() => { summary.reload(); due.reload(); }} />}
       {summary.data && !summary.data.total && <Empty title="Bài này chưa có thẻ">Giáo viên cần duyệt câu hỏi cho bài để tạo thẻ.</Empty>}
       {summary.data && !!summary.data.total && (
         <>
-          <div className="stat-tiles">
-            <div className="tile"><strong>{summary.data.due + done}</strong><span>Cần ôn hôm nay</span></div>
-            <div className="tile"><strong>{summary.data.new}</strong><span>Thẻ mới</span></div>
-            <div className="tile"><strong>{summary.data.learned}</strong><span>Đã thuộc</span></div>
+          <div className="fc-bar">
+            <div className="fc-chips">
+              <span className="fc-chip fc-chip-brand"><b>{summary.data.due + done}</b> cần ôn hôm nay</span>
+              <span className="fc-chip"><b>{summary.data.new}</b> thẻ mới</span>
+              <span className="fc-chip"><b>{summary.data.learned}</b> đã thuộc</span>
+            </div>
+            {queue.length > 0 && (
+              <div className="fc-progress">
+                <span>{done}/{total}</span>
+                <div style={{ width: 180 }}><Progress value={done / Math.max(1, total)} label="Tiến độ phiên ôn" /></div>
+              </div>
+            )}
           </div>
           {queue.length ? (
-            <div className="card col" style={{ gap: 14, maxWidth: 720, margin: '0 auto' }}>
-              <Progress value={done / Math.max(1, done + queue.length)} label="Tiến độ phiên ôn" height={14} />
-              <span className="muted small">Còn {queue.length} thẻ trong phiên · Phím tắt: Space lật, 1–4 chấm mức nhớ</span>
-              <div className="card" style={{ minHeight: 160, display: 'grid', placeItems: 'center', padding: 24 }}>
-                <div className="col" style={{ gap: 10, textAlign: 'center' }}>
-                  <strong style={{ fontSize: 13, textTransform: 'uppercase' }}>{card.new ? 'Thẻ mới' : 'Ôn lại'}</strong>
-                  <h2 style={{ fontSize: 22 }}>{card.front}</h2>
-                  {flipped && (
-                    <div className="col" style={{ gap: 6 }}>
-                      <hr style={{ width: '100%', border: 'none', borderTop: '2px dashed var(--line)' }} />
-                      <p style={{ fontWeight: 800, fontSize: 18 }}>{card.back}</p>
+            <div className="fc-session">
+              <div className={`fc-stack ${queue.length > 1 ? 'fc-stack-more' : ''}`}>
+                <button type="button" className={`fc-card ${flipped ? 'fc-flipped' : ''}`} onClick={() => setFlipped(true)} disabled={flipped}
+                  aria-label={flipped ? undefined : 'Lật thẻ'}>
+                  <span className="fc-kicker">{card.new ? 'Thẻ mới' : 'Ôn lại'} · {lessonCode}</span>
+                  <span className="fc-front">{card.front}</span>
+                  {flipped ? (
+                    <span className="fc-back">
+                      <strong>{card.back}</strong>
                       {card.explanation && <Markdown source={card.explanation} />}
-                    </div>
-                  )}
-                </div>
+                    </span>
+                  ) : <span className="fc-tap">Bấm vào thẻ hoặc nhấn Space để lật</span>}
+                </button>
               </div>
               {!flipped ? (
-                <Button size="lg" onClick={() => setFlipped(true)} style={{ alignSelf: 'center', minWidth: 220 }}>Lật thẻ</Button>
+                <Button size="lg" onClick={() => setFlipped(true)} className="fc-flip">Lật thẻ</Button>
               ) : (
-                <div className="row" style={{ justifyContent: 'center', flexWrap: 'wrap' }}>
+                <div className="fc-rates" role="group" aria-label="Chấm mức nhớ">
                   {RATINGS.map((r, i) => (
-                    <Button key={r.key} variant={r.variant} size="lg" disabled={busy} onClick={() => rate(r.key)} title={r.hint}>
-                      {`${i + 1}. ${r.label}`}
-                    </Button>
+                    <button key={r.key} type="button" className={`fc-rate fc-rate-${r.tone}`} disabled={busy} onClick={() => rate(r.key)}>
+                      <strong>{r.label}</strong><span>{r.hint}</span><kbd>{i + 1}</kbd>
+                    </button>
                   ))}
                 </div>
               )}
+              <span className="muted small">Còn {queue.length} thẻ trong phiên · Space lật thẻ, phím 1–4 để chấm</span>
             </div>
           ) : (
             <Empty title={done ? `Xong! Bạn đã ôn ${done} thẻ` : 'Hôm nay không còn thẻ nào cần ôn'}>
@@ -107,6 +115,6 @@ export function Flashcards({ lessonCode }: { lessonCode: string }) {
           )}
         </>
       )}
-    </>
+    </div>
   );
 }

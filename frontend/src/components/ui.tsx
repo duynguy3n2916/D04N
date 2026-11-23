@@ -26,6 +26,11 @@ export function IconButton({ icon, label, onClick, active, className = '', disab
   );
 }
 
+/** Biểu tượng tròn tô màu chủ đạo, thay cho linh vật ở trạng thái rỗng, kết quả và Tutor. */
+export function MarkIcon({ icon, size = 56, tone = 'brand' }: { icon: IconName; size?: number; tone?: 'brand' | 'soft' | 'ok' | 'bad' }) {
+  return <span className={`mark-icon mark-${tone}`} style={{ width: size, height: size }} aria-hidden="true"><Icon name={icon} size={Math.round(size * .46)} /></span>;
+}
+
 export function Badge({ tone = 'gray', children }: { tone?: 'gray' | 'green' | 'blue' | 'orange' | 'red' | 'purple' | 'yellow'; children: ReactNode }) {
   return <span className={`badge badge-${tone}`}>{children}</span>;
 }
