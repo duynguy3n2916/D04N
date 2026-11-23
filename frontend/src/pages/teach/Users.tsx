@@ -4,6 +4,8 @@ import { PasswordInput } from '../../components/PasswordInput';
 import { Badge, Button, confirmDialog, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
 import { api, errorText, type ClassInfo, type Role } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
+import { Avatar } from '../../components/Social';
+import { FilterPills, PillSelect, SearchBox, StatusTag, Toolbar } from '../../components/Manage';
 import { useAsync } from '../../lib/hooks';
 
 interface UserRow {
@@ -13,7 +15,7 @@ interface UserRow {
 interface ImportResult { created: { row: number; user_id: string; name: string | null; class_ids: string[]; password: string | null; temporary: boolean }[]; errors: { row: number; username: string; error: string }[]; total_rows: number }
 
 const ROLE_LABEL: Record<Role, string> = { student: 'Học sinh', teacher: 'Giáo viên', admin: 'Quản trị' };
-const ROLE_TONE: Record<Role, 'green' | 'blue' | 'purple'> = { student: 'green', teacher: 'blue', admin: 'purple' };
+const ROLE_TONE: Record<Role, 'gray' | 'blue' | 'yellow'> = { student: 'gray', teacher: 'blue', admin: 'yellow' };
 
 function copy(text: string, toast: (t: string, tone?: any) => void) {
   navigator.clipboard?.writeText(text).then(() => toast('Đã sao chép', 'success'), () => toast('Không sao chép được, hãy bôi đen để chép', 'error'));
@@ -27,16 +29,45 @@ export function Users() {
   const [classFilter, setClassFilter] = useState('');
   const classes = useAsync((s) => api<ClassInfo[]>('/ai/classes', { signal: s }), []);
 
+  const toast = useToast();
+  const cur = classes.data?.find((c) => c.class_id === classFilter);
+  const rotate = async (c: ClassInfo) => {
+    if (!await confirmDialog('Tạo mã vào lớp mới? Mã cũ sẽ không dùng được nữa.')) return;
+    try { await api(`/ai/classes/${encodeURIComponent(c.class_id)}`, { method: 'PATCH', json: { rotate_code: true } }); classes.reload(); toast('Đã đổi mã vào lớp', 'success'); }
+    catch (e) { toast(errorText(e), 'error'); }
+  };
+
   return (
     <>
       <PageHeader title={admin ? 'Người dùng & lớp' : 'Học sinh & lớp'}
         sub={admin ? 'Tạo tài khoản, phân quyền, cấp lại mật khẩu, quản lý lớp học.' : 'Tạo tài khoản cho học sinh lớp bạn dạy, chia sẻ mã vào lớp, cấp lại mật khẩu khi học sinh quên.'} />
-      <div className="seg" role="tablist" style={{ marginBottom: 18 }}>
-        <button role="tab" aria-selected={tab === 'users'} className={tab === 'users' ? 'on' : ''} onClick={() => setTab('users')}>{admin ? 'Tài khoản' : 'Học sinh'}</button>
-        <button role="tab" aria-selected={tab === 'classes'} className={tab === 'classes' ? 'on' : ''} onClick={() => setTab('classes')}>Lớp học ({classes.data?.length ?? 0})</button>
+      <div className="class-tabs" role="tablist" aria-label="Chọn lớp">
+        <button role="tab" aria-selected={tab === 'users' && !classFilter} className={tab === 'users' && !classFilter ? 'on' : ''} onClick={() => { setTab('users'); setClassFilter(''); }}>{admin ? 'Tất cả tài khoản' : 'Mọi lớp'}</button>
+        {classes.data?.filter((c) => c.is_active).map((c) => (
+          <button key={c.class_id} role="tab" aria-selected={tab === 'users' && classFilter === c.class_id} className={tab === 'users' && classFilter === c.class_id ? 'on' : ''}
+            onClick={() => { setTab('users'); setClassFilter(c.class_id); }}>{c.name || c.class_id}<span className="m-pill-n">{c.students ?? 0}</span></button>
+        ))}
+        <button role="tab" aria-selected={tab === 'classes'} className={`class-tab-manage ${tab === 'classes' ? 'on' : ''}`} onClick={() => setTab('classes')}>Quản lý lớp ({classes.data?.length ?? 0})</button>
       </div>
+      {tab === 'users' && cur && (
+        <section className="card class-banner">
+          <div className="grow" style={{ minWidth: 0 }}>
+            <span className="oc-kicker">{cur.class_id}</span>
+            <h2>{cur.name}</h2>
+            <p className="muted">{cur.students ?? 0} học sinh · {cur.teachers ?? 0} giáo viên{cur.is_active ? '' : ' · lớp đã đóng'}</p>
+          </div>
+          <div className="join-code">
+            <span className="oc-kicker">Mã vào lớp</span>
+            <strong>{cur.join_code}</strong>
+            <div className="row" style={{ gap: 6 }}>
+              <Button size="sm" icon="copy" onClick={() => copy(cur.join_code || '', toast)}>Sao chép</Button>
+              <Button size="sm" variant="ghost" icon="refresh" onClick={() => rotate(cur)}>Đổi mã</Button>
+            </div>
+          </div>
+        </section>
+      )}
       {tab === 'users'
-        ? <UsersTab classes={classes.data || []} classFilter={classFilter} setClassFilter={setClassFilter} />
+        ? <UsersTab classes={classes.data || []} classFilter={classFilter} />
         : <ClassesTab classes={classes} onShowStudents={(c) => { setClassFilter(c); setTab('users'); }} />}
     </>
   );
@@ -44,7 +75,7 @@ export function Users() {
 
 // ---------------------------------------------------------------- Tài khoản
 
-function UsersTab({ classes, classFilter, setClassFilter }: { classes: ClassInfo[]; classFilter: string; setClassFilter: (c: string) => void }) {
+function UsersTab({ classes, classFilter }: { classes: ClassInfo[]; classFilter: string }) {
   const { user } = useAuth();
   const admin = user?.role === 'admin';
   const toast = useToast();
@@ -73,30 +104,19 @@ function UsersTab({ classes, classFilter, setClassFilter }: { classes: ClassInfo
   const noClass = !admin && classes.length === 0;
   return (
     <>
-      <div className="card row" style={{ marginBottom: 14, alignItems: 'flex-end' }}>
-        <Field label="Tìm"><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tên, tên đăng nhập, email" /></Field>
+      <Toolbar>
+        <SearchBox value={q} onChange={setQ} placeholder="Tìm tên, tên đăng nhập, email…" />
         {admin && (
-          <Field label="Vai trò">
-            <select value={role} onChange={(e) => setRole(e.target.value)}>
-              <option value="">Tất cả</option><option value="student">Học sinh</option><option value="teacher">Giáo viên</option><option value="admin">Quản trị</option>
-            </select>
-          </Field>
+          <PillSelect label="Vai trò" value={role} onChange={setRole}>
+            <option value="">Mọi vai trò</option><option value="student">Học sinh</option><option value="teacher">Giáo viên</option><option value="admin">Quản trị</option>
+          </PillSelect>
         )}
-        <Field label="Lớp">
-          <select value={classFilter} onChange={(e) => setClassFilter(e.target.value)}>
-            <option value="">{admin ? 'Tất cả' : 'Mọi lớp của tôi'}</option>
-            {classes.map((c) => <option key={c.class_id} value={c.class_id}>{c.class_id} · {c.name}</option>)}
-          </select>
-        </Field>
-        <Field label="Trạng thái">
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">Tất cả</option><option value="true">Đang hoạt động</option><option value="false">Đã khóa</option>
-          </select>
-        </Field>
-        <span style={{ flex: 1 }} />
+        <FilterPills label="Trạng thái" value={status} onChange={setStatus}
+          options={[{ id: '', label: 'Tất cả' }, { id: 'true', label: 'Đang hoạt động' }, { id: 'false', label: 'Đã khóa' }]} />
+        <span className="grow" />
         <Button variant="ghost" icon="upload" disabled={noClass} onClick={() => setImportOpen(true)}>Nhập từ CSV</Button>
         <Button icon="plus" disabled={noClass} onClick={() => setEdit('new')}>{admin ? 'Thêm tài khoản' : 'Thêm học sinh'}</Button>
-      </div>
+      </Toolbar>
       {noClass && <div className="notice" style={{ marginBottom: 14 }}>Bạn chưa có lớp nào. Tạo lớp ở thẻ “Lớp học” trước, rồi thêm học sinh vào lớp.</div>}
       {list.loading && !list.data && <Spinner />}
       {list.error && <ErrorBox message={list.error} onRetry={list.reload} />}
@@ -108,14 +128,14 @@ function UsersTab({ classes, classFilter, setClassFilter }: { classes: ClassInfo
             <tbody>
               {list.data.map((u) => (
                 <tr key={u.user_id} className={u.is_active ? '' : 'row-dim'}>
-                  <td><strong>{u.name}</strong><div className="muted small">@{u.user_id}{u.email ? ` · ${u.email}` : ''}</div></td>
+                  <td className="td-main"><span className="doc-cell"><Avatar name={u.name} id={u.user_id} size={34} /><span style={{ minWidth: 0 }}><strong>{u.name}</strong><span className="td-sub">@{u.user_id}{u.email ? ` · ${u.email}` : ''}</span></span></span></td>
                   <td><Badge tone={ROLE_TONE[u.role]}>{ROLE_LABEL[u.role]}</Badge></td>
-                  <td className="small">{u.class_ids.join(', ') || '—'}</td>
-                  <td className="small">{u.last_login_at ? new Date(u.last_login_at).toLocaleString('vi-VN') : 'Chưa đăng nhập'}</td>
+                  <td className="td-num">{u.class_ids.join(', ') || '—'}</td>
+                  <td><span className="td-sub">{u.last_login_at ? new Date(u.last_login_at).toLocaleString('vi-VN') : 'Chưa đăng nhập'}</span></td>
                   <td>
-                    {!u.is_active ? <Badge tone="red">Đã khóa</Badge> : u.must_change_password ? <Badge tone="yellow">Chờ đổi mật khẩu</Badge> : <Badge tone="green">Hoạt động</Badge>}
+                    {!u.is_active ? <StatusTag tone="bad">Đã khóa</StatusTag> : u.must_change_password ? <StatusTag tone="wait">Chờ đổi mật khẩu</StatusTag> : <StatusTag tone="ok">Hoạt động</StatusTag>}
                   </td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
+                  <td className="td-actions">
                     <IconButton icon="edit" label="Sửa" onClick={() => setEdit(u)} />
                     {u.user_id !== user?.user_id && <IconButton icon="key" label="Cấp lại mật khẩu" onClick={() => reset(u)} />}
                     {u.user_id !== user?.user_id && <IconButton icon={u.is_active ? 'lock' : 'check'} label={u.is_active ? 'Khóa tài khoản' : 'Mở khóa tài khoản'} onClick={() => toggleActive(u)} />}
@@ -359,7 +379,7 @@ function ClassesTab({ classes, onShowStudents }: { classes: ReturnType<typeof us
                   </td>
                   <td><button className="linkbtn" onClick={() => onShowStudents(c.class_id)}>{c.students ?? 0} học sinh</button></td>
                   <td>{c.teachers ?? 0}</td>
-                  <td>{c.is_active ? <Badge tone="green">Đang mở</Badge> : <Badge tone="red">Đã đóng</Badge>}</td>
+                  <td>{c.is_active ? <StatusTag tone="ok">Đang mở</StatusTag> : <StatusTag tone="muted">Đã đóng</StatusTag>}</td>
                   <td style={{ whiteSpace: 'nowrap' }}>
                     <IconButton icon="edit" label="Đổi tên lớp" onClick={() => setRename(c)} />
                     <IconButton icon={c.is_active ? 'lock' : 'check'} label={c.is_active ? 'Đóng lớp (không nhận học sinh mới)' : 'Mở lại lớp'}

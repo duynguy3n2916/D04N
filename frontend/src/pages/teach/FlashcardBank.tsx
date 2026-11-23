@@ -84,7 +84,7 @@ export function FlashcardBank() {
                 <tr key={c.card_id} className={`row-click ${sel.has(c.card_id) ? 'row-on' : ''}`} onClick={() => setEditing(c)}>
                   <td className="td-check"><Check checked={sel.has(c.card_id)} onChange={() => sel.toggle(c.card_id)} label={`Chọn thẻ: ${c.front}`} /></td>
                   <td className="td-main"><strong>{c.front}</strong><span className="td-sub">{c.back}</span></td>
-                  <td className="td-sub" style={{ maxWidth: 220 }}>{c.sources.map((s) => s.display || s.label).join(', ') || '—'}</td>
+                  <td style={{ maxWidth: 220 }}><span className="td-sub">{c.sources.map((s) => s.display || s.label).join(', ') || '—'}</span></td>
                   <td><StatusTag tone={STATUS[c.status].tone}>{STATUS[c.status].label}</StatusTag></td>
                 </tr>
               ))}

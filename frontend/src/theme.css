@@ -660,3 +660,85 @@ a.oi:hover { background: var(--brand-soft); color: var(--ink); }
 .sidenav { overflow-y: auto; }
 .sidenav-group .nav-item { min-height: 42px; padding: 7px 14px; }
 @media (max-height: 940px) { .sidenav-group .nav-item { min-height: 38px; padding: 5px 14px; font-size: 15px; } .sidenav-title { margin-top: 4px; } }
+
+/* ===================== Khóa học: lưới thẻ + trình soạn 2 cột ===================== */
+.course-card, .course-card:hover { border: 0; box-shadow: none; border-radius: 24px; overflow: hidden; }
+.course-card:hover { box-shadow: 0 18px 36px -24px rgba(23, 18, 15, .35); }
+.course-card .cover { background: linear-gradient(135deg, var(--brand), var(--brand-strong)) !important; color: rgba(255, 255, 255, .7); }
+.course-card-body strong { font-size: 18px; letter-spacing: -.01em; }
+.cover-edit .cover, .cover-pick { border-radius: 18px; border-width: 1.5px; }
+.cover-pick { border-color: var(--brand-line); }
+.ce-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 20px; align-items: start; }
+.ce-tree { position: sticky; top: 20px; padding: 10px; display: flex; flex-direction: column; gap: 2px; max-height: calc(100vh - 40px); overflow-y: auto; }
+.ce-tree > .btn { margin: 8px 6px 4px; align-self: flex-start; }
+.ce-group { display: flex; flex-direction: column; gap: 1px; margin-top: 6px; }
+.ce-node { border: 0; background: transparent; font: inherit; text-align: left; color: var(--ink); cursor: pointer; display: flex; align-items: center; gap: 8px;
+  border-radius: 12px; padding: 8px 10px; min-height: 38px; font-size: 14.5px; font-weight: 600; overflow: hidden; }
+.ce-node:hover { background: var(--bg-soft); }
+.ce-node.on { background: var(--ink); color: var(--paper); }
+.ce-node.on .ol-code, .ce-node.on .ce-n { color: inherit; opacity: .7; }
+.ce-course { color: var(--muted); }
+.ce-chapter { font-weight: 800; font-size: 13px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
+.ce-chapter .ol-code { width: auto; }
+.ce-lesson .ol-code { width: 26px; flex: none; }
+.ce-item { padding-left: 44px; font-weight: 500; font-size: 14px; color: var(--muted); min-height: 34px; }
+.ce-item svg { flex: none; }
+.ce-n { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+.ce-detail { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.ce-head h2 { font-size: 30px; letter-spacing: -.03em; line-height: 1.1; margin-top: 4px; }
+.ce-head p { margin: 6px 0 0; }
+.ce-list { padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.ce-link { flex: 1; min-width: 0; border: 0; background: none; padding: 0; font: inherit; text-align: left; color: inherit; cursor: pointer; }
+.ce-link:hover strong { color: var(--brand); }
+.tree-item { border: 0; border-radius: 16px; padding: 8px 8px 8px 12px; min-height: 56px; }
+.tree-item:hover { background: var(--t-wash); }
+.tree-item strong { display: block; }
+@media (max-width: 1000px) { .ce-layout { grid-template-columns: 1fr; } .ce-tree { position: static; max-height: none; } }
+
+/* Học sinh & lớp: tab theo lớp, mã vào lớp hiện to */
+.class-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+.class-tabs button { border: 0; background: var(--bg-soft); color: var(--muted); border-radius: 999px; padding: 9px 16px; font: inherit; font-weight: 600; font-size: 14.5px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; min-height: 40px; }
+.class-tabs button:hover { color: var(--ink); }
+.class-tabs button.on { background: var(--ink); color: var(--paper); }
+.class-tabs .class-tab-manage { margin-left: auto; background: transparent; box-shadow: inset 0 0 0 1.5px var(--line); }
+.class-banner { display: flex; align-items: center; gap: 24px; flex-wrap: wrap; margin-bottom: 16px; padding: 22px 24px; }
+.class-banner h2 { font-size: 28px; letter-spacing: -.03em; margin-top: 4px; }
+.class-banner p { margin: 4px 0 0; }
+.join-code { background: var(--brand); color: #fff; border-radius: 22px; padding: 14px 18px; display: flex; flex-direction: column; gap: 6px; }
+.join-code .oc-kicker { color: rgba(255, 255, 255, .75); }
+.join-code strong { font-family: var(--mono); font-size: 34px; letter-spacing: 4px; line-height: 1.1; }
+.join-code .btn-green { background: #fff; color: var(--brand-strong); }
+.join-code .btn-ghost { color: #fff; border-color: rgba(255, 255, 255, .7); }
+.row-dim td { opacity: .6; }
+
+/* Đánh giá + Hệ thống */
+.eval-run { background: #fff; border-radius: 999px; padding: 6px 6px 6px 10px; }
+.run-chart svg { width: 100%; height: auto; display: block; }
+.run-chart .grid { stroke: var(--line); stroke-width: 1; }
+.run-chart .axis { font-size: 11px; fill: var(--muted); font-family: var(--mono); }
+.run-chart polyline { stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.run-chart circle { stroke: #fff; stroke-width: 2; }
+.ln-brand polyline { stroke: var(--brand); }
+.ln-brand circle { fill: var(--brand); }
+i.ln-brand { background: var(--brand); }
+.ln-ink polyline { stroke: var(--t-ink); }
+.ln-ink circle { fill: var(--t-ink); }
+i.ln-ink { background: var(--t-ink); }
+.ln-mid polyline { stroke: var(--brand-line); stroke-dasharray: 6 5; }
+.ln-mid circle { fill: var(--brand-line); }
+i.ln-mid { background: var(--brand-line); }
+.run-legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--muted); font-weight: 600; margin-top: 8px; }
+.run-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.run-legend i { width: 12px; height: 12px; border-radius: 4px; display: inline-block; }
+.run-row { border: 0; background: transparent; text-align: left; font: inherit; color: var(--ink); border-radius: 16px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.run-row:hover { background: var(--bg-soft); }
+.run-row.on { background: var(--brand-soft); }
+.settings-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 24px; align-items: start; }
+.settings-menu { position: sticky; top: 20px; display: flex; flex-direction: column; gap: 2px; }
+.settings-main { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.fl-item .ce-n { margin-left: auto; }
+.fl-item.on .ce-n { color: inherit; opacity: .7; }
+@media (max-width: 900px) { .settings-layout { grid-template-columns: 1fr; } .settings-menu { position: static; flex-direction: row; flex-wrap: wrap; } }
+.errorbox + .settings-layout, .errorbox + .split { margin-top: 14px; }
+.chip-x { border: 0; background: transparent; color: var(--t-muted); width: 22px; height: 22px; margin-left: 4px; border-radius: 999px; cursor: pointer; font-size: 15px; line-height: 1; display: inline-grid; place-items: center; }
+.chip-x:hover { background: var(--brand-soft); color: var(--brand); }
