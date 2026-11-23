@@ -4,12 +4,13 @@ import { useId } from 'react';
 export type MascotMood = 'happy' | 'wave' | 'think' | 'sad' | 'celebrate';
 
 const INK = '#25313B';
-// Bảng xanh lấy đúng theo token trong styles.css để logo khớp màu web.
-const GREEN = '#34A30F'; // --green
-const GREEN_DARK = '#237008'; // --green-dark
-const GREEN_TEXT = '#2B7A0B'; // --green-text
-const GREEN_LINE = '#7BD34B'; // --green-line
-const GREEN_LEAF = '#5CC02A'; // --green-leaf
+// Màu thân và lá đi theo màu chủ đạo người dùng chọn (biến CSS do lib/theme.ts đặt).
+// Thuộc tính fill/stroke của SVG không nhận var(), nên các màu này luôn được gán qua style.
+const GREEN = 'var(--brand)';
+const GREEN_DARK = 'var(--brand-strong)';
+const GREEN_TEXT = 'var(--brand-strong)';
+const GREEN_LINE = 'var(--brand-line)';
+const GREEN_LEAF = 'var(--brand-mid)';
 
 function Eyes({ mood }: { mood: MascotMood }) {
   if (mood === 'celebrate') {
@@ -32,8 +33,8 @@ function Eyes({ mood }: { mood: MascotMood }) {
   return (
     <>
       {eye(49)}{eye(71)}
-      {mood === 'sad' && <path d="M41.5 43.9l10.5-3.4M78.5 43.9l-10.5-3.4" stroke={GREEN_DARK} strokeWidth="2.6" strokeLinecap="round" />}
-      {mood === 'think' && <path d="M43 42.8q6-3.8 12 0" fill="none" stroke={GREEN_DARK} strokeWidth="2.6" strokeLinecap="round" />}
+      {mood === 'sad' && <path d="M41.5 43.9l10.5-3.4M78.5 43.9l-10.5-3.4" style={{ stroke: GREEN_DARK }} strokeWidth="2.6" strokeLinecap="round" />}
+      {mood === 'think' && <path d="M43 42.8q6-3.8 12 0" fill="none" style={{ stroke: GREEN_DARK }} strokeWidth="2.6" strokeLinecap="round" />}
     </>
   );
 }
@@ -68,8 +69,8 @@ function Extras({ mood }: { mood: MascotMood }) {
   if (mood === 'wave') {
     return (
       <>
-        <path d="M88 70q12-6 14-22" fill="none" stroke={GREEN_TEXT} strokeWidth="7" strokeLinecap="round" />
-        <circle cx="102" cy="46" r="5.5" fill={GREEN_LEAF} />
+        <path d="M88 70q12-6 14-22" fill="none" style={{ stroke: GREEN_TEXT }} strokeWidth="7" strokeLinecap="round" />
+        <circle cx="102" cy="46" r="5.5" style={{ fill: GREEN_LEAF }} />
         <path d="M110 36q4 4 2 10M115 40q3 3 1 7" fill="none" stroke="#FFC233" strokeWidth="2.4" strokeLinecap="round" />
       </>
     );
@@ -87,7 +88,7 @@ function Extras({ mood }: { mood: MascotMood }) {
     return (
       <>
         {CONFETTI.map(([x, y, c, a]) => <rect key={`${x}-${y}`} x={x} y={y} width="6" height="3.4" rx="1.4" fill={c} transform={`rotate(${a} ${x + 3} ${y + 1.7})`} />)}
-        <path d="M26 70q-10-6-10-20M94 70q10-6 10-20" fill="none" stroke={GREEN_TEXT} strokeWidth="7" strokeLinecap="round" />
+        <path d="M26 70q-10-6-10-20M94 70q10-6 10-20" fill="none" style={{ stroke: GREEN_TEXT }} strokeWidth="7" strokeLinecap="round" />
       </>
     );
   }
@@ -100,7 +101,7 @@ export function Mascot({ size = 120, mood = 'happy', label }: { size?: number; m
     <svg width={size} height={size} viewBox="0 0 120 120" role={label ? 'img' : undefined} aria-label={label} aria-hidden={label ? undefined : true}>
       <defs>
         <radialGradient id={`${id}b`} cx=".38" cy=".3" r=".8">
-          <stop offset="0" stopColor={GREEN_LINE} /><stop offset=".6" stopColor={GREEN} /><stop offset="1" stopColor={GREEN_DARK} />
+          <stop offset="0" style={{ stopColor: GREEN_LINE }} /><stop offset=".6" style={{ stopColor: GREEN }} /><stop offset="1" style={{ stopColor: GREEN_DARK }} />
         </radialGradient>
         <linearGradient id={`${id}p`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#B98258" /><stop offset="1" stopColor="#8A5733" />
@@ -109,11 +110,11 @@ export function Mascot({ size = 120, mood = 'happy', label }: { size?: number; m
       <ellipse cx="60" cy="115" rx="28" ry="3.6" fill="#000" opacity=".08" />
       {/* lá */}
       <g className="m-leaf">
-        <path d="M60 30v-8" stroke={GREEN_TEXT} strokeWidth="3.6" strokeLinecap="round" />
-        <path d="M60 23C54 8 36 6 30 15c8 10 22 12 30 8z" fill={GREEN_LINE} />
-        <path d="M57 21c-7-5-15-7-23-6" fill="none" stroke={GREEN_TEXT} strokeWidth="1.6" strokeLinecap="round" opacity=".55" />
-        <path d="M61 22C67 7 85 5 91 14c-8 10-22 12-30 8z" fill={GREEN_LEAF} />
-        <path d="M64 20c7-5 15-6 23-5" fill="none" stroke={GREEN_TEXT} strokeWidth="1.6" strokeLinecap="round" opacity=".55" />
+        <path d="M60 30v-8" style={{ stroke: GREEN_TEXT }} strokeWidth="3.6" strokeLinecap="round" />
+        <path d="M60 23C54 8 36 6 30 15c8 10 22 12 30 8z" style={{ fill: GREEN_LINE }} />
+        <path d="M57 21c-7-5-15-7-23-6" fill="none" style={{ stroke: GREEN_TEXT }} strokeWidth="1.6" strokeLinecap="round" opacity=".55" />
+        <path d="M61 22C67 7 85 5 91 14c-8 10-22 12-30 8z" style={{ fill: GREEN_LEAF }} />
+        <path d="M64 20c7-5 15-6 23-5" fill="none" style={{ stroke: GREEN_TEXT }} strokeWidth="1.6" strokeLinecap="round" opacity=".55" />
       </g>
       {/* đầu */}
       <circle cx="60" cy="58" r="30" fill={`url(#${id}b)`} />
@@ -134,11 +135,22 @@ export function Mascot({ size = 120, mood = 'happy', label }: { size?: number; m
   );
 }
 
+/** Biểu tượng logo: mầm hai lá lệch nhau, màu theo màu chủ đạo. */
+export function LogoMark({ size = 34 }: { size?: number }) {
+  return (
+    <svg className="logo-mark" width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+      <path d="M32 56V30" style={{ stroke: 'var(--brand)' }} strokeWidth="6" strokeLinecap="round" fill="none" />
+      <path d="M32 32C32 18 22 10 8 10c0 14 10 22 24 22z" style={{ fill: 'var(--brand)' }} />
+      <path d="M32 28c0-12 9-19 22-19 0 12-9 19-22 19z" style={{ fill: 'var(--brand-mid)' }} />
+    </svg>
+  );
+}
+
 export function Logo({ size = 34 }: { size?: number }) {
   return (
     <span className="logo">
-      <Mascot size={size} />
-      <span className="logo-text">mầm<i className="logo-swoosh" aria-hidden="true" /></span>
+      <LogoMark size={size} />
+      <span className="logo-text">mầm</span>
     </span>
   );
 }

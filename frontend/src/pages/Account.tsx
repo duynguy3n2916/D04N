@@ -5,8 +5,9 @@ import { Badge, Button, confirmDialog, ErrorBox, Field, useToast } from '../comp
 import { api, errorText, type ClassInfo, type User } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useAsync } from '../lib/hooks';
+import { ThemeSettings } from '../components/ThemePicker';
 
-/** Phần "Tài khoản" trong trang Hồ sơ: thông tin cá nhân, lớp học, đổi mật khẩu, đăng xuất mọi thiết bị. */
+/** Phần "Tài khoản" trong trang Hồ sơ: màu giao diện, thông tin cá nhân, lớp học, đổi mật khẩu, đăng xuất mọi thiết bị. */
 export function AccountSection() {
   const { user, setUser, changePassword, logout } = useAuth();
   const toast = useToast();
@@ -63,6 +64,8 @@ export function AccountSection() {
     <section className="col" style={{ gap: 20 }} aria-label="Tài khoản">
       <h2 style={{ fontSize: 22, marginTop: 8 }}>Tài khoản</h2>
       {me.error && <ErrorBox message={me.error} onRetry={me.reload} />}
+
+      <ThemeSettings />
 
       <form className="card col" style={{ gap: 12 }} onSubmit={saveInfo}>
         <div className="card-title" style={{ marginBottom: 0 }}><h2>Thông tin</h2><Badge tone="blue">{user?.user_id}</Badge></div>
