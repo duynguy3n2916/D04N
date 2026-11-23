@@ -98,6 +98,16 @@ Nguồn mà Tutor trích dẫn bấm được: nguồn video tua tới đúng gi
 ngẫu nhiên ≥ 32 ký tự, chạy `python init_db.py` rồi `python init_db.py --create-admin admin`. Tiến độ học cũ gắn theo mã người
 dùng, nên tạo tài khoản trùng mã cũ (ví dụ `sv-01`) là giữ được tiến độ.
 
+## RAG với LangChain
+
+Pipeline RAG dùng các thành phần chuẩn của LangChain: `RecursiveCharacterTextSplitter` để chia chunk,
+`Embeddings` (`HuggingFaceEmbeddings` / `OpenAIEmbeddings`) để tạo vector, `ScopedHybridRetriever` (kế thừa
+`BaseRetriever`, trả về `Document`) để truy xuất, `BaseDocumentCompressor` để rerank và `ChatOpenAI` để gọi model.
+Phần tìm kiếm vẫn là SQL pgvector + full-text trên bảng `ai_chunks` (không dùng vector store dựng sẵn) vì bộ lọc
+phạm vi quyền phải join với lớp / khóa học / bài học. Lấy retriever cho chain hoặc agent bằng
+`retrieval.get_retriever(db, RetrievalScope.for_user(user, lesson_id=...))`; `retrieval.retrieve()` giữ API cũ (list[dict]).
+Đặt `LANGSMITH_TRACING=true` và `LANGSMITH_API_KEY` để xem trace retriever / LLM trên LangSmith (tùy chọn).
+
 ## Cấu trúc
 
 ```
@@ -110,8 +120,11 @@ app/
   services/
     object_store.py  # kho file: Cloudflare R2 (MEDIA_STORAGE=r2) hoặc thư mục local; hỗ trợ Range để tua video
     storage.py       # nhận file upload: kiểm tra định dạng, dung lượng, tính SHA-256, đưa vào kho
-    llm.py           # LLM Gateway: OpenAI, validate JSON + tự sửa 1 lần, log ai_llm_calls
-    retrieval.py     # RAG Engine: lọc phạm vi + lớp, pgvector, ngưỡng điểm, mở rộng lân cận, nhãn nguồn [S1]
+    llm.py           # LLM Gateway: LangChain ChatOpenAI, validate JSON + tự sửa 1 lần, log ai_llm_calls
+    chunking.py      # LangChain RecursiveCharacterTextSplitter (đoạn -> dòng -> câu -> từ), giữ metadata trang/mục
+    embedding.py     # LangChain Embeddings: HuggingFace (local) | OpenAI | hash (test)
+    hybrid.py        # từ khóa Postgres full-text, RRF, rerank cross-encoder (LangChain BaseDocumentCompressor)
+    retrieval.py     # RAG Engine: ScopedHybridRetriever (LangChain BaseRetriever) lọc phạm vi + lớp, pgvector, ngưỡng điểm, mở rộng lân cận, nhãn nguồn [S1]
     tutor_explain.py # Tutor tự giải thích đáp án khi học sinh hết giờ / trả lời sai (AI thứ hai, chạy nền)
     tutor.py         # Tutor: lịch sử + tóm tắt, transcript quanh video_time, hint mode do server quyết, chặn lộ đáp án
     question_gen.py  # Teacher AI: sinh đề, ngân hàng câu hỏi, duyệt từng câu, tỷ lệ chấp nhận

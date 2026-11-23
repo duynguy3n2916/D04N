@@ -7,7 +7,11 @@ pydantic==2.11.*
 pydantic-settings==2.9.*
 python-multipart==0.0.9
 pyjwt==2.10.*
-openai==1.70.*
+openai>=1.109,<2
+langchain-core==1.*
+langchain-openai==1.*
+langchain-text-splitters==1.*
+langchain-huggingface==1.*
 sentence-transformers==3.4.*
 pypdf==5.4.*
 python-docx==1.1.*

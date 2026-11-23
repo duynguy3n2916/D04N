@@ -4,12 +4,17 @@
   Câu hỏi tách thành các âm tiết có nghĩa (bỏ hư từ), nối OR; kết quả chỉ được nhận khi phủ đủ tỉ lệ
   từ khóa (RAG_HYBRID_MIN_COVERAGE) để không lọt chunk chỉ trùng vài từ phổ biến.
 - RRF (Reciprocal Rank Fusion): score = Σ 1 / (k + rank) trên các danh sách dense / sparse.
-- Rerank (tùy chọn, RAG_RERANK=cross_encoder): chấm lại cặp (câu hỏi, chunk) bằng cross-encoder đa ngôn ngữ.
+- Rerank (tùy chọn, RAG_RERANK=cross_encoder): LangChain `BaseDocumentCompressor` chấm lại cặp (câu hỏi, chunk)
+  bằng cross-encoder đa ngôn ngữ.
 """
 import logging
 import re
 import threading
 import unicodedata
+from collections.abc import Sequence
+
+from langchain_core.callbacks import Callbacks
+from langchain_core.documents import BaseDocumentCompressor, Document
 
 from app.config import settings
 
@@ -90,18 +95,29 @@ def _get_reranker():
     return _reranker
 
 
-def rerank(query: str, chunks: list[dict], top_k: int) -> list[dict]:
-    """Sắp lại theo cross-encoder nếu bật RAG_RERANK=cross_encoder; lỗi thì giữ nguyên thứ tự."""
-    if settings.rag_rerank != "cross_encoder" or len(chunks) < 2:
-        return chunks[:top_k]
-    model = _get_reranker()
-    if model is None:
-        return chunks[:top_k]
-    try:
-        scores = model.predict([(query, c["content"][:2000]) for c in chunks])
-    except Exception:
-        log.exception("rerank_failed")
-        return chunks[:top_k]
-    for c, s in zip(chunks, scores):
-        c["rerank_score"] = round(float(s), 4)
-    return sorted(chunks, key=lambda c: c["rerank_score"], reverse=True)[:top_k]
+class CrossEncoderReranker(BaseDocumentCompressor):
+    """Sắp lại Document theo điểm cross-encoder (ghi vào metadata["rerank_score"]); lỗi thì giữ nguyên thứ tự."""
+
+    top_k: int = 5
+
+    def compress_documents(self, documents: Sequence[Document], query: str,
+                           callbacks: Callbacks | None = None) -> Sequence[Document]:
+        docs = list(documents)
+        if len(docs) < 2:
+            return docs[: self.top_k]
+        model = _get_reranker()
+        if model is None:
+            return docs[: self.top_k]
+        try:
+            scores = model.predict([(query, d.page_content[:2000]) for d in docs])
+        except Exception:
+            log.exception("rerank_failed")
+            return docs[: self.top_k]
+        for d, s in zip(docs, scores):
+            d.metadata["rerank_score"] = round(float(s), 4)
+        return sorted(docs, key=lambda d: d.metadata["rerank_score"], reverse=True)[: self.top_k]
+
+
+def get_compressor(top_k: int) -> BaseDocumentCompressor | None:
+    """Bộ rerank theo cấu hình RAG_RERANK (None = không rerank)."""
+    return CrossEncoderReranker(top_k=top_k) if settings.rag_rerank == "cross_encoder" else None
