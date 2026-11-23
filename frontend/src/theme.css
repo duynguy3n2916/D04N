@@ -177,3 +177,67 @@ a { color: var(--brand); } a:hover { color: var(--brand-strong); }
 .tile span { font-weight: 600; }
 .stat-tiles .tile:nth-child(2) { background: var(--brand); color: #fff; }
 .stat-tiles .tile:nth-child(2) span { color: rgba(255, 255, 255, .85); }
+
+/* ===================== Trang Học: danh mục thu gọn ===================== */
+.learn-page { display: flex; flex-direction: column; gap: 18px; max-width: 860px; margin: 0 auto; width: 100%; }
+.learn-head { display: flex; align-items: flex-end; gap: 20px; flex-wrap: wrap; }
+.learn-head h1 { font-size: 40px; letter-spacing: -.035em; line-height: 1.05; text-wrap: balance; }
+.learn-head-stat { display: flex; align-items: center; gap: 14px; text-align: right; }
+.learn-head-stat strong { display: block; font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+.learn-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.learn-toolbar .pill { border: 0; background: var(--bg-soft); color: var(--muted); min-height: 36px; padding: 6px 14px; }
+.learn-toolbar .pill-on { background: var(--ink); color: var(--paper); }
+.learn-toolbar .btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.oc-kicker { display: block; font-size: 12px; font-weight: 700; letter-spacing: .6px; text-transform: uppercase; color: var(--muted); }
+.outline-card { padding: 0; overflow: hidden; }
+.oc-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px; }
+.oc-head h2 { font-size: 18px; }
+.ol { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 20px; border: 0; border-top: 1px solid var(--line); background: #fff;
+  font: inherit; color: var(--ink); cursor: pointer; text-align: left; min-height: 52px; }
+.ol:hover, .ol-open { background: var(--bg-soft); }
+.ol-caret { width: 12px; color: var(--muted); font-size: 12px; }
+.ol-code { width: 30px; font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.ol-title { flex: 1; min-width: 0; font-weight: 700; font-size: 16px; }
+.ol-bar { width: 120px; height: 8px; border-radius: 9px; background: var(--brand-soft); overflow: hidden; flex: none; }
+.ol-bar i { display: block; height: 100%; background: var(--brand); border-radius: 9px; transition: width .4s ease; }
+.ol-count { width: 40px; text-align: right; font-family: var(--mono); font-size: 13px; color: var(--muted); }
+.ol-spacer { width: 34px; }
+.ol-items { display: flex; flex-direction: column; background: var(--bg-soft); padding: 4px 0 8px; }
+.ol-empty { padding: 10px 20px 14px 76px; background: var(--bg-soft); }
+.oi { display: flex; align-items: center; gap: 12px; padding: 9px 20px 9px 64px; text-decoration: none; color: var(--ink); min-height: 50px; }
+a.oi:hover { background: var(--brand-soft); color: var(--ink); }
+.oi-row-current { background: var(--brand-soft); }
+.oi-row-current .oi-title { font-weight: 700; }
+.oi-row-locked { color: var(--muted); }
+.oi-ico { width: 34px; height: 34px; border-radius: 11px; display: grid; place-items: center; flex: none; }
+.oi-done { background: var(--brand); color: #fff; }
+.oi-current { background: var(--brand); color: #fff; box-shadow: 0 0 0 4px var(--brand-tint); }
+.oi-open { background: #fff; color: var(--brand); border: 1.5px solid var(--brand-line); }
+.oi-locked { background: transparent; color: var(--muted); }
+.oi-title { flex: 1; min-width: 0; font-weight: 500; }
+.oi-meta { font-size: 13px; font-weight: 600; color: var(--muted); white-space: nowrap; }
+.oi-chip { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 84px; padding: 4px 10px; border-radius: 999px; font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.oi-chip-done { background: var(--brand-tint); color: var(--brand-strong); }
+.oi-chip-current { background: var(--ink); color: var(--paper); }
+.oi-chip-open { background: #fff; color: var(--brand-strong); }
+.oi-chip-locked { background: transparent; color: var(--muted); min-width: 34px; }
+@media (max-width: 700px) {
+  .oi { padding-left: 20px; } .oi-meta, .ol-bar { display: none; }
+  .learn-head h1 { font-size: 30px; }
+}
+
+/* Cột phải trang Học */
+.kpi-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kpi { background: #fff; border-radius: 22px; padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.kpi strong { font-size: 28px; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; }
+.kpi-label { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; color: var(--muted); font-size: 14px; }
+.kpi-brand { background: var(--brand); color: #fff; }
+.kpi-brand .kpi-label { color: rgba(255, 255, 255, .85); }
+.goal-card { display: flex; align-items: center; gap: 16px; }
+.goal-card h2 { font-size: 19px; }
+.goal-edit { font-weight: 700; font-size: 14px; text-decoration: none; margin-top: 2px; }
+.study-tools-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.study-tools-row .btn { width: 100%; }
+.leader { padding: 8px 10px; border-radius: 14px; font-weight: 600; }
+.leader .avatar { width: 32px; height: 32px; flex-basis: 32px; font-size: 14px; }
+.notice { border-radius: 16px; }
