@@ -1,7 +1,6 @@
 import { Fragment, useMemo } from 'react';
 import { AppShell } from '../components/AppShell';
 import { Bolt, Flame, Gem, Icon, type IconName } from '../components/Icon';
-import { Mascot } from '../components/Mascot';
 import { Badge, Button, CountUp, Empty, ErrorBox, Progress, Spinner, useToast } from '../components/ui';
 import { api, apiBlob, errorText, type CourseSummary, type CourseTree, type ItemSummary, type Stats } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -143,12 +142,6 @@ function CoursePath({ tree }: { tree: CourseTree }) {
                   {!ls.items.length && <p className="muted small">Bài này chưa có nội dung.</p>}
                 </Fragment>
               ))}
-              {tree.current_item_id && ch.lessons.some((l) => l.items.some((i) => i.item_id === tree.current_item_id)) && (
-                <div className="path-mascot">
-                  <div className="speech">Mình học tiếp nhé! Có gì khó cứ bấm “Hỏi Tutor AI”.</div>
-                  <Mascot size={110} />
-                </div>
-              )}
             </div>
           </Fragment>
         );
@@ -197,7 +190,6 @@ export function Learn({ path, courseId }: { path: string; courseId?: string }) {
         {tree.data && <CoursePath tree={tree.data} />}
         {tree.data && tree.data.items_total > 0 && tree.data.items_done === tree.data.items_total && (
           <div className="card row" style={{ maxWidth: 620, width: '100%' }}>
-            <Mascot size={72} mood="celebrate" />
             <div className="grow"><h2>Hoàn thành khóa học!</h2><p className="muted">Bạn đã học hết các mục. <Badge tone="green">Tuyệt vời</Badge></p></div>
           </div>
         )}
