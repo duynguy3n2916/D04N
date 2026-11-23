@@ -6,6 +6,7 @@ import { Badge, Button, confirmDialog, Empty, ErrorBox, Field, IconButton, Modal
 import { api, errorText, fmtTime, mediaUrl, type Job, type TranscriptSegment } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { Link, navigate } from '../../lib/router';
+import { FilterPills, SearchBox, StatusTag, Toolbar } from '../../components/Manage';
 
 interface VideoRow {
   video_id: string; title: string; has_file: boolean; source_url: string | null; duration_seconds: number | null; size_mb: number | null;
@@ -24,49 +25,73 @@ interface CourseDestination extends CourseChoice {
 
 // ---------------------------------------------------------------- Danh sách video
 
+type VFilter = '' | 'no-sub' | 'draft' | 'no-file';
 export function Videos() {
   const list = useAsync((s) => api<VideoRow[]>('/ai/media/videos', { signal: s }), []);
   const [open, setOpen] = useState(false);
+  const [dropped, setDropped] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [q, setQ] = useState('');
+  const [filter, setFilter] = useState<VFilter>('');
+  const all = list.data || [];
+  const test = (v: VideoRow, f: VFilter) => f === 'no-sub' ? !v.transcript : f === 'draft' ? v.questions.draft > 0 : f === 'no-file' ? !v.has_file && !v.source_url : true;
+  const rows = all.filter((v) => test(v, filter) && (!q || v.title.toLowerCase().includes(q.toLowerCase())));
+  // Kéo thả file video vào bất kỳ đâu trên trang để mở hộp tải lên.
+  const onDrop = (e: React.DragEvent) => {
+    e.preventDefault(); setDragging(false);
+    const f = [...e.dataTransfer.files].find((x) => x.type.startsWith('video/') || /\.(mp4|webm|mov|mkv)$/i.test(x.name));
+    if (f) { setDropped(f); setOpen(true); }
+  };
   return (
-    <>
-      <PageHeader title="Video bài giảng" sub="Tải video, tạo phụ đề và đặt câu hỏi dừng video cho học sinh."
-        actions={<Button icon="upload" onClick={() => setOpen(true)}>Thêm video</Button>} />
+    <div className="videos-page" onDragOver={(e) => { if (e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true); } }}
+      onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }} onDrop={onDrop}>
+      <PageHeader title="Video bài giảng" sub="Tải video, tạo phụ đề và đặt câu hỏi dừng video cho học sinh. Có thể kéo thả file video vào trang."
+        actions={<Button icon="upload" onClick={() => { setDropped(null); setOpen(true); }}>Thêm video</Button>} />
+      <Toolbar>
+        <SearchBox value={q} onChange={setQ} placeholder="Tìm video…" />
+        <FilterPills<VFilter> label="Lọc video" value={filter} onChange={setFilter} options={[
+          { id: '', label: 'Tất cả', count: all.length }, { id: 'no-sub', label: 'Chưa có phụ đề', count: all.filter((v) => test(v, 'no-sub')).length },
+          { id: 'draft', label: 'Câu hỏi chờ duyệt', count: all.filter((v) => test(v, 'draft')).length }, { id: 'no-file', label: 'Chưa có file', count: all.filter((v) => test(v, 'no-file')).length }]} />
+      </Toolbar>
       {list.loading && !list.data && <Spinner />}
       {list.error && <ErrorBox message={list.error} onRetry={list.reload} />}
-      {list.data && !list.data.length && <Empty title="Chưa có video nào" />}
-      <div className="col" style={{ gap: 12 }}>
-        {list.data?.map((v) => (
-          <Link key={v.video_id} to={`/teach/videos/${encodeURIComponent(v.video_id)}`} className="video-card">
-            <span className="video-thumb"><Icon name="play" size={24} /></span>
-            <span className="col" style={{ gap: 4, flex: 1, minWidth: 0 }}>
-              <strong style={{ fontSize: 17 }}>{v.title}</strong>
-              <span className="row" style={{ gap: 6 }}>
-                <span className="muted small">{v.video_id}{v.duration_seconds ? ` · ${fmtTime(v.duration_seconds)}` : ''}{v.size_mb ? ` · ${v.size_mb} MB` : ''}</span>
-                {!v.has_file && !v.source_url && <Badge tone="red">Chưa có file</Badge>}
-                {v.source_url && !v.has_file && <Badge tone="blue">Link ngoài</Badge>}
-                {v.transcript ? <Badge tone="green">Phụ đề v{v.transcript.version}</Badge> : <Badge tone="orange">Chưa có phụ đề</Badge>}
-                <Badge tone="purple">{v.questions.approved} câu hỏi</Badge>
-                {v.questions.draft > 0 && <Badge tone="yellow">{v.questions.draft} nháp chờ duyệt</Badge>}
+      {list.data && !all.length && <Empty title="Chưa có video nào">Bấm “Thêm video” hoặc kéo thả file .mp4 vào trang này. Phụ đề được tạo tự động sau khi tải lên.</Empty>}
+      {!!all.length && !rows.length && <Empty title="Không có video nào khớp">Thử bỏ bớt bộ lọc hoặc từ khóa.</Empty>}
+      <div className="video-grid">
+        {rows.map((v) => (
+          <Link key={v.video_id} to={`/teach/videos/${encodeURIComponent(v.video_id)}`} className="vcard">
+            <span className="vcard-thumb">
+              <span className="vcard-play"><Icon name="play" size={22} /></span>
+              {v.duration_seconds ? <span className="vcard-dur">{fmtTime(v.duration_seconds)}</span> : null}
+              {!v.has_file && !v.source_url && <span className="vcard-flag">Chưa có file</span>}
+              {v.source_url && !v.has_file && <span className="vcard-flag">Link ngoài</span>}
+            </span>
+            <span className="vcard-body">
+              <strong>{v.title}</strong>
+              <span className="vcard-tags">
+                {v.transcript ? <StatusTag tone="ok">Có phụ đề</StatusTag> : <StatusTag tone="muted">Chưa có phụ đề</StatusTag>}
+                {v.questions.approved > 0 && <StatusTag tone="ai">{v.questions.approved} câu hỏi</StatusTag>}
+                {v.questions.draft > 0 && <StatusTag tone="wait">{v.questions.draft} chờ duyệt</StatusTag>}
               </span>
             </span>
-            <Icon name="chevronRight" />
           </Link>
         ))}
       </div>
-      {open && <UploadDialog onClose={() => setOpen(false)} onDone={(id) => { setOpen(false); navigate(`/teach/videos/${encodeURIComponent(id)}`); }} />}
-    </>
+      {dragging && <div className="drop-hint" aria-hidden="true"><Icon name="upload" size={32} /><strong>Thả file video để tải lên</strong></div>}
+      {open && <UploadDialog initialFile={dropped} onClose={() => setOpen(false)} onDone={(id) => { setOpen(false); navigate(`/teach/videos/${encodeURIComponent(id)}`); }} />}
+    </div>
   );
 }
 
-function UploadDialog({ onClose, onDone }: { onClose: () => void; onDone: (videoId: string) => void }) {
+function UploadDialog({ onClose, onDone, initialFile }: { onClose: () => void; onDone: (videoId: string) => void; initialFile?: File | null }) {
   const [mode, setMode] = useState<'file' | 'url'>('file');
-  const [f, setF] = useState({ title: '', class_id: '', course_id: '', target_lesson_id: '', url: '', transcribe: true });
+  const [f, setF] = useState({ title: initialFile ? initialFile.name.replace(/\.[^.]+$/, '') : '', class_id: '', course_id: '', target_lesson_id: '', url: '', transcribe: true });
   const courses = useAsync((s) => api<CourseChoice[]>('/ai/courses', { signal: s }), []);
   const destination = useAsync((s) => f.course_id
     ? api<CourseDestination>(`/ai/courses/${f.course_id}`, { signal: s }) : Promise.resolve(null), [f.course_id]);
   const selectedCourse = destination.data?.course_id === f.course_id ? destination.data : null;
   const lessonExists = !!selectedCourse?.chapters.some((ch) => ch.lessons.some((ls) => ls.lesson_id === f.target_lesson_id));
-  const [file, setFile] = useState<File | null>(null);
+  const [file, setFile] = useState<File | null>(initialFile || null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
