@@ -551,7 +551,7 @@ a.oi:hover { background: var(--brand-soft); color: var(--ink); }
 /* ===================== Mẫu danh sách quản lý (trang giáo viên) ===================== */
 .m-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 18px; }
 .m-kpi { padding: 18px 20px; border-radius: 24px; }
-.m-kpi strong { font-size: 40px; letter-spacing: -.04em; }
+.m-kpi strong { font-size: 40px; letter-spacing: -.04em; line-height: 1.2; margin-top: 10px; }
 .m-kpi-hint { font-size: 13px; color: var(--muted); font-weight: 500; }
 .kpi-brand .m-kpi-hint { color: rgba(255, 255, 255, .75); }
 .m-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
