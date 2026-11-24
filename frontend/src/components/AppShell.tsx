@@ -35,19 +35,21 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
   const [reduceFx, setReduce] = useState(() => document.documentElement.classList.contains('reduce-fx'));
   const toggleFx = () => { setReduce(!reduceFx); setReduceFx(!reduceFx); };
   const noti = useNotifications();
+  // Trang Trợ lý đã có cột lịch sử riêng: thu menu chính thành dải icon để không thành hai thanh bên cạnh nhau
+  const compact = path.startsWith('/coach');
   const badge: Record<string, number> = { '/forum': noti?.forum_new || 0, '/messages': noti?.dm_unread || 0, '/inbox': noti?.inbox_unread || 0 };
   const nav = (items: NavItem[]) => items
     .filter((n) => !n.admin || user?.role === 'admin')
     .map((n) => (
       <Link key={n.to} to={n.to} className={`nav-item ${path.startsWith(n.match) ? 'nav-on' : ''}`}
-        aria-current={path.startsWith(n.match) ? 'page' : undefined}>
+        aria-current={path.startsWith(n.match) ? 'page' : undefined} title={compact ? n.label : undefined}>
         <Icon name={n.icon} size={26} />
         <span>{n.label}</span>
         {!!badge[n.to] && <span className="nav-badge" aria-label={`${badge[n.to]} mới`}>{badge[n.to] > 99 ? '99+' : badge[n.to]}</span>}
       </Link>
     ));
   return (
-    <div className="shell">
+    <div className={`shell ${compact ? 'shell-compact' : ''}`}>
       <nav className="sidenav" aria-label="Điều hướng chính">
         <Link to={teacher && !path.startsWith('/learn') && !path.startsWith('/profile') && !path.startsWith('/settings') ? '/teach/courses' : '/learn'} className="sidenav-logo" aria-label="Trang chủ"><Logo size={34} /></Link>
         <div className="sidenav-group">

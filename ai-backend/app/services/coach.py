@@ -24,6 +24,7 @@ from app.core.errors import AppError
 from app.core.prompts import STUDY_COACH
 from app.core.security import Principal
 from app.core.utils import as_aware, parse_uuid, redact_pii, utcnow
+from app.models.coach import CoachConversation, CoachMessage
 from app.models.learning import FlashcardReview, ItemProgress, Lesson, LessonItem, QuizAnswerLog
 from app.models.video_question import QuestionBankItem
 from app.services import flashcards, learning, llm
@@ -342,3 +343,79 @@ def ask(db: Session, user: Principal, message: str, history: list[dict] | None =
 
 def _labels_in(text: str) -> list[str]:
     return re.findall(r"\[(S\d+)\]", text or "")
+
+
+# ----------------------------------------------------------------------------
+# Lịch sử trò chuyện (lưu DB để xem lại và chat tiếp)
+# ----------------------------------------------------------------------------
+
+_RESULT_KEYS = ("steps", "sources", "actions", "guarded", "stopped")
+
+
+def _title_from(message: str) -> str:
+    text = re.sub(r"\s+", " ", message).strip()
+    return text if len(text) <= 60 else text[:57].rstrip() + "…"
+
+
+def _own_conversation(db: Session, user: Principal, conversation_id) -> CoachConversation:
+    cid = parse_uuid(conversation_id, "conversation_id")
+    conv = db.get(CoachConversation, cid)
+    if conv is None or conv.student_id != user.user_id:
+        raise AppError(404, "NOT_FOUND", "Không tìm thấy cuộc trò chuyện.")
+    return conv
+
+
+def _conv_summary(conv: CoachConversation) -> dict:
+    return {"id": str(conv.id), "title": conv.title, "created_at": conv.created_at, "updated_at": conv.updated_at}
+
+
+def chat(db: Session, user: Principal, message: str, conversation_id=None, history: list[dict] | None = None) -> dict:
+    """Một lượt hỏi có lưu lịch sử. Có conversation_id: lấy ngữ cảnh từ DB và nối tiếp; không có: tạo cuộc mới."""
+    conv = _own_conversation(db, user, conversation_id) if conversation_id else None
+    if settings.redact_pii:
+        message = redact_pii(message or "")
+    if conv is not None:
+        history = [{"role": m.role, "content": m.content} for m in conv.messages]
+    res = ask(db, user, message, history)
+    if conv is None:
+        conv = CoachConversation(student_id=user.user_id, title=_title_from(message))
+        db.add(conv)
+        db.flush()
+    db.add(CoachMessage(conversation_id=conv.id, role="user", content=message.strip()))
+    db.add(CoachMessage(conversation_id=conv.id, role="assistant", content=res["answer"],
+                        result={k: res.get(k) for k in _RESULT_KEYS}))
+    conv.updated_at = func.now()
+    db.commit()
+    db.refresh(conv)
+    return {**res, "conversation": _conv_summary(conv)}
+
+
+def list_conversations(db: Session, user: Principal, limit: int = 100) -> list[dict]:
+    rows = (db.query(CoachConversation).filter(CoachConversation.student_id == user.user_id)
+            .order_by(CoachConversation.updated_at.desc()).limit(max(1, min(limit, 200))).all())
+    return [_conv_summary(c) for c in rows]
+
+
+def get_conversation(db: Session, user: Principal, conversation_id) -> dict:
+    conv = _own_conversation(db, user, conversation_id)
+    msgs = [{"id": str(m.id), "role": m.role, "content": m.content, "created_at": m.created_at,
+             "res": ({"answer": m.content, **(m.result or {})} if m.role == "assistant" else None)}
+            for m in conv.messages]
+    return {**_conv_summary(conv), "messages": msgs}
+
+
+def rename_conversation(db: Session, user: Principal, conversation_id, title: str) -> dict:
+    conv = _own_conversation(db, user, conversation_id)
+    title = re.sub(r"\s+", " ", title or "").strip()
+    if not title:
+        raise AppError(400, "EMPTY_TITLE", "Tên cuộc trò chuyện không được để trống.")
+    conv.title = title[:200]
+    db.commit()
+    db.refresh(conv)
+    return _conv_summary(conv)
+
+
+def delete_conversation(db: Session, user: Principal, conversation_id) -> None:
+    conv = _own_conversation(db, user, conversation_id)
+    db.delete(conv)
+    db.commit()

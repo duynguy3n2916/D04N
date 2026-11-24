@@ -127,3 +127,37 @@ def test_coach_paused_during_quiz_and_validation(client, teacher, fake_llm):
     assert client.post("/ai/coach/chat", json={"message": "hi"}).status_code == 401
     tools = client.get("/ai/coach/tools", headers=sv).json()
     assert {t["name"] for t in tools} >= {"get_progress", "get_weak_points", "queue_flashcards"}
+
+
+def test_coach_conversation_history_saved_continued_and_private(client, teacher, fake_llm):
+    sv = token(client, "sv-co6", "student", ["lop-a"])
+    other = token(client, "sv-co6-khac", "student", ["lop-a"])
+    fake_llm.push("coach", "Chào bạn, mình giúp bạn ôn nhé.")
+    d = client.post("/ai/coach/chat", headers=sv, json={"message": "Mai kiểm tra chương 1, giúp mình ôn"}).json()
+    conv = d["conversation"]
+    assert conv["title"] == "Mai kiểm tra chương 1, giúp mình ôn"
+
+    # chat tiếp: ngữ cảnh lấy từ DB, client không cần gửi history
+    fake_llm.push("coach", "Phần đóng gói nhé.")
+    d2 = client.post("/ai/coach/chat", headers=sv, json={"message": "Phần nào trước?", "conversation_id": conv["id"]}).json()
+    assert d2["conversation"]["id"] == conv["id"]
+    sent = [c for c in fake_llm.calls if c["kind"] == "coach"][-1]["messages"]
+    assert [m["content"] for m in sent[:3]] == ["Mai kiểm tra chương 1, giúp mình ôn", "Chào bạn, mình giúp bạn ôn nhé.",
+                                                "Phần nào trước?"]
+
+    lst = client.get("/ai/coach/conversations", headers=sv).json()
+    assert [c["id"] for c in lst] == [conv["id"]]
+    full = client.get(f"/ai/coach/conversations/{conv['id']}", headers=sv).json()
+    assert [m["role"] for m in full["messages"]] == ["user", "assistant", "user", "assistant"]
+    assert full["messages"][1]["res"]["steps"] == [] and full["messages"][3]["content"] == "Phần đóng gói nhé."
+
+    # người khác không xem / chat tiếp / xóa được
+    assert client.get("/ai/coach/conversations", headers=other).json() == []
+    assert client.get(f"/ai/coach/conversations/{conv['id']}", headers=other).status_code == 404
+    assert client.post("/ai/coach/chat", headers=other, json={"message": "x", "conversation_id": conv["id"]}).status_code == 404
+    assert client.delete(f"/ai/coach/conversations/{conv['id']}", headers=other).status_code == 404
+
+    r = client.patch(f"/ai/coach/conversations/{conv['id']}", headers=sv, json={"title": "  Ôn chương 1 "})
+    assert r.json()["title"] == "Ôn chương 1"
+    assert client.delete(f"/ai/coach/conversations/{conv['id']}", headers=sv).status_code == 204
+    assert client.get("/ai/coach/conversations", headers=sv).json() == []
