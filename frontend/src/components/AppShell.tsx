@@ -4,7 +4,7 @@ import { useNotifications } from '../lib/notifications';
 import { Link } from '../lib/router';
 import { useState } from 'react';
 import { Icon, type IconName } from './Icon';
-import { Logo } from './Mascot';
+import { Logo } from './Logo';
 import { IconButton, setReduceFx } from './ui';
 
 type NavItem = { to: string; label: string; icon: IconName; match: string; admin?: boolean };

@@ -76,7 +76,6 @@ a { color: var(--brand); } a:hover { color: var(--brand-strong); }
 .logo-text, .sidenav-logo .logo-text, .login-top .logo-text {
   padding: 0; font-family: var(--font); font-weight: 800; font-size: 28px; line-height: 1; letter-spacing: -.04em;
   color: var(--ink); -webkit-text-fill-color: currentColor; background: none; text-shadow: none; }
-.logo-swoosh { display: none; }
 
 /* Thanh bên */
 .sidenav { background: var(--paper); border-right: 1px solid var(--line); }
@@ -96,29 +95,8 @@ a { color: var(--brand); } a:hover { color: var(--brand-strong); }
 .grad-word { background: none; color: var(--brand); -webkit-text-fill-color: var(--brand); animation: none; }
 .login-hero h1 { font-size: 52px; letter-spacing: -.04em; line-height: 1.02; }
 .role { border: 2px solid var(--line); box-shadow: none; border-radius: 22px; }
-.role-on { border-color: var(--brand); background: var(--brand-soft); box-shadow: none; color: var(--brand-strong); }
 
 /* Lộ trình học */
-.course-banner { background: var(--brand); animation: none; box-shadow: none; border-radius: 28px; }
-.course-banner small { color: rgba(255, 255, 255, .8); letter-spacing: .4px; text-transform: none; font-weight: 600; }
-.course-banner .btn { background: rgba(255, 255, 255, .16); border: 2px solid rgba(255, 255, 255, .7); box-shadow: none; }
-.course-head { background: #fff; border: 0; box-shadow: none; border-radius: 28px; }
-.course-head::before { background: var(--brand); }
-.course-head-kicker { color: var(--brand); letter-spacing: .4px; text-transform: none; }
-.lesson-sep { text-transform: none; letter-spacing: 0; font-weight: 700; }
-.node, .node-done, .node-current, .node-video, .node-slide, .node-reading, .node-quiz { box-shadow: none; }
-.node-done, .node-current { background: var(--brand); }
-.node-video { background: var(--brand-mid); }
-.node-slide { background: var(--t-ink); }
-.node-reading { background: var(--brand-line); color: var(--brand-strong); }
-.node-quiz { background: var(--brand-strong); }
-.node-locked { background: var(--line); box-shadow: none; }
-.node-ring { border-color: var(--brand-tint); }
-.node-ring::before, .node-ring::after { border-color: var(--brand-line); }
-.node-start { color: var(--brand); box-shadow: none; letter-spacing: 0; font-weight: 800; }
-.speech { font-family: var(--font); font-size: 15px !important; font-weight: 600 !important; border-radius: 18px; }
-.stat-row .stat, .stat-row .stat + .stat { background: #fff !important; border: 2px solid var(--line); color: var(--ink); box-shadow: none; }
-.stat-row .stat:first-child { background: var(--brand) !important; border-color: var(--brand); color: #fff; }
 .week-bar span.bar { background: var(--brand); }
 .pill { border: 2px solid var(--ink); color: var(--ink); background: transparent; font-weight: 600; }
 .pill-on { background: var(--ink); border-color: var(--ink); color: var(--paper); }
@@ -442,32 +420,16 @@ a.oi:hover { background: var(--brand-soft); color: var(--ink); }
 
 /* ===================== Diễn đàn: 3 cột ===================== */
 .forum-layout { display: grid; grid-template-columns: 200px minmax(0, 1fr) 260px; gap: 24px; align-items: start; max-width: 1280px; margin: 0 auto; }
-.forum-filters { position: sticky; top: 20px; display: flex; flex-direction: column; gap: 2px; }
-.forum-filters .oc-kicker { margin: 14px 0 6px 12px; }
-.forum-filters .oc-kicker:first-child { margin-top: 0; }
 .fl-item { border: 0; background: transparent; text-align: left; font: inherit; font-weight: 600; font-size: 15px; color: var(--ink); padding: 8px 12px; border-radius: 999px; cursor: pointer;
   display: flex; gap: 8px; align-items: center; min-height: 40px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .fl-item:hover { background: var(--bg-soft); }
 .fl-item.on { background: var(--ink); color: var(--paper); }
-.fl-code { font-family: var(--mono); font-size: 12px; opacity: .65; flex: none; }
 .fl-item:has(.fl-title) { white-space: normal; border-radius: 14px; line-height: 1.3; }
-.fl-text { display: flex; flex-direction: column; min-width: 0; }
-.fl-course { font-size: 12px; font-weight: 500; opacity: .65; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.fl-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .forum-feed { min-width: 0; }
-.forum-mobile-sorts { display: none !important; }
-.forum-side { position: sticky; top: 20px; display: flex; flex-direction: column; gap: 12px; }
-.forum-side-card { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px; }
-.forum-side-brand { background: var(--brand); color: rgba(255, 255, 255, .88); }
-.forum-side-brand .oc-kicker { color: rgba(255, 255, 255, .75); }
-.forum-side-brand .linkbtn { color: #fff; align-self: flex-start; margin-top: 4px; }
-.forum-big { font-size: 48px; font-weight: 800; letter-spacing: -.04em; line-height: 1; color: #fff; }
-.forum-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 .sn-tag { background: var(--bg-soft); color: var(--ink); border-radius: 999px; padding: 4px 10px; font-weight: 600; }
 .sn-tag:hover, .sn-tag.on { background: var(--ink); color: var(--paper); }
 .sn-tag.on .muted { color: inherit; }
 .sn-tag-lesson { background: var(--brand-soft); color: var(--brand-strong); }
-.sn-toolbar { margin: 4px 0 14px; }
 .sn-search { border: 0; background: #fff; border-radius: 999px; min-height: 46px; padding: 0 16px; max-width: none; }
 .sn-search input { font-weight: 500; }
 .sn-tabs { border: 0; padding: 4px; background: var(--bg-soft); }
@@ -487,8 +449,8 @@ a.oi:hover { background: var(--brand-soft); color: var(--ink); }
 .sn-bubble { border: 0; background: #fff; border-radius: 20px; padding: 12px 16px; }
 .sn-accepted .sn-bubble { background: var(--ok-soft); box-shadow: inset 0 0 0 2px var(--ok-line); }
 .sn-reply-box { padding: 16px 18px; }
-@media (max-width: 1280px) { .forum-layout { grid-template-columns: 190px minmax(0, 1fr); } .forum-side { display: none; } }
-@media (max-width: 900px) { .forum-layout { grid-template-columns: 1fr; } .forum-filters { display: none; } .forum-mobile-sorts { display: inline-flex !important; } }
+@media (max-width: 1280px) { .forum-layout { grid-template-columns: 190px minmax(0, 1fr); } }
+@media (max-width: 900px) { .forum-layout { grid-template-columns: 1fr; } }
 
 /* ===================== Tin nhắn: kiểu Messenger ===================== */
 .dm-layout { gap: 16px; height: calc(100vh - 180px); }
@@ -610,7 +572,6 @@ a.oi:hover { background: var(--brand-soft); color: var(--ink); }
 .table tr.row-on td { background: var(--brand-soft); }
 .table tr.row-on td:first-child { border-radius: 16px 0 0 16px; }
 .table tr.row-on td:last-child { border-radius: 0 16px 16px 0; }
-.table-head { border-bottom: 1px solid var(--line); }
 .td-check { width: 44px; }
 .td-main { min-width: 260px; }
 .td-main strong { display: block; font-weight: 700; line-height: 1.35; }
@@ -909,7 +870,6 @@ i.ln-mid { background: var(--brand-line); }
 .lc-state-doing { color: var(--brand-strong); }
 .lc-state-done { color: var(--ok-text); }
 .lc-body { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px 18px; flex: 1; }
-.lc-code { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--brand); }
 .lc-body h3 { font-size: 19px; line-height: 1.25; letter-spacing: -.02em; }
 .lc-desc { color: var(--muted); font-size: 14px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .lc-progress { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 8px; }

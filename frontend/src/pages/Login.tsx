@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Icon } from '../components/Icon';
-import { Logo } from '../components/Mascot';
+import { Logo } from '../components/Logo';
 import { PasswordInput, PasswordRules, passwordOk } from '../components/PasswordInput';
 import { Button, ErrorBox, Field, MarkIcon } from '../components/ui';
 import { api, errorText } from '../lib/api';

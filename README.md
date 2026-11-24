@@ -102,7 +102,7 @@ D04N/
 │       └── styles/            # base.css → theme.css → polish.css (nạp theo thứ tự này)
 ├── scripts/                   # run.ps1 / run.sh: chạy server, tự build giao diện khi cần
 ├── deploy/                    # Caddy + docker-compose cho máy chủ
-└── docs/                      # architecture.md, kế hoạch đồ án, sơ đồ, mock giao diện
+└── docs/                      # architecture.md, kế hoạch đồ án, sơ đồ kiến trúc
 ```
 
 ---
