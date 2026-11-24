@@ -47,3 +47,6 @@
 
 /* Bảng: chữ thường đậm vừa */
 .table th, table th { font-weight: 600; color: var(--muted); }
+
+/* Bộ lọc cột trái (Diễn đàn, Cài đặt): mục chọn nền đỏ nhạt như menu chính */
+.fl-item.on, .fl-item.on:hover { background: var(--brand-soft); color: var(--brand-strong); }
