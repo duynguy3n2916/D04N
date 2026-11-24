@@ -77,7 +77,7 @@ export function Forum({ threadId }: { threadId?: string }) {
   const moderator = isTeacher(user) && (user?.role === 'admin' || (user?.class_ids || []).includes(cid));
   if (threadId) return <ThreadView threadId={threadId} />;
   return (
-    <>
+    <div className="forum-page">
       <PageHeader title="Diễn đàn lớp" sub="Hỏi bài, chia sẻ tài liệu, thả tim và thảo luận cùng cả lớp."
         actions={<Button variant="ghost" size="sm" icon="chat" onClick={() => navigate('/messages')}>Tin nhắn</Button>} />
       {!classes.length ? <Empty title="Bạn chưa vào lớp nào">Nhập mã lớp ở trang hồ sơ để tham gia diễn đàn.</Empty> : (
@@ -96,7 +96,7 @@ export function Forum({ threadId }: { threadId?: string }) {
           <Feed key={cid} classId={cid} moderator={moderator} />
         </>
       )}
-    </>
+    </div>
   );
 }
 
@@ -129,49 +129,33 @@ function Feed({ classId, moderator }: { classId: string; moderator: boolean }) {
     } catch (e) { toast(errorText(e), 'error'); }
   };
   const filtered = !!(kind || tag || lesson || q);
-  // Cột phải: chủ đề và bài học được nhắc nhiều trong bảng tin đang xem.
-  const rows = list.data || [];
-  const topTags = useMemo(() => {
-    const m = new Map<string, number>();
-    rows.forEach((t) => t.tags.forEach((g) => m.set(g, (m.get(g) || 0) + 1)));
-    return [...m.entries()].sort((a, b) => b[1] - a[1]).slice(0, 8);
-  }, [rows]);
-  const openQuestions = rows.filter((t) => t.kind === 'question' && !t.has_answer);
   return (
     <div className="forum-layout">
-      <aside className="forum-filters" aria-label="Bộ lọc diễn đàn">
-        <span className="oc-kicker">Sắp xếp</span>
-        {SORTS.map((s) => <button key={s.id} className={`fl-item ${sort === s.id ? 'on' : ''}`} aria-pressed={sort === s.id} onClick={() => setSort(s.id)}>{s.label}</button>)}
-        <span className="oc-kicker">Loại bài</span>
-        {(['', 'question', 'post', 'announcement'] as const).map((k) => (
-          <button key={k || 'all'} className={`fl-item ${kind === k ? 'on' : ''}`} aria-pressed={kind === k} onClick={() => setKind(k)}>{k ? KIND_LABEL[k] : 'Tất cả'}</button>
-        ))}
-        {!!lessons.data?.length && <>
-          <span className="oc-kicker">Bài học</span>
-          {lessons.data.slice(0, 8).map((l) => (
-            <button key={l.code} className={`fl-item ${lesson === l.code ? 'on' : ''}`} title={l.title} aria-pressed={lesson === l.code} onClick={() => setLesson(lesson === l.code ? '' : l.code)}>
-              <span className="fl-text"><span className="fl-title">{l.title}</span>{l.course_title && <small className="fl-course">{l.course_title}</small>}</span>
-            </button>
-          ))}
-        </>}
-      </aside>
-
       <div className="forum-feed">
         <Composer classId={classId} moderator={moderator} members={members.data || []} lessons={lessons.data || []} onPosted={list.reload} />
-        <div className="sn-toolbar">
-          <label className="sn-search">
-            <Icon name="search" size={18} />
-            <span className="sr-only">Tìm bài đăng</span>
-            <input value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="Tìm trong diễn đàn…" />
-          </label>
-          <div className="forum-mobile-sorts sn-tabs" role="tablist" aria-label="Sắp xếp">
+        <div className="forum-bar" role="toolbar" aria-label="Lọc diễn đàn">
+          <div className="sn-tabs" role="tablist" aria-label="Sắp xếp">
             {SORTS.map((s) => <button key={s.id} role="tab" aria-selected={sort === s.id} className={sort === s.id ? 'on' : ''} onClick={() => setSort(s.id)}>{s.label}</button>)}
           </div>
+          <select className="forum-select" value={kind} onChange={(e) => setKind(e.target.value as Kind | '')} aria-label="Loại bài">
+            <option value="">Mọi loại bài</option>
+            {(['question', 'post', 'announcement'] as const).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
+          </select>
+          {!!lessons.data?.length && (
+            <select className="forum-select" value={lesson} onChange={(e) => setLesson(e.target.value)} aria-label="Bài học">
+              <option value="">Mọi bài học</option>
+              {lessons.data.map((l) => <option key={l.code} value={l.code}>{l.course_title ? `${l.title} · ${l.course_title}` : l.title}</option>)}
+            </select>
+          )}
+          <label className="sn-search forum-search">
+            <Icon name="search" size={17} />
+            <span className="sr-only">Tìm bài đăng</span>
+            <input value={qInput} onChange={(e) => setQInput(e.target.value)} placeholder="Tìm…" />
+          </label>
         </div>
-        {(tag || lesson) && (
+        {tag && (
           <div className="row" style={{ gap: 6, marginBottom: 12 }}>
             {tag && <button className="sn-pill on" onClick={() => setTag('')}>#{tag} <Icon name="x" size={12} /></button>}
-            {lesson && <button className="sn-pill on" onClick={() => setLesson('')}><Icon name="book" size={14} /> {lessonTitle[lesson] || lesson} <Icon name="x" size={12} /></button>}
           </div>
         )}
         {list.loading && !list.data ? <Spinner /> : list.error ? <ErrorBox message={list.error} onRetry={list.reload} /> : !list.data?.length ? (
@@ -186,22 +170,6 @@ function Feed({ classId, moderator }: { classId: string; moderator: boolean }) {
         )}
       </div>
 
-      <aside className="forum-side" aria-label="Tóm tắt diễn đàn">
-        <section className="card forum-side-card forum-side-brand">
-          <span className="oc-kicker">Đang chờ trả lời</span>
-          <strong className="forum-big">{openQuestions.length}</strong>
-          <span>câu hỏi chưa có câu trả lời đúng</span>
-          {openQuestions.length > 0 && sort !== 'unanswered' && <button className="linkbtn" onClick={() => setSort('unanswered')}>Xem các câu này</button>}
-        </section>
-        {topTags.length > 0 && (
-          <section className="card forum-side-card">
-            <span className="oc-kicker">Chủ đề nổi bật</span>
-            <div className="forum-tags">
-              {topTags.map(([g, n]) => <button key={g} className={`sn-tag ${tag === g ? 'on' : ''}`} onClick={() => setTag(tag === g ? '' : g)}>#{g} <span className="muted">{n}</span></button>)}
-            </div>
-          </section>
-        )}
-      </aside>
     </div>
   );
 }
