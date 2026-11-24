@@ -1,4 +1,5 @@
-"""Pipeline ingest học liệu: parse -> chunk -> embed -> lưu. Chạy trong job nền."""
+"""Pipeline ingest học liệu: parse -> chunk (LangChain text splitter) -> embed (LangChain Embeddings) -> lưu.
+Chạy trong job nền."""
 import logging
 import uuid
 
@@ -8,7 +9,7 @@ from app.config import settings
 from app.core.errors import AppError
 from app.models.documents import AIChunk, AIDocument
 from app.services import jobs
-from app.services.chunking import chunk_text
+from app.services.chunking import split_documents
 from app.services.embedding import embed_batched
 from app.services.object_store import get_store
 from app.services.parsers import extract, extract_plain_text
@@ -40,12 +41,9 @@ def create_document(db: Session, *, title: str, source_type: str, file_path: str
 
 
 def _chunk_sections(sections: list[dict]) -> list[dict]:
-    all_chunks: list[dict] = []
-    for item in sections:
-        for c in chunk_text(item["text"], settings.rag_chunk_size, settings.rag_chunk_overlap, section=item.get("section")):
-            c["page"] = item.get("page")
-            all_chunks.append(c)
-    return all_chunks
+    docs = split_documents(sections, settings.rag_chunk_size, settings.rag_chunk_overlap)
+    return [{"content": d.page_content, "section": d.metadata.get("section"), "page": d.metadata.get("page")}
+            for d in docs]
 
 
 def index_document(db: Session, doc: AIDocument, sections: list[dict], ctx: "jobs.JobContext | None" = None) -> int:

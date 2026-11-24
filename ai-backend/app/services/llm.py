@@ -1,6 +1,6 @@
 """LLM Gateway: điểm duy nhất gọi model.
 
-- Gọi OpenAI, timeout + retry của SDK.
+- Gọi model qua LangChain `ChatOpenAI` (timeout + retry), stream có usage token.
 - Gắn prompt_id/version, ghi nhật ký ai_llm_calls (token, latency, chi phí, correlation_id).
 - complete_json: parse + validate bằng Pydantic, tự sửa 1 lần nếu model trả JSON sai schema.
 """
@@ -50,6 +50,7 @@ class LLMResult:
 # ----------------------------------------------------------------------------
 
 def _openai_client():
+    """Client OpenAI SDK gốc (giữ lại cho mã chưa chuyển sang LangChain)."""
     with _client_lock:
         if "openai" not in _clients:
             from openai import OpenAI
@@ -57,27 +58,56 @@ def _openai_client():
         return _clients["openai"]
 
 
-def _call_provider(system: str, messages: list[dict], max_tokens: int, json_mode: bool,
-                   temperature: float) -> tuple[str, int | None, int | None, str]:
-    """Gọi model OpenAI. Trả về (text, input_tokens, output_tokens, model). Test có thể thay hàm này."""
+def chat_model(*, max_tokens: int = 1500, temperature: float | None = 0.2, json_mode: bool = False,
+               streaming: bool = False):
+    """LangChain chat model theo cấu hình. temperature=None: dùng mặc định của model (model suy luận o*, gpt-5)."""
     if not settings.openai_api_key:
         raise LLMError("Chưa cấu hình OPENAI_API_KEY.")
-    kwargs = {"model": settings.openai_llm_model,
-              "messages": [{"role": "system", "content": system}] + messages,
-              # max_completion_tokens dùng được cho cả gpt-4o / gpt-4.1 lẫn các model suy luận (o*, gpt-5)
-              "max_completion_tokens": max_tokens, "temperature": temperature}
+    from langchain_openai import ChatOpenAI
+    kwargs = dict(model=settings.openai_llm_model, api_key=settings.openai_api_key,
+                  timeout=settings.llm_timeout_seconds, max_retries=2,
+                  # ChatOpenAI gửi max_tokens dưới tên max_completion_tokens (dùng được cho cả model suy luận)
+                  max_tokens=max_tokens, temperature=temperature)
     if json_mode:
-        kwargs["response_format"] = {"type": "json_object"}
+        kwargs["model_kwargs"] = {"response_format": {"type": "json_object"}}
+    if streaming:
+        kwargs["stream_usage"] = True
+    return ChatOpenAI(**kwargs)
+
+
+def to_lc_messages(system: str, messages: list[dict]) -> list:
+    """Tin nhắn dạng {"role", "content"} -> SystemMessage / HumanMessage / AIMessage của LangChain."""
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+    out = [SystemMessage(content=system)]
+    for m in messages:
+        out.append(AIMessage(content=m["content"]) if m.get("role") == "assistant" else HumanMessage(content=m["content"]))
+    return out
+
+
+def _with_temperature_fallback(run, **model_kw):
+    """Một số model chỉ nhận temperature mặc định -> gọi lại không kèm temperature."""
     try:
-        resp = _openai_client().chat.completions.create(**kwargs)
-    except Exception as e:  # một số model chỉ nhận temperature mặc định -> gọi lại không kèm temperature
-        if "temperature" not in str(e):
+        return run(chat_model(**model_kw))
+    except Exception as e:
+        if "temperature" not in str(e) or model_kw.get("temperature") is None:
             raise
-        kwargs.pop("temperature")
-        resp = _openai_client().chat.completions.create(**kwargs)
-    usage = getattr(resp, "usage", None)
-    return (resp.choices[0].message.content or "", getattr(usage, "prompt_tokens", None),
-            getattr(usage, "completion_tokens", None), getattr(resp, "model", settings.openai_llm_model))
+        return run(chat_model(**{**model_kw, "temperature": None}))
+
+
+def _usage(msg) -> tuple[int | None, int | None]:
+    u = getattr(msg, "usage_metadata", None) or {}
+    return u.get("input_tokens"), u.get("output_tokens")
+
+
+def _call_provider(system: str, messages: list[dict], max_tokens: int, json_mode: bool,
+                   temperature: float) -> tuple[str, int | None, int | None, str]:
+    """Gọi model qua LangChain. Trả về (text, input_tokens, output_tokens, model). Test có thể thay hàm này."""
+    lc_messages = to_lc_messages(system, messages)
+    resp = _with_temperature_fallback(lambda m: m.invoke(lc_messages), max_tokens=max_tokens,
+                                      temperature=temperature, json_mode=json_mode)
+    in_tok, out_tok = _usage(resp)
+    model = (resp.response_metadata or {}).get("model_name") or settings.openai_llm_model
+    return resp.text or "", in_tok, out_tok, model
 
 
 # ----------------------------------------------------------------------------
@@ -144,30 +174,33 @@ def complete_text(task: str, prompt: Prompt, user_content: str, *, history: list
 
 def _stream_provider(system: str, messages: list[dict], max_tokens: int,
                      temperature: float) -> Iterator["str | tuple[int | None, int | None, str]"]:
-    """Gọi OpenAI dạng stream: phát từng đoạn chữ, cuối cùng phát (input_tokens, output_tokens, model).
+    """Gọi model dạng stream qua LangChain: phát từng đoạn chữ, cuối cùng phát (input_tokens, output_tokens, model).
     Test có thể thay hàm này."""
-    if not settings.openai_api_key:
-        raise LLMError("Chưa cấu hình OPENAI_API_KEY.")
-    kwargs = {"model": settings.openai_llm_model,
-              "messages": [{"role": "system", "content": system}] + messages,
-              "max_completion_tokens": max_tokens, "temperature": temperature,
-              "stream": True, "stream_options": {"include_usage": True}}
-    try:
-        stream = _openai_client().chat.completions.create(**kwargs)
-    except Exception as e:
-        if "temperature" not in str(e):
-            raise
-        kwargs.pop("temperature")
-        stream = _openai_client().chat.completions.create(**kwargs)
+    lc_messages = to_lc_messages(system, messages)
+
+    def start(model):
+        it = model.stream(lc_messages)
+        first = next(it, None)  # lỗi tham số (vd. temperature) chỉ lộ ra khi lấy phần tử đầu
+        return first, it
+
+    first, it = _with_temperature_fallback(start, max_tokens=max_tokens, temperature=temperature, streaming=True)
     in_tok = out_tok = None
     model = settings.openai_llm_model
-    for ev in stream:
-        model = getattr(ev, "model", None) or model
-        if getattr(ev, "usage", None):
-            in_tok, out_tok = ev.usage.prompt_tokens, ev.usage.completion_tokens
-        if ev.choices and ev.choices[0].delta and ev.choices[0].delta.content:
-            yield ev.choices[0].delta.content
+    for chunk in _chain_first(first, it):
+        name = (chunk.response_metadata or {}).get("model_name")
+        model = name or model
+        if getattr(chunk, "usage_metadata", None):
+            in_tok, out_tok = _usage(chunk)
+        text = chunk.text
+        if text:
+            yield text
     yield (in_tok, out_tok, model)
+
+
+def _chain_first(first, it):
+    if first is not None:
+        yield first
+    yield from it
 
 
 def stream_text(task: str, prompt: Prompt, user_content: str, *, history: list[dict] | None = None,

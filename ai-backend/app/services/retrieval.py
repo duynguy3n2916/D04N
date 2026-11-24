@@ -1,8 +1,19 @@
 """RAG Engine dùng chung: lọc phạm vi -> vector + từ khóa (hybrid, RRF) -> ngưỡng điểm -> rerank
--> mở rộng lân cận -> context có nhãn nguồn."""
+-> mở rộng lân cận -> context có nhãn nguồn.
+
+Truy xuất được đóng gói thành LangChain `BaseRetriever` (`ScopedHybridRetriever`) trả về `Document`, nên
+dùng được trong chain / agent LangChain và có callback, tracing (LangSmith) như mọi retriever khác.
+Phần tìm kiếm vẫn là SQL pgvector + full-text trên bảng ai_chunks vì bộ lọc phạm vi quyền (lớp, khóa học,
+bài, nguồn còn gắn trong bài) cần join với các bảng LMS, điều mà vector store dựng sẵn không làm được.
+`retrieve()` giữ API cũ (list[dict]) cho các service hiện có.
+"""
 import re
 from dataclasses import dataclass, field
+from typing import Any
 
+from langchain_core.callbacks import CallbackManagerForRetrieverRun
+from langchain_core.documents import Document
+from langchain_core.retrievers import BaseRetriever
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -13,7 +24,7 @@ from app.models.documents import AIChunk, AIDocument
 from app.models.learning import Chapter, Course, CourseClass, Lesson, LessonItem
 from app.models.transcript import TranscriptSegment, VideoTranscript
 from app.services.embedding import embed_query
-from app.services.hybrid import lexical_accept, query_terms, rerank, rrf, tsquery_text
+from app.services.hybrid import get_compressor, lexical_accept, query_terms, rrf, tsquery_text
 
 _WORDS = re.compile(r"\w+")
 # dấu hiệu câu hỏi nối tiếp, phụ thuộc câu trước ("còn X thì sao?", "nó dùng để làm gì?", "cho ví dụ")
@@ -91,16 +102,17 @@ def _row_to_dict(chunk: AIChunk, doc: AIDocument, score: float | None) -> dict:
     }
 
 
-def retrieve(db: Session, query: str, scope: RetrievalScope, top_k: int | None = None,
-             min_score: float | None = None, hybrid: bool | None = None) -> list[dict]:
-    """Dense (pgvector) [+ sparse full-text, hợp nhất RRF] [+ rerank]; mỗi kết quả có `score` = cosine.
+def dict_to_document(d: dict) -> Document:
+    return Document(page_content=d["content"], metadata={k: v for k, v in d.items() if k != "content"},
+                    id=d.get("chunk_id"))
 
-    Một chunk được nhận khi cosine >= min_score, hoặc (hybrid) khớp đủ từ khóa có nghĩa của câu hỏi
-    (`lexical_match`) — nên ngưỡng từ chối vẫn có tác dụng với câu ngoài học liệu.
-    """
-    top_k = top_k or settings.rag_top_k
-    min_score = settings.rag_min_score if min_score is None else min_score
-    hybrid = settings.rag_hybrid if hybrid is None else hybrid
+
+def document_to_dict(doc: Document) -> dict:
+    return {"content": doc.page_content, **doc.metadata}
+
+
+def _search(db: Session, query: str, scope: RetrievalScope, top_k: int, min_score: float, hybrid: bool) -> list[dict]:
+    """Dense (pgvector) [+ sparse full-text, hợp nhất RRF] + ngưỡng điểm; chưa rerank."""
     pool = top_k * 3 if (hybrid or settings.rag_rerank != "none") else top_k * 2
     q_emb = embed_query(query)
     distance = AIChunk.embedding.cosine_distance(q_emb).label("distance")
@@ -144,8 +156,46 @@ def retrieve(db: Session, query: str, scope: RetrievalScope, top_k: int | None =
     else:
         order = {k: i for i, k in enumerate(dense_rank)}
         accepted.sort(key=lambda k: order.get(k, len(order)))
-    candidates = [found[k] for k in accepted]
-    return rerank(query, candidates, top_k) if settings.rag_rerank != "none" else candidates[:top_k]
+    return [found[k] for k in accepted]
+
+
+class ScopedHybridRetriever(BaseRetriever):
+    """LangChain retriever trên học liệu trong phạm vi quyền của người hỏi.
+
+    Mỗi Document có metadata giống dict cũ (chunk_id, score = cosine, page, section, document_title,
+    source_type, start_time...). Một chunk được nhận khi cosine >= min_score, hoặc (hybrid) khớp đủ
+    từ khóa có nghĩa của câu hỏi (`lexical_match`), nên ngưỡng từ chối vẫn có tác dụng với câu ngoài học liệu.
+    """
+
+    db: Any
+    scope: RetrievalScope
+    top_k: int = 5
+    min_score: float = 0.0
+    hybrid: bool = True
+
+    def _get_relevant_documents(self, query: str, *, run_manager: CallbackManagerForRetrieverRun) -> list[Document]:
+        candidates = [dict_to_document(d) for d in
+                      _search(self.db, query, self.scope, self.top_k, self.min_score, self.hybrid)]
+        compressor = get_compressor(self.top_k) if settings.rag_rerank != "none" else None
+        if compressor is None:
+            return candidates[: self.top_k]
+        return list(compressor.compress_documents(candidates, query, callbacks=run_manager.get_child()))
+
+
+def get_retriever(db: Session, scope: RetrievalScope, top_k: int | None = None, min_score: float | None = None,
+                  hybrid: bool | None = None) -> ScopedHybridRetriever:
+    return ScopedHybridRetriever(
+        db=db, scope=scope, top_k=top_k or settings.rag_top_k,
+        min_score=settings.rag_min_score if min_score is None else min_score,
+        hybrid=settings.rag_hybrid if hybrid is None else hybrid,
+    )
+
+
+def retrieve(db: Session, query: str, scope: RetrievalScope, top_k: int | None = None,
+             min_score: float | None = None, hybrid: bool | None = None) -> list[dict]:
+    """API cũ: chạy `ScopedHybridRetriever` và trả về list[dict] (content + metadata)."""
+    docs = get_retriever(db, scope, top_k, min_score, hybrid).invoke(query)
+    return [document_to_dict(d) for d in docs]
 
 
 def contextual_query(question: str, history: list[dict]) -> str:
