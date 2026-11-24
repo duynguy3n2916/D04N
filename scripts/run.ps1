@@ -1,4 +1,4 @@
-# Chạy hệ thống trên Windows (PowerShell), từ bất kỳ thư mục nào:
+﻿# Chạy hệ thống trên Windows (PowerShell), từ bất kỳ thư mục nào:
 #   .\scripts\run.ps1            # chạy server ở http://localhost:8000
 #   .\scripts\run.ps1 -Reload    # tự khởi động lại khi sửa code backend (chậm hơn một chút)
 #   .\scripts\run.ps1 -Port 8001
@@ -6,6 +6,7 @@
 # script tự build lại để lúc nào cũng chạy giao diện mới nhất.
 param([switch]$Reload, [int]$Port = 8000)
 $ErrorActionPreference = "Stop"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $root = Split-Path -Parent $PSScriptRoot
 
 Push-Location $root
@@ -25,6 +26,24 @@ try {
         }
     }
 } finally { Pop-Location }
+
+# Server cũ còn chạy ngầm (cửa sổ khác / lần chạy trước) sẽ chiếm cổng: tắt nó nếu là server của dự án này.
+$busy = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+if ($busy) {
+    $procs = Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'uvicorn' -and $_.CommandLine -match 'app\.main:app' }
+    $owners = $busy | ForEach-Object { Get-CimInstance Win32_Process -Filter "ProcessId=$($_.OwningProcess)" }
+    $foreign = $owners | Where-Object { $_.Name -notmatch '^python' }
+    if ($foreign) {
+        Write-Host "Cổng $Port đang bị chương trình khác dùng ($($foreign.Name -join ', ')). Tắt nó hoặc chạy: .\scripts\run.ps1 -Port 8001" -ForegroundColor Red
+        exit 1
+    }
+    $ids = @($procs.ProcessId) + @($owners.ProcessId) | Where-Object { $_ } | Sort-Object -Unique
+    $children = Get-CimInstance Win32_Process | Where-Object { $ids -contains $_.ParentProcessId }
+    $ids = @($ids) + @($children.ProcessId) | Where-Object { $_ } | Sort-Object -Unique
+    Write-Host "Tắt server cũ đang chạy ở cổng $Port..." -ForegroundColor Yellow
+    $ids | ForEach-Object { Stop-Process -Id $_ -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Milliseconds 800
+}
 
 Set-Location (Join-Path $root "ai-backend")
 foreach ($venv in ".venv", "venv") {
