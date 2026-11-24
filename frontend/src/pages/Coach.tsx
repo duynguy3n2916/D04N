@@ -66,7 +66,7 @@ export function Coach({ conversationId }: { conversationId?: string }) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const justCreated = useRef<string | null>(null);
 
-  const firstName = (user?.display_name || user?.name || '').trim().split(/\s+/).pop() || '';
+  const firstName = (user?.display_name || user?.name || '').replace(/\([^)]*\)/g, '').trim().split(/\s+/).pop() || '';
   const active = convs?.find((c) => c.id === conversationId);
 
   useEffect(() => {
@@ -210,52 +210,14 @@ export function Coach({ conversationId }: { conversationId?: string }) {
   return (
     <div className={`cc ${sideOpen ? '' : 'cc-side-closed'} ${drawer ? 'cc-drawer-open' : ''}`}>
       <div className="cc-scrim" onClick={() => setDrawer(false)} aria-hidden="true" />
-      <aside className="cc-side" aria-label="Lịch sử trò chuyện">
-        <div className="cc-side-head">
-          <span className="cc-side-title">Lịch sử</span>
-          <button type="button" className="cc-icon" onClick={toggleSide} aria-label="Ẩn lịch sử" title="Ẩn lịch sử"><Icon name="x" size={18} /></button>
-        </div>
-        <button type="button" className="cc-new" onClick={() => navigate('/coach')}>
-          <Icon name="edit" size={18} /> Cuộc trò chuyện mới
-        </button>
-        <div className="cc-search">
-          <Icon name="search" size={16} />
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm cuộc trò chuyện" aria-label="Tìm cuộc trò chuyện" />
-        </div>
-        <nav className="cc-list">
-          {convs === null && <div className="cc-list-note">Đang tải…</div>}
-          {convs?.length === 0 && <div className="cc-list-note">Chưa có cuộc trò chuyện nào. Hỏi trợ lý một câu để bắt đầu.</div>}
-          {convs && convs.length > 0 && groups.length === 0 && <div className="cc-list-note">Không tìm thấy.</div>}
-          {groups.map((g) => (
-            <div key={g.label} className="cc-group">
-              <div className="cc-group-label">{g.label}</div>
-              {g.items.map((c) => editing?.id === c.id ? (
-                <input key={c.id} className="cc-rename" autoFocus value={editing.title} maxLength={200}
-                  onChange={(e) => setEditing({ id: c.id, title: e.target.value })} onBlur={saveTitle}
-                  onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditing(null); }}
-                  aria-label="Tên cuộc trò chuyện" />
-              ) : (
-                <div key={c.id} className={`cc-item ${c.id === conversationId ? 'cc-item-on' : ''}`}>
-                  <button type="button" className="cc-item-title" onClick={() => navigate(`/coach/${c.id}`)} title={c.title}
-                    aria-current={c.id === conversationId ? 'page' : undefined}>{c.title}</button>
-                  <span className="cc-item-tools">
-                    <button type="button" onClick={() => setEditing({ id: c.id, title: c.title })} aria-label="Đổi tên" title="Đổi tên"><Icon name="edit" size={15} /></button>
-                    <button type="button" onClick={() => remove(c)} aria-label="Xóa" title="Xóa"><Icon name="trash" size={15} /></button>
-                  </span>
-                </div>
-              ))}
-            </div>
-          ))}
-        </nav>
-      </aside>
 
       <section className="cc-main">
         <header className="cc-top">
+          <span className="cc-top-title">{active?.title || 'Trợ lý học tập'}</span>
+          {!empty && <button type="button" className="cc-icon" onClick={() => navigate('/coach')} aria-label="Cuộc trò chuyện mới" title="Cuộc trò chuyện mới"><Icon name="edit" size={19} /></button>}
           <button type="button" className="cc-icon cc-toggle" onClick={toggleSide} aria-label="Lịch sử trò chuyện" title="Lịch sử trò chuyện">
             <Icon name="history" size={20} />
           </button>
-          <span className="cc-top-title">{active?.title || 'Trợ lý học tập'}</span>
-          {!empty && <button type="button" className="cc-icon" onClick={() => navigate('/coach')} aria-label="Cuộc trò chuyện mới" title="Cuộc trò chuyện mới"><Icon name="edit" size={19} /></button>}
         </header>
 
         {empty ? (
@@ -341,6 +303,44 @@ export function Coach({ conversationId }: { conversationId?: string }) {
           </>
         )}
       </section>
+      <aside className="cc-side" aria-label="Lịch sử trò chuyện">
+        <div className="cc-side-head">
+          <span className="cc-side-title">Lịch sử</span>
+          <button type="button" className="cc-icon" onClick={toggleSide} aria-label="Ẩn lịch sử" title="Ẩn lịch sử"><Icon name="x" size={18} /></button>
+        </div>
+        <button type="button" className="cc-new" onClick={() => navigate('/coach')}>
+          <Icon name="edit" size={18} /> Cuộc trò chuyện mới
+        </button>
+        <div className="cc-search">
+          <Icon name="search" size={16} />
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Tìm cuộc trò chuyện" aria-label="Tìm cuộc trò chuyện" />
+        </div>
+        <nav className="cc-list">
+          {convs === null && <div className="cc-list-note">Đang tải…</div>}
+          {convs?.length === 0 && <div className="cc-list-note">Chưa có cuộc trò chuyện nào. Hỏi trợ lý một câu để bắt đầu.</div>}
+          {convs && convs.length > 0 && groups.length === 0 && <div className="cc-list-note">Không tìm thấy.</div>}
+          {groups.map((g) => (
+            <div key={g.label} className="cc-group">
+              <div className="cc-group-label">{g.label}</div>
+              {g.items.map((c) => editing?.id === c.id ? (
+                <input key={c.id} className="cc-rename" autoFocus value={editing.title} maxLength={200}
+                  onChange={(e) => setEditing({ id: c.id, title: e.target.value })} onBlur={saveTitle}
+                  onKeyDown={(e) => { if (e.key === 'Enter') saveTitle(); if (e.key === 'Escape') setEditing(null); }}
+                  aria-label="Tên cuộc trò chuyện" />
+              ) : (
+                <div key={c.id} className={`cc-item ${c.id === conversationId ? 'cc-item-on' : ''}`}>
+                  <button type="button" className="cc-item-title" onClick={() => navigate(`/coach/${c.id}`)} title={c.title}
+                    aria-current={c.id === conversationId ? 'page' : undefined}>{c.title}</button>
+                  <span className="cc-item-tools">
+                    <button type="button" onClick={() => setEditing({ id: c.id, title: c.title })} aria-label="Đổi tên" title="Đổi tên"><Icon name="edit" size={15} /></button>
+                    <button type="button" onClick={() => remove(c)} aria-label="Xóa" title="Xóa"><Icon name="trash" size={15} /></button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          ))}
+        </nav>
+      </aside>
     </div>
   );
 }

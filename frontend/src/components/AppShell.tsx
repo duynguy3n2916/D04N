@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { storage } from '../lib/api';
 import { isTeacher, useAuth } from '../lib/auth';
 import { useNotifications } from '../lib/notifications';
 import { Link } from '../lib/router';
@@ -6,6 +7,8 @@ import { useState } from 'react';
 import { Icon, type IconName } from './Icon';
 import { Logo } from './Logo';
 import { IconButton, setReduceFx } from './ui';
+
+const NAV_KEY = 'mam.nav';
 
 type NavItem = { to: string; label: string; icon: IconName; match: string; admin?: boolean };
 
@@ -35,8 +38,11 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
   const [reduceFx, setReduce] = useState(() => document.documentElement.classList.contains('reduce-fx'));
   const toggleFx = () => { setReduce(!reduceFx); setReduceFx(!reduceFx); };
   const noti = useNotifications();
-  // Trang Trợ lý đã có cột lịch sử riêng: thu menu chính thành dải icon để không thành hai thanh bên cạnh nhau
-  const compact = path.startsWith('/coach');
+  // Người dùng tự thu gọn / mở rộng menu (nhớ lựa chọn). Chưa chọn thì trang Trợ lý (đã có cột lịch sử riêng)
+  // mặc định thu thành dải icon để không thành hai thanh bên cạnh nhau.
+  const [navPref, setNavPref] = useState(() => storage.get(NAV_KEY));
+  const compact = navPref ? navPref === 'mini' : path.startsWith('/coach');
+  const toggleNav = () => { const next = compact ? 'full' : 'mini'; storage.set(NAV_KEY, next); setNavPref(next); };
   const badge: Record<string, number> = { '/forum': noti?.forum_new || 0, '/messages': noti?.dm_unread || 0, '/inbox': noti?.inbox_unread || 0 };
   const nav = (items: NavItem[]) => items
     .filter((n) => !n.admin || user?.role === 'admin')
@@ -51,7 +57,10 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
   return (
     <div className={`shell ${compact ? 'shell-compact' : ''}`}>
       <nav className="sidenav" aria-label="Điều hướng chính">
-        <Link to={teacher && !path.startsWith('/learn') && !path.startsWith('/profile') && !path.startsWith('/settings') ? '/teach/courses' : '/learn'} className="sidenav-logo" aria-label="Trang chủ"><Logo size={34} /></Link>
+        <div className="sidenav-top">
+          <Link to={teacher && !path.startsWith('/learn') && !path.startsWith('/profile') && !path.startsWith('/settings') ? '/teach/courses' : '/learn'} className="sidenav-logo" aria-label="Trang chủ"><Logo size={34} /></Link>
+          <IconButton icon={compact ? 'chevronRight' : 'chevronLeft'} label={compact ? 'Mở rộng menu' : 'Thu gọn menu'} onClick={toggleNav} className="sidenav-toggle" />
+        </div>
         <div className="sidenav-group">
           {teacher && <span className="sidenav-title">Học sinh</span>}
           {nav(STUDENT)}

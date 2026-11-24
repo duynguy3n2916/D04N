@@ -221,7 +221,7 @@ function CourseCatalog({ courses }: { courses: CourseSummary[] }) {
   const resume = courses.find((c) => courseState(c) === 'doing');
   const shown = courses.filter((c) => filter === 'all' || courseState(c) === filter);
   const count = (f: CourseFilter) => f === 'all' ? courses.length : courses.filter((c) => courseState(c) === f).length;
-  const name = (user?.display_name || user?.name || '').trim().split(/\s+/).pop();
+  const name = (user?.display_name || user?.name || '').replace(/\([^)]*\)/g, '').trim().split(/\s+/).pop();
   return (
     <>
       <header className="learn-head">

@@ -61,3 +61,14 @@
 .forum-search { flex: 1 1 110px; min-width: 110px; min-height: 42px; border: 1px solid var(--line); }
 @media (max-width: 700px) { .forum-bar .sn-tabs { width: 100%; } .forum-bar .sn-tabs button { flex: 1; padding: 4px 8px; } .forum-select { flex: 1 1 0; max-width: none; } .forum-search { flex-basis: 100%; } }
 .forum-page { max-width: 820px; margin: 0 auto; }
+
+/* Nút thu gọn / mở rộng menu bên trái */
+.sidenav-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.sidenav-top .sidenav-logo { min-width: 0; }
+.sidenav-toggle { flex: none; width: 34px; height: 34px; color: var(--t-muted, var(--muted)); }
+.sidenav-toggle:hover { color: var(--brand); background: var(--brand-soft); }
+.sidenav { transition: flex-basis .2s ease, width .2s ease, padding .2s ease; }
+@media (min-width: 901px) {
+  .shell-compact .sidenav-top { flex-direction: column; gap: 4px; }
+}
+@media (max-width: 900px) { .sidenav-toggle { display: none; } }

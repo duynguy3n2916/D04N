@@ -731,9 +731,9 @@ i.ln-mid { background: var(--brand-line); }
   .shell-compact .sidenav-group + .sidenav-group { border-top: 1px solid var(--line); padding-top: 10px; }
 }
 .cc { display: flex; height: 100vh; min-height: 520px; position: relative; background: var(--paper); }
-.cc-side { flex: 0 0 272px; display: flex; flex-direction: column; gap: 10px; padding: 16px 12px; border-right: 1px solid var(--line);
-  background: var(--t-wash); min-width: 0; transition: margin-left .22s var(--ease, ease), opacity .2s; }
-.cc-side-closed .cc-side { margin-left: -272px; opacity: 0; pointer-events: none; }
+.cc-side { flex: 0 0 272px; display: flex; flex-direction: column; gap: 10px; padding: 16px 12px; border-left: 1px solid var(--line);
+  background: var(--t-wash); min-width: 0; transition: margin-right .22s var(--ease, ease), opacity .2s; }
+.cc-side-closed .cc-side { margin-right: -272px; opacity: 0; pointer-events: none; }
 .cc-side-head { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 0 8px; }
 .cc-side-title { font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
 .cc-icon { display: inline-grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; border: 0; background: transparent;
@@ -834,8 +834,8 @@ i.ln-mid { background: var(--brand-line); }
 
 @media (max-width: 900px) {
   .cc { height: calc(100dvh - 64px); min-height: 460px; }
-  .cc-side { position: absolute; inset: 0 auto 0 0; z-index: 30; width: min(300px, 86vw); margin-left: 0 !important; opacity: 1 !important;
-    pointer-events: auto !important; transform: translateX(-105%); transition: transform .22s ease; box-shadow: 8px 0 30px rgba(0,0,0,.12); }
+  .cc-side { position: absolute; inset: 0 0 0 auto; z-index: 30; width: min(300px, 86vw); margin-right: 0 !important; opacity: 1 !important;
+    pointer-events: auto !important; transform: translateX(105%); transition: transform .22s ease; box-shadow: -8px 0 30px rgba(0,0,0,.12); }
   .cc-drawer-open .cc-side { transform: none; }
   .cc-drawer-open .cc-scrim { display: block; position: absolute; inset: 0; z-index: 25; background: rgba(20, 10, 14, .32); }
   .cc-toggle { visibility: visible; }
