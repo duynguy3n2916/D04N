@@ -5,16 +5,18 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.core.errors import AppError
-from app.core.llm_schemas import Difficulty, QuestionType
 from app.core.security import Principal, ensure_class_access, get_current_user, require_teacher
 from app.core.utils import clean_id, parse_uuid
 from app.database import get_db
-from app.models.transcript import TranscriptSegment, VideoTranscript
 from app.models.learning import MediaVideo
-from app.services import jobs, video_learning, workflow
-from app.services.retrieval import active_transcript
-from app.services.storage import safe_extension, save_upload
-from app.services.transcription import parse_transcript_content, save_transcript_version, transcript_to_dict
+from app.models.transcript import TranscriptSegment, VideoTranscript
+from app.services.ai import video_learning
+from app.services.ai.schemas import Difficulty, QuestionType
+from app.services.courses import workflow
+from app.services.media.storage import safe_extension, save_upload
+from app.services.media.transcription import parse_transcript_content, save_transcript_version, transcript_to_dict
+from app.services.rag.retrieval import active_transcript
+from app.services.system import jobs
 
 router = APIRouter(prefix="/ai", tags=["videos"])
 

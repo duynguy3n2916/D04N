@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { Fragment, useState, useEffect } from 'react';
 import { PageHeader } from '../../components/AppShell';
-import { Badge, Button, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
+import { Button, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
 import { api, apiBlob, errorText } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
+import { ManualCreateDialog } from '../../components/ManualCreateDialog';
+import { Icon } from '../../components/Icon';
+import { BulkBar, Check, FilterPills, KpiRow, PillSelect, SearchBox, StatusTag, Toolbar, useSelection } from '../../components/Manage';
 
 interface BankItem {
   item_id: string; generation_id: string | null; status: string; edited: boolean; lesson_id: string | null; created_at: string;
@@ -36,79 +39,149 @@ const TYPE: Record<string, string> = { multiple_choice: 'Trắc nghiệm', true_
 
 export function QuestionBank() {
   const toast = useToast();
-  const [lesson, setLesson] = useState('');
+
+  const getUrlParams = () => {
+    const hash = window.location.hash;
+    const query = hash.includes('?') ? hash.substring(hash.indexOf('?')) : '';
+    return new URLSearchParams(query);
+  };
+
+  const [lesson, setLesson] = useState(() => getUrlParams().get('lesson') || '');
   const [status, setStatus] = useState('');
+  const [q_, setQ] = useState('');
+  const [typeF, setTypeF] = useState('');
+  const [srcF, setSrcF] = useState('');
+  const lessons = useLessonCodes();
+
   const bank = useAsync((s) => api<BankItem[]>(`/ai/teacher/question-bank?${new URLSearchParams({ ...(lesson && { lesson_id: lesson }), ...(status && { status }) })}`, { signal: s }), [lesson, status]);
-  const stats = useAsync((s) => api<Stats>('/ai/teacher/stats', { signal: s }), []);
+  const stats = useAsync((s) => api<Stats>('/ai/teacher/stats', { signal: s }), [], 'teach/qstats');
+
+  useEffect(() => {
+    const focusId = getUrlParams().get('focus');
+    if (focusId && bank.data && bank.data.length > 0) {
+      setTimeout(() => {
+        const element = document.getElementById(`question-${focusId}`);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          element.style.transition = 'background-color 0.8s ease';
+          element.style.backgroundColor = 'var(--yellow-light, #fffbe6)'; 
+          setTimeout(() => { element.style.backgroundColor = ''; }, 2500);
+        }
+      }, 100);
+    }
+  }, [bank.data]);
+
   const [genOpen, setGenOpen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
   const [edit, setEdit] = useState<BankItem | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
 
   const setSt = async (it: BankItem, st: string) => {
     try { await api(`/ai/question-bank/${it.item_id}`, { method: 'PATCH', json: { status: st } }); bank.reload(); stats.reload(); } catch (e) { toast(errorText(e), 'error'); }
   };
-  const approveAll = async () => {
-    const drafts = bank.data?.filter((x) => x.status === 'draft') || [];
-    for (const d of drafts) { try { await api(`/ai/question-bank/${d.item_id}`, { method: 'PATCH', json: { status: 'approved' } }); } catch { /* bỏ qua */ } }
-    toast(`Đã duyệt ${drafts.length} câu`, 'success'); bank.reload(); stats.reload();
-  };
+
 
   const st = stats.data;
+  const rows = (bank.data || []).filter((q) => (!q_ || q.question.toLowerCase().includes(q_.toLowerCase()))
+    && (!typeF || q.type === typeF) && (!srcF || (srcF === 'ai' ? !!q.generation_id : !q.generation_id)));
+  const sel = useSelection(rows.map((q) => q.item_id));
+  const [open, setOpen] = useState<string | null>(null);
+  const bulk = async (to: 'approved' | 'rejected') => {
+    const ids = sel.selected;
+    let ok = 0;
+    for (const id of ids) { try { await api(`/ai/question-bank/${id}`, { method: 'PATCH', json: { status: to } }); ok++; } catch { /* bỏ qua */ } }
+    toast(`${to === 'approved' ? 'Đã duyệt' : 'Đã từ chối'} ${ok}/${ids.length} câu`, ok === ids.length ? 'success' : 'error');
+    sel.clear(); bank.reload(); stats.reload();
+  };
   return (
     <>
-      <PageHeader title="Ngân hàng câu hỏi" sub="AI soạn câu hỏi từ tài liệu của bài; giáo viên sửa và duyệt. Bài kiểm tra cuối bài lấy từ các câu đã duyệt."
-        actions={<>
-          <Button variant="ghost" icon="doc" onClick={() => setExportOpen(true)}>Xuất đề</Button>
-          <Button icon="wand" onClick={() => setGenOpen(true)}>AI soạn câu hỏi</Button>
-        </>} />
-      {st && (
-        <div className="stat-tiles">
-          <div className="tile"><strong>{st.approved}</strong><span>Đã duyệt</span></div>
-          <div className="tile"><strong>{st.pending}</strong><span>Chờ duyệt</span></div>
-          <div className="tile"><strong>{st.rejected}</strong><span>Đã từ chối</span></div>
-          <div className="tile"><strong>{st.acceptance_rate != null ? `${Math.round(st.acceptance_rate * 100)}%` : '—'}</strong><span>Tỉ lệ chấp nhận ({st.approved_without_edit} không cần sửa)</span></div>
-        </div>
-      )}
-      <div className="row" style={{ marginBottom: 14, alignItems: 'flex-end' }}>
-        <Field label="Bài học"><LessonSelect value={lesson} onChange={setLesson} allowAll /></Field>
-        <Field label="Trạng thái">
-          <select value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">Tất cả</option><option value="draft">Nháp</option><option value="approved">Đã duyệt</option><option value="rejected">Từ chối</option>
-          </select>
-        </Field>
-        <span style={{ flex: 1 }} />
-        {!!bank.data?.some((x) => x.status === 'draft') && <Button variant="soft" icon="check" onClick={approveAll}>Duyệt tất cả câu nháp đang hiện</Button>}
-      </div>
+      <PageHeader title="Ngân hàng câu hỏi" sub="AI soạn câu hỏi từ tài liệu của bài, giáo viên sửa và duyệt. Bài kiểm tra cuối bài lấy từ các câu đã duyệt."
+        actions={
+          <div className="row" style={{ gap: 8 }}>
+            <Button variant="ghost" icon="doc" onClick={() => setExportOpen(true)}>Xuất đề</Button>
+            <Button variant="ghost" icon="plus" onClick={() => setCreateOpen(true)}>Tạo thủ công</Button>
+            <Button icon="wand" onClick={() => setGenOpen(true)}>AI soạn câu hỏi</Button>
+          </div>
+        } />
+      {st && <KpiRow items={[
+        { label: 'Tổng câu hỏi', value: st.approved + st.pending + st.rejected },
+        { label: 'Chờ duyệt', value: st.pending, brand: true },
+        { label: 'Đã duyệt', value: st.approved },
+        { label: 'Tỉ lệ chấp nhận', value: st.acceptance_rate != null ? `${Math.round(st.acceptance_rate * 100)}%` : '—', hint: `${st.approved_without_edit} câu không cần sửa` },
+      ]} />}
+      <Toolbar>
+        <SearchBox value={q_} onChange={setQ} placeholder="Tìm câu hỏi…" />
+        <FilterPills label="Trạng thái" value={status} onChange={setStatus}
+          options={[{ id: '', label: 'Tất cả' }, { id: 'draft', label: 'Chờ duyệt' }, { id: 'approved', label: 'Đã duyệt' }, { id: 'rejected', label: 'Từ chối' }]} />
+        <PillSelect label="Bài học" value={lesson} onChange={setLesson}>
+          <option value="">Tất cả bài</option>
+          {lessons.data?.map((l) => <option key={l.code} value={l.code}>{l.code} · {l.title}</option>)}
+        </PillSelect>
+        <PillSelect label="Loại câu hỏi" value={typeF} onChange={setTypeF}>
+          <option value="">Mọi loại</option>
+          {Object.entries(TYPE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </PillSelect>
+        <PillSelect label="Nguồn" value={srcF} onChange={setSrcF}>
+          <option value="">Mọi nguồn</option><option value="ai">AI soạn</option><option value="manual">Thủ công</option>
+        </PillSelect>
+      </Toolbar>
       {bank.loading && !bank.data && <Spinner />}
       {bank.error && <ErrorBox message={bank.error} onRetry={bank.reload} />}
-      {bank.data && !bank.data.length && <Empty title="Chưa có câu hỏi">Bấm “AI soạn câu hỏi” và chọn bài học.</Empty>}
-      <div className="col" style={{ gap: 12 }}>
-        {bank.data?.map((q) => (
-          <div key={q.item_id} className="qcard">
-            <div className="row" style={{ gap: 6 }}>
-              <Badge tone={q.status === 'approved' ? 'green' : q.status === 'rejected' ? 'red' : 'yellow'}>{q.status === 'approved' ? 'Đã duyệt' : q.status === 'rejected' ? 'Từ chối' : 'Nháp'}</Badge>
-              <Badge>{TYPE[q.type] || q.type}</Badge>
-              <Badge tone="purple">{DIFF[q.difficulty] || q.difficulty}</Badge>
-              {q.lesson_id && <Badge tone="blue">{q.lesson_id}</Badge>}
-              {q.edited && <Badge tone="orange">Đã sửa</Badge>}
-            </div>
-            <h3>{q.question}</h3>
-            {q.options?.length ? (
-              <div className="qcard-opts">{q.options.map((o, i) => <div key={i} className={`qcard-opt ${(q.correct_index ?? q.options!.indexOf(q.correct_answer || '')) === i ? 'ok' : ''}`}>{o}</div>)}</div>
-            ) : q.correct_answer ? <p className="small"><b>Đáp án:</b> {q.correct_answer}</p> : null}
-            {q.explanation && <p className="muted small" style={{ fontWeight: 700 }}>{q.explanation}</p>}
-            {!!q.sources?.length && <p className="muted small">Nguồn: {q.sources.join(', ')}</p>}
-            <div className="row">
-              {q.status !== 'approved' && <Button size="sm" icon="check" onClick={() => setSt(q, 'approved')}>Duyệt</Button>}
-              {q.status !== 'rejected' && <Button size="sm" variant="danger-ghost" onClick={() => setSt(q, 'rejected')}>Từ chối</Button>}
-              <IconButton icon="edit" label="Sửa câu hỏi" onClick={() => setEdit(q)} />
-            </div>
-          </div>
-        ))}
-      </div>
+      {bank.data && !bank.data.length && <Empty title="Chưa có câu hỏi">Bấm “AI soạn câu hỏi”, chọn bài học và nguồn, AI sẽ soạn nháp để bạn duyệt.</Empty>}
+      {bank.data && !!bank.data.length && !rows.length && <Empty title="Không có câu nào khớp">Thử bỏ bớt bộ lọc hoặc từ khóa.</Empty>}
+      {!!rows.length && (
+        <div className="table-wrap">
+          <table className="table">
+            <thead><tr>
+              <th className="td-check"><Check checked={sel.allOn} onChange={sel.toggleAll} label="Chọn tất cả" /></th>
+              <th>Câu hỏi</th><th>Bài</th><th>Loại</th><th>Nguồn</th><th>Trạng thái</th><th className="td-actions"><span className="sr-only">Thao tác</span></th>
+            </tr></thead>
+            <tbody>
+              {rows.map((q) => {
+                const isOpen = open === q.item_id;
+                return (
+                  <Fragment key={q.item_id}>
+                    <tr id={`question-${q.item_id}`} className={`row-click ${sel.has(q.item_id) ? 'row-on' : ''}`} onClick={() => setOpen(isOpen ? null : q.item_id)} aria-expanded={isOpen}>
+                      <td className="td-check"><Check checked={sel.has(q.item_id)} onChange={() => sel.toggle(q.item_id)} label={`Chọn câu: ${q.question}`} /></td>
+                      <td className="td-main"><strong>{q.question}</strong>
+                        <span className="td-sub">{[DIFF[q.difficulty] || q.difficulty, q.sources?.[0], q.edited ? 'đã sửa' : ''].filter(Boolean).join(' · ')}</span></td>
+                      <td className="td-num">{q.lesson_id || '—'}</td>
+                      <td>{TYPE[q.type] || q.type}</td>
+                      <td>{q.generation_id ? <StatusTag tone="ai"><Icon name="sparkle" size={13} />AI</StatusTag> : <StatusTag tone="muted">Thủ công</StatusTag>}</td>
+                      <td>{q.status === 'approved' ? <StatusTag tone="ok">Đã duyệt</StatusTag> : q.status === 'rejected' ? <StatusTag tone="bad">Từ chối</StatusTag> : <StatusTag tone="wait">Chờ duyệt</StatusTag>}</td>
+                      <td className="td-actions" onClick={(e) => e.stopPropagation()}><IconButton icon="edit" label="Sửa câu hỏi" onClick={() => setEdit(q)} /></td>
+                    </tr>
+                    {isOpen && (
+                      <tr className="row-detail"><td colSpan={7}>
+                        <div className="m-detail">
+                          {q.options?.length ? (
+                            <div className="qcard-opts">{q.options.map((o, i) => <div key={i} className={`qcard-opt ${(q.correct_index ?? q.options!.indexOf(q.correct_answer || '')) === i ? 'ok' : ''}`}>{o}</div>)}</div>
+                          ) : q.correct_answer ? <p className="small"><b>Đáp án:</b> {q.correct_answer}</p> : null}
+                          {q.explanation && <p className="muted small">{q.explanation}</p>}
+                          {!!q.sources?.length && <p className="muted small">Nguồn: {q.sources.join(', ')}</p>}
+                          <div className="row">
+                            {q.status !== 'approved' && <Button size="sm" icon="check" onClick={() => setSt(q, 'approved')}>Duyệt</Button>}
+                            {q.status !== 'rejected' && <Button size="sm" variant="danger-ghost" onClick={() => setSt(q, 'rejected')}>Từ chối</Button>}
+                            <Button size="sm" variant="ghost" icon="edit" onClick={() => setEdit(q)}>Sửa</Button>
+                          </div>
+                        </div>
+                      </td></tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <BulkBar count={sel.selected.length} noun="câu" onClear={sel.clear}>
+        <Button size="sm" icon="check" onClick={() => bulk('approved')}>Duyệt</Button>
+        <Button size="sm" variant="ghost" onClick={() => bulk('rejected')}>Từ chối</Button>
+      </BulkBar>
       {genOpen && <GenerateDialog defaultLesson={lesson} onClose={() => setGenOpen(false)} onDone={(code) => { setGenOpen(false); setLesson(code); setStatus('draft'); bank.reload(); stats.reload(); }} />}
       {exportOpen && <ExportDialog defaultLesson={lesson} onClose={() => setExportOpen(false)} />}
       {edit && <BankEditor item={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); bank.reload(); stats.reload(); }} />}
+      {createOpen && <ManualCreateDialog defaultLesson={lesson} onClose={() => setCreateOpen(false)} onSaved={() => { setCreateOpen(false); bank.reload(); stats.reload(); toast('Đã tạo và duyệt câu hỏi mới', 'success'); }} />}
     </>
   );
 }
@@ -203,7 +276,9 @@ function BankEditor({ item, onClose, onSaved }: { item: BankItem; onClose: () =>
               <div key={i} className="row" style={{ flexWrap: 'nowrap' }}>
                 <input type="radio" name="bank-correct" aria-label={`Đáp án đúng là lựa chọn ${i + 1}`} checked={f.correct_answer === o} onChange={() => setF({ ...f, correct_answer: o })} style={{ width: 20, height: 20, accentColor: 'var(--green)' }} />
                 <input className="input" value={o} aria-label={`Lựa chọn ${i + 1}`} onChange={(e) => {
-                  const n = [...f.options]; const wasCorrect = f.correct_answer === n[i]; n[i] = e.target.value;
+                  const n = [...f.options]; 
+                  const wasCorrect = f.correct_answer === n[i]; 
+                  n[i] = e.target.value;
                   setF({ ...f, options: n, correct_answer: wasCorrect ? e.target.value : f.correct_answer });
                 }} />
               </div>

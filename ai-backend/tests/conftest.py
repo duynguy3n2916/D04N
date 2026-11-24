@@ -2,7 +2,6 @@
 import os
 
 import pytest
-
 from sqlalchemy.engine import make_url  # noqa: E402
 
 
@@ -65,7 +64,8 @@ _reset_schema()
 from fastapi.testclient import TestClient  # noqa: E402
 
 from app.main import app  # noqa: E402
-from app.services import jobs, llm  # noqa: E402
+from app.services.ai import llm  # noqa: E402
+from app.services.system import jobs  # noqa: E402
 from tests.fake_llm import FakeLLM  # noqa: E402
 
 jobs.set_inline(True)
@@ -89,6 +89,7 @@ def fake_llm(monkeypatch):
         yield (in_tok, out_tok, model)
 
     monkeypatch.setattr(llm, "_stream_provider", fake_stream)
+    monkeypatch.setattr(llm, "_tools_provider", fake.tools)
     return fake
 
 

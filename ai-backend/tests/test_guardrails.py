@@ -2,11 +2,11 @@
 chống thoát thẻ học liệu, thời hạn lưu; và baseline đối chứng trong evaluation."""
 from datetime import timedelta
 
-from app.core.prompts import wrap_documents
 from app.core.utils import redact_pii, utcnow
 from app.database import SessionLocal
 from app.models.conversation import AIConversation, AIMessage
-from app.services.retention import purge_expired
+from app.services.ai.prompts import wrap_documents
+from app.services.system.retention import purge_expired
 from tests.conftest import LESSON_TEXT, token
 from tests.test_api_core import upload
 

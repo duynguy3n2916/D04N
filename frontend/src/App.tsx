@@ -5,11 +5,12 @@ import { match, navigate, useLocation } from './lib/router';
 import { Learn } from './pages/Learn';
 import { LessonPage } from './pages/Lesson';
 import { Flashcards } from './pages/Flashcards';
+import { Coach } from './pages/Coach';
 import { Forum } from './pages/Forum';
 import { Inbox } from './pages/Inbox';
 import { Messages } from './pages/Messages';
 import { ForceChangePassword, Login, ResetPassword } from './pages/Login';
-import { Profile } from './pages/Profile';
+import { Profile, Settings } from './pages/Profile';
 import { CourseEditor, Courses } from './pages/teach/Courses';
 import { Documents } from './pages/teach/Documents';
 import { Evaluation } from './pages/teach/Evaluation';
@@ -44,7 +45,9 @@ export function App() {
 
   let page: ReactElement;
   if ((m = match('/learn/:courseId?', path))) page = <Learn path={path} courseId={m.courseId} />;
+  else if ((m = match('/coach/:conversationId?', path))) page = <Coach conversationId={m.conversationId} />;
   else if (match('/profile', path)) page = <Profile />;
+  else if (match('/settings', path)) page = <Settings />;
   else if (match('/forum', path)) page = <Forum />;
   else if (match('/inbox', path)) page = <Inbox />;
   else if (match('/teach/courses', path)) page = teacherOnly(<Courses />);

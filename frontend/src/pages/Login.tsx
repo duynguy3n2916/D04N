@@ -1,7 +1,8 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Logo, Mascot } from '../components/Mascot';
+import { Icon } from '../components/Icon';
+import { Logo } from '../components/Logo';
 import { PasswordInput, PasswordRules, passwordOk } from '../components/PasswordInput';
-import { Button, ErrorBox, Field } from '../components/ui';
+import { Button, ErrorBox, Field, MarkIcon } from '../components/ui';
 import { api, errorText } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { navigate } from '../lib/router';
@@ -42,20 +43,28 @@ export function Login() {
   };
 
   return (
-    <div className="login-page">
-      <header className="login-top">
-        <Logo size={38} />
-        <span className="muted" style={{ fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.6px', fontSize: 14 }}>Trợ lý AI học tập</span>
-      </header>
-      <main className="login-main">
+    <div className="login-page login-split">
+      <section className="login-side">
+        <header className="login-top">
+          <Logo size={38} />
+          <span className="login-tag">Trợ lý AI học tập</span>
+        </header>
         <div className="login-hero">
-          <Mascot size={240} mood="wave" label="Linh vật Mầm vẫy tay" />
-          <h1>Học mỗi ngày, có <span className="grad-word">AI</span> kèm cặp từng bước</h1>
+          <h1>Học cùng <span className="grad-word">AI</span>, mỗi ngày một chút.</h1>
           <p>Xem bài giảng, trả lời câu hỏi ngay trong video và hỏi Tutor bất cứ lúc nào.</p>
         </div>
-
+        <ul className="login-points">
+          <li><Icon name="play" size={16} />Video có câu hỏi xen giữa</li>
+          <li><Icon name="sparkle" size={16} />Tutor trả lời kèm nguồn</li>
+          <li><Icon name="refresh" size={16} />Thẻ ghi nhớ ôn đúng hạn</li>
+        </ul>
+      </section>
+      <main className="login-panel">
         <form className="login-form" onSubmit={submit} aria-label={TITLE[mode]}>
-          <h2 style={{ fontSize: 28 }}>{TITLE[mode]}</h2>
+          <div>
+            <h2 className="login-title">{TITLE[mode]}</h2>
+            {mode === 'login' && <p className="login-sub">Dùng tài khoản giáo viên cấp hoặc tài khoản bạn đã tạo.</p>}
+          </div>
           {notice && mode === 'login' && <div className="notice">{notice}</div>}
 
           {mode === 'forgot' ? (
@@ -151,7 +160,7 @@ export function ForceChangePassword() {
       <header className="login-top"><Logo size={38} /></header>
       <main className="login-main">
         <form className="login-form card" onSubmit={submit} aria-label="Đổi mật khẩu" style={{ padding: '26px 28px' }}>
-          <Mascot size={90} mood="think" />
+          <MarkIcon icon="key" size={56} tone="soft" />
           <h2 style={{ fontSize: 26 }}>Đặt mật khẩu của riêng bạn</h2>
           <p className="muted" style={{ fontWeight: 700 }}>
             Xin chào {user?.name || user?.user_id}! Bạn đang dùng mật khẩu tạm do giáo viên cấp. Hãy đổi sang mật khẩu mới để tiếp tục.
@@ -191,7 +200,7 @@ export function ResetPassword() {
       <header className="login-top"><Logo size={38} /></header>
       <main className="login-main">
         <form className="login-form card" onSubmit={submit} aria-label="Đặt mật khẩu mới" style={{ padding: '26px 28px' }}>
-          <Mascot size={90} mood="think" />
+          <MarkIcon icon="key" size={56} tone="soft" />
           <h2 style={{ fontSize: 26 }}>Đặt mật khẩu mới</h2>
           {!token && <ErrorBox message="Link không hợp lệ. Hãy mở đúng link trong email hoặc yêu cầu link mới." />}
           <Field label="Mật khẩu mới"><PasswordInput value={next} onChange={(e) => setNext(e.target.value)} required autoFocus autoComplete="new-password" /></Field>

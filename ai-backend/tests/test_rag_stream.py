@@ -3,8 +3,9 @@ import json
 from types import SimpleNamespace
 
 from app.config import settings
-from app.services import hybrid, learning
-from app.services.retrieval import RetrievalScope, retrieve
+from app.services.courses import learning
+from app.services.rag import hybrid
+from app.services.rag.retrieval import RetrievalScope, retrieve
 from tests.conftest import token
 from tests.test_api_core import upload
 

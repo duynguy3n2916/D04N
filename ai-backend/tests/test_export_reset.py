@@ -6,10 +6,10 @@ from urllib.parse import unquote
 from docx import Document
 
 from app.config import settings
-from app.services import mailer, quiz_export
+from app.services.courses import quiz_export
+from app.services.system import mailer
 from tests.conftest import LESSON_TEXT, token
 from tests.test_api_core import upload
-
 
 
 def test_quiz_export_variants_remap_answers():

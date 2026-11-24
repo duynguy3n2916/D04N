@@ -10,7 +10,7 @@ import { useAsync } from '../lib/hooks';
 export function AccountSection() {
   const { user, setUser, changePassword, logout } = useAuth();
   const toast = useToast();
-  const me = useAsync((s) => api<User & { classes: ClassInfo[] }>('/ai/auth/me', { signal: s }), []);
+  const me = useAsync((s) => api<User & { classes: ClassInfo[] }>('/ai/auth/me', { signal: s }), [], 'auth/me');
 
   // thông tin
   const [info, setInfo] = useState<{ display_name: string; email: string } | null>(null);

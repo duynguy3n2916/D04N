@@ -16,7 +16,7 @@ interface Thread { conversation_id: string; other_id: string; other_name: string
 
 /** Tin nhắn riêng giữa các thành viên cùng lớp. Giáo viên chỉ xem được tin nhắn bị báo cáo. */
 export function Messages({ conversationId }: { conversationId?: string }) {
-  const list = useAsync((s) => api<Conversation[]>('/ai/messages/conversations', { signal: s }), []);
+  const list = useAsync((s) => api<Conversation[]>('/ai/messages/conversations', { signal: s }), [], 'dm/list');
   const [picking, setPicking] = useState(false);
   useInterval(list.reload, 20_000);
   return (
@@ -54,7 +54,7 @@ export function Messages({ conversationId }: { conversationId?: string }) {
 
 function Chat({ conversationId, onChange }: { conversationId: string; onChange: () => void }) {
   const toast = useToast();
-  const data = useAsync((s) => api<Thread>(`/ai/messages/conversations/${conversationId}`, { signal: s }), [conversationId]);
+  const data = useAsync((s) => api<Thread>(`/ai/messages/conversations/${conversationId}`, { signal: s }), [conversationId], `dm/${conversationId}`);
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [reporting, setReporting] = useState<Message | null>(null);

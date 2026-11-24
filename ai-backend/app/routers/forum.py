@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.security import Principal, get_current_user, get_user_for_media
 from app.core.utils import parse_uuid
 from app.database import get_db
-from app.services import forum
+from app.services.social import forum
 
 router = APIRouter(prefix="/ai/forum", tags=["forum"])
 
@@ -78,7 +78,7 @@ def upload_image(class_id: str, file: UploadFile = File(...), user: Principal = 
 @router.get("/images/{image_id}")
 def get_image(image_id: str, request: Request, user: Principal = Depends(get_user_for_media),
               db: Session = Depends(get_db)):
-    from app.services.object_store import get_store
+    from app.services.media.object_store import get_store
     img = forum.get_image(db, user, parse_uuid(image_id, "image_id"))
     return get_store().response(img.file_key, request, media_type=img.mime, cache_control="private, max-age=86400")
 

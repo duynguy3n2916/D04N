@@ -4,8 +4,8 @@ Nền tảng học trực tuyến có AI kèm cặp: học sinh xem video bài g
 **Tutor AI** trả lời câu hỏi dựa trên đúng học liệu của bài (có trích nguồn); video **tự dừng để hỏi** học sinh và AI giải
 thích đáp án; giáo viên dùng AI để soạn câu hỏi và quản lý lớp học.
 
-> Đồ án — thiết kế chi tiết xem [`architecture.md`](architecture.md), kế hoạch ban đầu xem
-> `Ke_hoach_xay_dung_he_thong_AI_ho_tro_hoc_tap.docx`.
+> Đồ án — thiết kế chi tiết xem [`docs/architecture.md`](docs/architecture.md), kế hoạch ban đầu xem
+> `docs/Ke_hoach_xay_dung_he_thong_AI_ho_tro_hoc_tap.docx`.
 
 ---
 
@@ -23,6 +23,9 @@ thích đáp án; giáo viên dùng AI để soạn câu hỏi và quản lý l�
   câu hỏi trong video hoặc bài kiểm tra, Tutor chỉ gợi ý, không nói đáp án.
 - **Bài kiểm tra** cuối bài từ ngân hàng câu hỏi đã duyệt; có thể giới hạn thời gian (đếm ngược, tự nộp) và lịch mở / đóng.
   Câu hay làm sai được ưu tiên xuất hiện lại ở lượt sau (luyện tập thích ứng).
+- **Trợ lý học tập (Study Coach Agent):** học sinh hỏi kiểu “mai kiểm tra, mình nên ôn gì?”; agent tự gọi tool (xem tiến độ,
+  câu hay sai, thẻ đến hạn, tìm học liệu, bài luyện tập, đưa câu sai vào lịch ôn) rồi trả kế hoạch ôn kèm nguồn và nút mở đúng mục.
+  Giới hạn số bước, chỉ đọc dữ liệu của chính học sinh, không nêu đáp án và tạm dừng khi đang làm bài kiểm tra.
 - **Ôn thẻ ghi nhớ** theo lịch lặp lại ngắt quãng (SM-2): thẻ từ câu hỏi đã duyệt và thẻ AI soạn đã được giáo viên duyệt.
 - **Mạng xã hội học tập của lớp:** bảng tin câu hỏi / bài chia sẻ / thông báo của giáo viên, sắp xếp Mới nhất · Nổi bật ·
   Chưa có trả lời, tìm kiếm, lọc theo #thẻ hoặc theo bài học; thả tim bài và bình luận; bình luận lồng (trả lời một bình luận);
@@ -69,20 +72,37 @@ thích đáp án; giáo viên dùng AI để soạn câu hỏi và quản lý l�
 
 ```
 D04N/
-├── ai-backend/            # FastAPI: API, RAG, Tutor, Question Agent, đánh giá
+├── ai-backend/                # FastAPI: API, RAG, Tutor, Study Coach, Question Agent, đánh giá
 │   ├── app/
-│   │   ├── core/          # bảo mật, mật khẩu, prompt, lỗi, schema LLM
-│   │   ├── models/        # bảng dữ liệu (SQLAlchemy)
-│   │   ├── routers/       # các nhóm API /ai/*
-│   │   └── services/      # nghiệp vụ: retrieval, tutor, workflow video, learning, accounts, lưu trữ file (object_store)...
-│   ├── sample_data/       # dữ liệu demo: bài OOP, video + phụ đề, slide PDF, bộ câu hỏi đánh giá
-│   ├── tests/             # pytest (Postgres thật trên cloud, LLM giả lập)
-│   ├── init_db.py         # tạo / nâng cấp database, nạp dữ liệu demo, tạo tài khoản quản trị
-│   ├── Dockerfile         # đóng gói backend (tùy chọn)
-│   └── docker-compose.yml # chạy backend trong Docker (tùy chọn, profile full); DB không nằm trong compose
-├── frontend/              # React + TypeScript (bản build sẵn ở frontend/dist)
-├── architecture.md        # tài liệu kiến trúc
-└── Ke_hoach_xay_dung_he_thong_AI_ho_tro_hoc_tap.docx
+│   │   ├── main.py            # khởi tạo app, phục vụ frontend/dist ở /app
+│   │   ├── config.py          # cấu hình đọc từ .env
+│   │   ├── database.py        # kết nối Postgres
+│   │   ├── migrate.py         # đồng bộ schema (bỏ qua khi schema không đổi)
+│   │   ├── core/              # dùng chung: bảo mật/JWT, mật khẩu, lỗi, request context, tiện ích
+│   │   ├── models/            # bảng dữ liệu (SQLAlchemy)
+│   │   ├── routers/           # các nhóm API /ai/* (chỉ nhận request, kiểm quyền, gọi service)
+│   │   └── services/          # nghiệp vụ, chia theo mảng:
+│   │       ├── ai/            #   LLM gateway, prompt, Tutor, Study Coach, sinh câu hỏi, chấm, đánh giá
+│   │       ├── rag/           #   đọc học liệu, chia đoạn, embedding, tìm kiếm hybrid
+│   │       ├── courses/       #   khóa học, tiến độ, flashcard, phiên xem video, xuất đề / báo cáo
+│   │       ├── media/         #   lưu upload, kho file (local / R2), phụ đề và phiên âm
+│   │       ├── social/        #   diễn đàn, nhắn tin, thông báo
+│   │       └── system/        #   tài khoản, job nền, dọn dữ liệu, email
+│   ├── sample_data/           # dữ liệu demo: bài OOP, video + phụ đề, slide PDF, bộ câu hỏi đánh giá
+│   ├── tests/                 # pytest (Postgres thật, LLM giả lập)
+│   ├── init_db.py             # tạo / nâng cấp database, nạp dữ liệu demo, tạo tài khoản quản trị
+│   ├── check_agents.py        # chẩn đoán Question Agent và Tutor AI trong video
+│   ├── Dockerfile             # đóng gói backend (tùy chọn)
+│   └── docker-compose.yml     # chạy backend trong Docker (tùy chọn)
+├── frontend/                  # React + TypeScript (bản build sẵn ở frontend/dist)
+│   └── src/
+│       ├── pages/             # trang học sinh; teach/ = trang giáo viên; items/ = video, slide, bài đọc, quiz
+│       ├── components/        # thành phần giao diện dùng chung
+│       ├── lib/               # gọi API, đăng nhập, router, hooks
+│       └── styles/            # base.css → theme.css → polish.css (nạp theo thứ tự này)
+├── scripts/                   # run.ps1 / run.sh: chạy server, tự build giao diện khi cần
+├── deploy/                    # Caddy + docker-compose cho máy chủ
+└── docs/                      # architecture.md, kế hoạch đồ án, sơ đồ kiến trúc
 ```
 
 ---
@@ -108,11 +128,18 @@ copy .env.example .env          # macOS/Linux: cp .env.example .env
 pip install -r requirements.txt
 python init_db.py --seed
 
-# 3. Chạy
-uvicorn app.main:app --reload --port 8000
+# 3. Chạy (từ thư mục gốc repo)
+cd ..
+.\scripts\run.ps1              # macOS/Linux: ./scripts/run.sh
+#   thêm -Reload (--reload) nếu đang sửa code backend và muốn tự khởi động lại
+#   hoặc chạy tay: cd ai-backend && uvicorn app.main:app --port 8000
 ```
 
-Khi khởi động, app tự tạo extension `vector` và đồng bộ schema (xem `app/migrate.py`).
+`run.ps1` tự build lại giao diện nếu `frontend/src` mới hơn `frontend/dist` (cần Node.js), nên lúc nào cũng chạy bản mới
+nhất. Server tắt cache trình duyệt cho giao diện (`Cache-Control: no-store`), nên mở lại trang là thấy bản mới.
+
+Khi khởi động, app tự tạo extension `vector` và đồng bộ schema (xem `app/migrate.py`). Nếu schema không đổi so với lần trước
+(dấu vân tay lưu ở bảng `app_schema_state`), bước này chỉ tốn một truy vấn nên khởi động nhanh hơn nhiều với DB cloud.
 
 Mở **http://localhost:8000** (giao diện) — tài liệu API: http://localhost:8000/docs
 
@@ -173,6 +200,7 @@ schema `public` của database test rồi tạo lại (không tạo hay xóa dat
 | `RAG_HYBRID`, `RAG_RERANK`, `RAG_QUERY_REWRITE` | bật tìm từ khóa + RRF (mặc định bật); rerank `none`/`cross_encoder`; ghép câu hỏi nối tiếp `history`/`none` |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `PUBLIC_APP_URL` | gửi email đặt lại mật khẩu (để trống `SMTP_HOST` = tắt) |
 | `QUIZ_GUARD_MINUTES` | bài kiểm tra làm dở trong khoảng này thì Tutor chỉ gợi ý, không nói đáp án (mặc định 90) |
+| `COACH_MAX_STEPS`, `COACH_HISTORY_TURNS` | số lượt gọi tool tối đa của Trợ lý học tập (mặc định 5); số lượt hội thoại gửi kèm (mặc định 4) |
 | `REDACT_PII` | che email / số điện thoại trong câu hỏi trước khi lưu và gửi LLM (mặc định bật) |
 | `CHAT_RETENTION_DAYS`, `LLM_LOG_RETENTION_DAYS` | thời hạn lưu tin nhắn Tutor / nhật ký gọi LLM, 0 = giữ mãi (mặc định 365 / 180) |
 
@@ -182,5 +210,5 @@ Không commit file `.env` (đã có trong `.gitignore`).
 
 ## Tài liệu
 
-- [`architecture.md`](architecture.md) — yêu cầu chức năng, kiến trúc, state machine video, thiết kế dữ liệu, API, bảo mật, đánh giá.
+- [`docs/architecture.md`](docs/architecture.md) — yêu cầu chức năng, kiến trúc, state machine video, thiết kế dữ liệu, API, bảo mật, đánh giá.
 - [`ai-backend/README.md`](ai-backend/README.md) — chi tiết backend, danh mục API, lệnh tiện ích.

@@ -1,7 +1,7 @@
 """File video bài giảng (tải lên, phát với Range) và file gốc tài liệu (PDF/PPTX cho trình xem slide)."""
 import mimetypes
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func
@@ -17,11 +17,11 @@ from app.models.learning import Lesson, LessonItem, MediaVideo
 from app.models.observability import AIJob
 from app.models.transcript import VideoTranscript
 from app.models.video_question import VideoQuestion
-from app.services import jobs
-from app.services.course_admin import link_video_sources
-from app.services.jobs import job_to_dict
-from app.services.object_store import get_store
-from app.services.storage import safe_extension, save_upload
+from app.services.courses.course_admin import link_video_sources
+from app.services.media.object_store import get_store
+from app.services.media.storage import safe_extension, save_upload
+from app.services.system import jobs
+from app.services.system.jobs import job_to_dict
 
 router = APIRouter(prefix="/ai", tags=["media"])
 VIDEO_TYPES = ("mp4", "webm", "mov", "m4v", "mkv", "mp3", "m4a", "wav", "ogg")
@@ -32,7 +32,7 @@ def _target_lesson(db: Session, user: Principal, target_lesson_id: str | None) -
         return None
     lesson = (db.query(Lesson).filter(Lesson.id == parse_uuid(target_lesson_id, "target_lesson_id"))
               .with_for_update().first())
-    from app.services import learning
+    from app.services.courses import learning
     if not lesson or not learning.can_see_course(db, user, lesson.chapter.course):
         raise AppError(404, "NOT_FOUND", "Không tìm thấy bài học để gắn video.")
     return lesson
@@ -53,7 +53,7 @@ def _attach_video(db: Session, video: MediaVideo, lesson: Lesson | None) -> None
 
 def _duration(path: str) -> float | None:
     try:
-        from app.services.transcription import _ffmpeg_exe, _media_duration
+        from app.services.media.transcription import _ffmpeg_exe, _media_duration
         exe = _ffmpeg_exe()
         return _media_duration(exe, path) if exe else None
     except Exception:
@@ -153,6 +153,112 @@ def register_video_url(req: VideoUrlIn, user: Principal = Depends(require_teache
     return _video_dict(db, v, vid)
 
 
+# Hàm phụ trợ để xóa file chạy ngầm
+def _cleanup_r2_file(file_path: str):
+    try:
+        store = get_store()
+        if store.exists(file_path):
+            store.delete(file_path)
+    except Exception as e:
+        # Ghi log lỗi nếu R2 gặp sự cố (file rác không ảnh hưởng đến app)
+        print(f"[CẢNH BÁO] Không thể xóa file trên R2: {file_path}. Chi tiết: {e}")
+        
+
+@router.post("/media/videos/inline-upload", status_code=201)
+def inline_upload_video(
+    file: UploadFile = File(...),
+    title: str | None = Form(None),
+    class_id: str | None = Form(None),
+    user: Principal = Depends(require_teacher),
+    db: Session = Depends(get_db)
+):
+    """API tải lên nhanh video trực tiếp từ modal cấu hình Mục học."""
+    class_id = clean_id(class_id)
+    ensure_class_access(user, class_id)
+    
+    # 1. Sinh mã video
+    video_id = generate_code("VD")
+    
+    # 2. Kiểm tra định dạng file an toàn
+    ext = safe_extension(file.filename, VIDEO_TYPES)
+    store = get_store()
+    
+    # 3. Tiến hành đẩy file lên Cloudflare R2 (hoặc storage cấu hình)
+    key, _, size = save_upload(file, "media", ext, settings.max_media_mb)
+    
+    # 4. Lưu bản ghi vào bảng MediaVideo
+    v = MediaVideo(
+        video_id=video_id,
+        title=title or file.filename.rsplit('.', 1)[0] or video_id,
+        file_path=key,
+        size_bytes=size,
+        class_id=class_id,
+        mime=mimetypes.guess_type(f"x.{ext}")[0] or "video/mp4",
+        created_by=user.user_id
+    )
+    
+    # Đo thời lượng video nếu có ffmpeg hỗ trợ
+    try:
+        with store.local_path(key) as local:
+            v.duration_seconds = _duration(local)
+    except Exception:
+        v.duration_seconds = None
+
+    db.add(v)
+    db.commit()
+    db.refresh(v)
+    
+    return {
+        "video_id": v.video_id,
+        "title": v.title,
+        "has_file": True,
+        "duration_seconds": v.duration_seconds,
+        "size_mb": round((v.size_bytes or 0) / 1048576, 1)
+    }
+
+
+@router.delete("/media/videos/{video_id}", status_code=200)
+def delete_video(video_id: str, background_tasks: BackgroundTasks, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
+    """Xóa video an toàn: Commit DB thành công mới tiến hành xóa file vật lý."""
+    
+    # 1. Tìm video
+    v = db.get(MediaVideo, video_id)
+    if not v:
+        raise AppError(404, "NOT_FOUND", "Không tìm thấy video.")
+        
+    ensure_class_access(user, v.class_id)
+    
+    # Trích xuất file_path ra một biến độc lập trước khi xóa object `v`
+    target_file_path = v.file_path
+    
+    try:
+        # 2. Xóa các bản ghi liên quan trong DB (Sử dụng Try-Except để Rollback)
+        db.query(LessonItem).filter(LessonItem.video_id == video_id).delete()
+        db.query(VideoTranscript).filter(VideoTranscript.video_id == video_id).delete()
+        db.query(VideoQuestion).filter(VideoQuestion.video_id == video_id).delete()
+        db.query(AIDocument).filter(AIDocument.source_type == "video", AIDocument.source_id == video_id).delete()
+        db.query(AIJob).filter(AIJob.job_type == "transcribe_video", AIJob.payload["video_id"].astext == video_id).delete()
+
+        # 3. Xóa bản ghi Video chính
+        db.delete(v)
+        
+        # 4. CHỐT GIAO DỊCH DATABASE
+        db.commit()
+        
+    except Exception as e:
+        # NẾU CÓ BẤT KỲ LỖI NÀO LÚC XÓA DB -> ĐẢO NGƯỢC TOÀN BỘ
+        db.rollback()
+        raise AppError(500, "DB_DELETE_ERROR", f"Không thể xóa dữ liệu: {str(e)}")
+
+    # 5. CHỈ XÓA FILE TRÊN R2 KHI DATABASE ĐÃ COMMIT THÀNH CÔNG CHẮC CHẮN 100%
+    if target_file_path:
+        # Đẩy tiến trình xóa file ra chạy nền. 
+        # API sẽ lập tức trả về 200 OK cho Frontend mà không cần chờ R2 xóa xong.
+        background_tasks.add_task(_cleanup_r2_file, target_file_path)
+    
+    return {"message": "Đã xóa video thành công."}
+
+
 @router.post("/media/videos/{video_id}/transcribe", status_code=202)
 def transcribe_stored(video_id: str, language: str = "vi", user: Principal = Depends(require_teacher),
                       db: Session = Depends(get_db)):
@@ -195,6 +301,33 @@ def stream_video(video_id: str, request: Request, user: Principal = Depends(get_
     return store.response(v.file_path, request, media_type=v.mime or "video/mp4")
 
 
+@router.post("/media/parse-markdown")
+async def parse_markdown_file(
+    file: UploadFile = File(...),
+    user: Principal = Depends(require_teacher)
+):
+    """API đọc file .md từ máy tính và trả về nội dung dạng text cho Frontend."""
+    
+    # 1. Kiểm tra đuôi file
+    if not file.filename.lower().endswith(".md"):
+        raise AppError(400, "INVALID_FILE", "Chỉ hỗ trợ tải lên file định dạng Markdown (.md).")
+    
+    try:
+        # 2. Đọc nội dung file vào bộ nhớ
+        content = await file.read()
+        
+        # 3. Giải mã định dạng chuẩn UTF-8 (hỗ trợ tiếng Việt)
+        text = content.decode("utf-8")
+        
+        # Trả về nguyên văn nội dung
+        return {"content_md": text}
+        
+    except UnicodeDecodeError:
+        raise AppError(400, "INVALID_ENCODING", "File không đúng chuẩn mã hóa UTF-8. Vui lòng kiểm tra lại file.")
+    except Exception as e:
+        raise AppError(500, "PARSE_ERROR", f"Không thể đọc file: {str(e)}")
+
+
 @router.get("/documents/{document_id}/file")
 def document_file(document_id: str, request: Request, user: Principal = Depends(get_user_for_media),
                   db: Session = Depends(get_db)):
@@ -215,7 +348,7 @@ def document_slides(document_id: str, user: Principal = Depends(get_user_for_med
     doc = db.get(AIDocument, parse_uuid(document_id, "document_id"))
     if not doc or not doc.file_path or not user.can_access_class(doc.class_id):
         raise AppError(404, "NOT_FOUND", "Không tìm thấy tài liệu.")
-    from app.services.parsers import extract_pdf, extract_pptx
+    from app.services.rag.parsers import extract_pdf, extract_pptx
     if doc.source_type not in ("pptx", "pdf"):
         raise AppError(400, "NOT_SLIDES", "Chỉ hỗ trợ PDF / PPTX.")
     with get_store().local_path(doc.file_path) as local:

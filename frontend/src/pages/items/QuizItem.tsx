@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 'react';
 import { Icon } from '../../components/Icon';
-import { Mascot } from '../../components/Mascot';
-import { Button, celebrate, ErrorBox, Progress } from '../../components/ui';
+import { Button, celebrate, ErrorBox, MarkIcon, Progress } from '../../components/ui';
 import { api, ApiError, errorText } from '../../lib/api';
 import type { ItemProps } from '../Lesson';
 
@@ -105,7 +104,7 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
     return (
       <div className="quiz-page">
         <div className="result-hero">
-          <Mascot size={120} mood={item.completed ? 'happy' : 'wave'} />
+          <MarkIcon icon={item.completed ? 'check' : 'question'} size={84} tone={item.completed ? 'brand' : 'soft'} />
           <h2>{item.title}</h2>
           <p className="muted" style={{ fontWeight: 700, maxWidth: 520 }}>
             {Math.min(quiz.count, quiz.available || quiz.count)} câu hỏi · cần đúng {Math.round(quiz.pass_ratio * 100)}% để qua bài.
@@ -138,7 +137,7 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
     return (
       <div className="quiz-page">
         <div className="result-hero">
-          <Mascot size={130} mood={final.passed ? 'celebrate' : 'think'} />
+          <MarkIcon icon={final.passed ? 'trophy' : 'refresh'} size={96} tone={final.passed ? 'brand' : 'bad'} />
           <h2>{final.passed ? 'Xuất sắc, bạn đã qua bài!' : 'Chưa đạt lần này'}</h2>
           <p className="muted" style={{ fontWeight: 700 }}>
             {final.passed ? 'Bài tiếp theo đã được mở khóa.' : `Cần đúng ít nhất ${Math.round(final.pass_ratio * 100)}%. Ôn lại rồi thử lần nữa nhé.`}
