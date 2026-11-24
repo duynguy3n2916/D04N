@@ -190,7 +190,7 @@ export function CourseCoverArt({ course, className = '' }: { course: Pick<Course
     <span className={`lc-cover ${course.cover_url ? '' : 'lc-cover-blank'} ${className}`}>
       {course.cover_url
         ? <img src={mediaUrl(course.cover_url)} alt="" loading="lazy" />
-        : <span className="lc-cover-text" aria-hidden="true"><Icon name="book" size={30} /><b>{course.code}</b></span>}
+        : <span className="lc-cover-text" aria-hidden="true"><Icon name="book" size={30} /><b>{course.title}</b></span>}
     </span>
   );
 }
@@ -203,7 +203,6 @@ function CourseCard({ c }: { c: CourseSummary }) {
       <CourseCoverArt course={c} />
       <span className={`lc-state lc-state-${st}`}>{STATE_LABEL[st]}</span>
       <div className="lc-body">
-        <span className="lc-code">{c.code}</span>
         <h3>{c.title}</h3>
         {c.description && <p className="lc-desc">{c.description}</p>}
         <div className="lc-progress">
@@ -284,7 +283,7 @@ export function Learn({ path, courseId }: { path: string; courseId?: string }) {
           <header className="learn-head lc-detail-head">
             <CourseCoverArt course={tree.data} className="lc-detail-cover" />
             <div className="grow">
-              <span className="oc-kicker" style={{ color: 'var(--brand)' }}>Khóa học · {tree.data.code}</span>
+              <span className="oc-kicker" style={{ color: 'var(--brand)' }}>Khóa học</span>
               <h1>{tree.data.title}</h1>
               {tree.data.description && <p className="muted lc-detail-desc">{tree.data.description}</p>}
             </div>
