@@ -100,6 +100,7 @@ D04N/
 │       ├── components/        # thành phần giao diện dùng chung
 │       ├── lib/               # gọi API, đăng nhập, router, hooks
 │       └── styles/            # base.css → theme.css → polish.css (nạp theo thứ tự này)
+├── mobile/                    # app điện thoại (React Native + Expo) cho học sinh và giáo viên, xem mobile/README.md
 ├── scripts/                   # run.ps1 / run.sh: chạy server, tự build giao diện khi cần
 ├── deploy/                    # Caddy + docker-compose cho máy chủ
 └── docs/                      # architecture.md, kế hoạch đồ án, sơ đồ kiến trúc
@@ -165,6 +166,18 @@ npm install
 npm run dev      # http://localhost:5173/app/  (gọi API qua proxy tới backend :8000)
 npm run build    # build lại frontend/dist
 ```
+
+### App điện thoại (tùy chọn)
+
+Bản rút gọn cho học sinh và giáo viên, dùng chung backend. Chạy backend với `.\scripts\run.ps1 -Lan`, rồi:
+
+```bash
+cd mobile
+npm install
+npm start        # quét mã QR bằng app Expo Go trên điện thoại
+```
+
+Chi tiết: [mobile/README.md](mobile/README.md).
 
 ### Kiểm thử
 

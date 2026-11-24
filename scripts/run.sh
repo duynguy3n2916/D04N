@@ -1,13 +1,15 @@
 #!/usr/bin/env bash
-# Chạy hệ thống trên macOS / Linux:  ./scripts/run.sh [--reload] [--port 8000]
+# Chạy hệ thống trên macOS / Linux:  ./scripts/run.sh [--reload] [--port 8000] [--lan]
+# --lan: mở cho máy khác cùng Wi-Fi (app điện thoại mobile/ cần cái này).
 # Tự build lại frontend/dist nếu frontend/src mới hơn và máy có Node.js.
 set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
-port=8000; reload=()
+port=8000; reload=(); host=127.0.0.1
 while [ $# -gt 0 ]; do
   case "$1" in
     --reload) reload=(--reload --reload-dir app) ;;
     --port) port="$2"; shift ;;
+    --lan) host=0.0.0.0 ;;
   esac
   shift
 done
@@ -25,4 +27,5 @@ fi
 cd ai-backend
 for v in .venv venv; do [ -f "$v/bin/activate" ] && . "$v/bin/activate" && break; done
 echo "Mở http://localhost:$port (Ctrl+C để dừng)"
-exec python -m uvicorn app.main:app --port "$port" ${reload[@]+"${reload[@]}"}
+[ "$host" = 0.0.0.0 ] && echo "Điện thoại cùng Wi-Fi nhập địa chỉ máy chủ: <IP máy này>:$port"
+exec python -m uvicorn app.main:app --host "$host" --port "$port" ${reload[@]+"${reload[@]}"}

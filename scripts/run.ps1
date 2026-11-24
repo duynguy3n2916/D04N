@@ -2,9 +2,10 @@
 #   .\scripts\run.ps1            # chạy server ở http://localhost:8000
 #   .\scripts\run.ps1 -Reload    # tự khởi động lại khi sửa code backend (chậm hơn một chút)
 #   .\scripts\run.ps1 -Port 8001
+#   .\scripts\run.ps1 -Lan       # mở cho máy khác cùng Wi-Fi (app điện thoại mobile/ cần cái này)
 # Nếu mã giao diện (frontend/src) mới hơn bản build (frontend/dist) và máy có Node.js,
 # script tự build lại để lúc nào cũng chạy giao diện mới nhất.
-param([switch]$Reload, [int]$Port = 8000)
+param([switch]$Reload, [int]$Port = 8000, [switch]$Lan)
 $ErrorActionPreference = "Stop"
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $root = Split-Path -Parent $PSScriptRoot
@@ -52,5 +53,12 @@ foreach ($venv in ".venv", "venv") {
 }
 $uvicornArgs = @("app.main:app", "--port", $Port)
 if ($Reload) { $uvicornArgs += @("--reload", "--reload-dir", "app") }
+if ($Lan) {
+    $uvicornArgs += @("--host", "0.0.0.0")
+    $ips = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.)' -and $_.PrefixOrigin -ne 'WellKnown' } | Select-Object -ExpandProperty IPAddress
+    foreach ($ip in $ips) { Write-Host "Điện thoại cùng Wi-Fi nhập địa chỉ máy chủ: $($ip):$Port" -ForegroundColor Cyan }
+    Write-Host "Nếu điện thoại không kết nối được: cho phép Python qua Windows Firewall (mạng Private)." -ForegroundColor Yellow
+}
 Write-Host "Mở http://localhost:$Port (Ctrl+C để dừng)" -ForegroundColor Green
 python -m uvicorn @uvicornArgs
