@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.security import Principal, get_current_user
 from app.core.utils import parse_uuid
 from app.database import get_db
-from app.services import messages
+from app.services.social import messages
 
 router = APIRouter(prefix="/ai/messages", tags=["messages"])
 

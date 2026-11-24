@@ -36,7 +36,7 @@ def test_auto_course_and_lesson_codes_stay_stable(client, teacher):
 
 def test_auto_video_attaches_and_transcript_inherits_scope(client, teacher, monkeypatch):
     from app.routers import media
-    from app.services import transcription
+    from app.services.media import transcription
 
     course, lesson = _destination(client, teacher)
     monkeypatch.setattr(media, '_duration', lambda _: 100.0)

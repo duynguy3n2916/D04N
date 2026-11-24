@@ -1,9 +1,9 @@
 """Đề kiểm tra có giờ: đặt giới hạn, chặn trả lời sau giờ, nộp tự động (câu chưa làm tính là sai)."""
 from datetime import timedelta
 
+from app.core.utils import utcnow
 from app.database import SessionLocal
 from app.models.learning import ItemProgress
-from app.core.utils import utcnow
 from tests.conftest import LESSON_TEXT, token
 
 
@@ -93,6 +93,7 @@ def test_teacher_sees_class_submissions(client, teacher, fake_llm):
 
 def test_student_progress_report_docx(client, teacher, fake_llm):
     import io
+
     from docx import Document
     reading, quiz = _timed_quiz(client, teacher, "exam5", 0)
     sv = token(client, "sv-report", "student", ["lop-a"])
@@ -107,10 +108,11 @@ def test_student_progress_report_docx(client, teacher, fake_llm):
 def test_adaptive_sampling_prefers_wrong_questions(client, teacher, fake_llm):
     import random
     import uuid
-    from app.models.video_question import QuestionBankItem
-    from app.models.learning import QuizAnswerLog
-    from app.services.learning import _adaptive_sample
+
     from app.core.security import Principal
+    from app.models.learning import QuizAnswerLog
+    from app.models.video_question import QuestionBankItem
+    from app.services.courses.learning import _adaptive_sample
     _, quiz = _timed_quiz(client, teacher, "exam6", 0)
     db = SessionLocal()
     try:

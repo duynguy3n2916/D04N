@@ -1,7 +1,7 @@
 # AI Learning Support — Backend
 
 Hệ thống AI hỗ trợ học tập: Knowledge Base + RAG, Tutor, Teacher AI, Speech-to-Text, AI Video Learning,
-Question Agent điều phối bằng state machine, và đánh giá định lượng. Thiết kế chi tiết: `../architecture.md`.
+Question Agent điều phối bằng state machine, và đánh giá định lượng. Thiết kế chi tiết: `../docs/architecture.md`.
 
 ## Chạy hệ thống (Windows / macOS / Linux)
 
@@ -20,7 +20,7 @@ python init_db.py --seed
 python init_db.py --create-admin admin
 
 # 3. Chạy
-uvicorn app.main:app --reload --port 8000
+uvicorn app.main:app --reload --port 8000   # hoặc ../scripts/run.ps1 -Reload
 ```
 
 - Giao diện web: http://localhost:8000 (tự chuyển tới `/app/`) — Swagger: http://localhost:8000/docs
@@ -112,34 +112,49 @@ phạm vi quyền phải join với lớp / khóa học / bài học. Lấy retr
 
 ```
 app/
-  main.py            # FastAPI, middleware request_id, tự migrate, job runner, quét timeout nền
-  config.py          # cấu hình (.env)
-  migrate.py         # đồng bộ schema idempotent
-  core/              # security (JWT, vai trò, tra tài khoản mỗi request), passwords (scrypt), errors, prompts (có version), llm_schemas (Pydantic), utils
-  models/            # 27 bảng (xem architecture.md §9)
+  main.py              # FastAPI, middleware request_id, migrate khi khởi động, job runner, quét timeout nền, phục vụ frontend
+  config.py            # cấu hình (.env)
+  database.py          # engine + session
+  migrate.py           # đồng bộ schema idempotent; bỏ qua khi dấu vân tay schema không đổi (bảng app_schema_state)
+  core/                # security (JWT, vai trò, tra tài khoản mỗi request), passwords (scrypt), errors, context, utils
+  models/              # bảng dữ liệu (xem docs/architecture.md §9)
+  routers/             # auth, users, classes, documents, chat, coach, teacher, videos, workflow, evaluation, jobs,
+                       # admin, learn, media, forum, messages
   services/
-    object_store.py  # kho file: Cloudflare R2 (MEDIA_STORAGE=r2) hoặc thư mục local; hỗ trợ Range để tua video
-    storage.py       # nhận file upload: kiểm tra định dạng, dung lượng, tính SHA-256, đưa vào kho
-    llm.py           # LLM Gateway: LangChain ChatOpenAI, validate JSON + tự sửa 1 lần, log ai_llm_calls
-    chunking.py      # LangChain RecursiveCharacterTextSplitter (đoạn -> dòng -> câu -> từ), giữ metadata trang/mục
-    embedding.py     # LangChain Embeddings: HuggingFace (local) | OpenAI | hash (test)
-    hybrid.py        # từ khóa Postgres full-text, RRF, rerank cross-encoder (LangChain BaseDocumentCompressor)
-    retrieval.py     # RAG Engine: ScopedHybridRetriever (LangChain BaseRetriever) lọc phạm vi + lớp, pgvector, ngưỡng điểm, mở rộng lân cận, nhãn nguồn [S1]
-    tutor_explain.py # Tutor tự giải thích đáp án khi học sinh hết giờ / trả lời sai (AI thứ hai, chạy nền)
-    tutor.py         # Tutor: lịch sử + tóm tắt, transcript quanh video_time, hint mode do server quyết, chặn lộ đáp án
-    question_gen.py  # Teacher AI: sinh đề, ngân hàng câu hỏi, duyệt từng câu, tỷ lệ chấp nhận
-    transcription.py # phụ đề / Whisper (ffmpeg cắt đoạn), phiên bản transcript, index KB
-    video_learning.py# câu hỏi theo mốc, AI đề xuất mốc, duyệt câu hỏi video
-    workflow.py      # state machine + Question Agent (khóa dòng, deadline phía server, nhật ký transition)
-    grading.py       # chấm trắc nghiệm theo chỉ số lựa chọn, tự luận bằng LLM (có dự phòng)
-    evaluation.py    # Hit@K/MRR/Recall theo nguồn đúng, groundedness/correctness (judge), latency, chi phí, WER
-    jobs.py          # job nền trong tiến trình (ingest, phiên âm, evaluation) + bảng ai_jobs
-    accounts.py      # đăng nhập/đăng ký, đổi mật khẩu, quản lý tài khoản, nhập CSV, lớp học + mã vào lớp
-    learning.py      # lộ trình học: trạng thái mục (khóa tuần tự), tiến độ, XP/chuỗi ngày/bảng xếp hạng, quiz cuối bài
-    course_admin.py  # soạn khóa học: chương, bài, mục (video/slide/bài đọc/kiểm tra), bài đọc tự nạp vào Knowledge Base
-  routers/           # auth, users, documents, chat, teacher, videos, workflow, evaluation, jobs, admin, learn, media
-sample_data/         # bài học OOP, phụ đề video-01, bộ câu hỏi đánh giá
-tests/               # pytest: Postgres thật trên database test riêng, LLM giả lập
+    ai/
+      llm.py           # LLM Gateway: LangChain ChatOpenAI, validate JSON + tự sửa 1 lần, log ai_llm_calls
+      prompts.py       # prompt có version
+      schemas.py       # schema Pydantic cho đầu ra LLM
+      tutor.py         # Tutor: lịch sử + tóm tắt, transcript quanh video_time, hint mode do server quyết, chặn lộ đáp án
+      tutor_explain.py # Tutor tự giải thích đáp án khi học sinh hết giờ / trả lời sai (AI thứ hai, chạy nền)
+      coach.py         # Study Coach Agent: tool-calling trên tiến độ, điểm yếu, RAG, quiz, flashcard; lưu lịch sử hội thoại
+      question_gen.py  # Teacher AI: sinh đề, ngân hàng câu hỏi, duyệt từng câu, tỷ lệ chấp nhận
+      video_learning.py# câu hỏi theo mốc, AI đề xuất mốc, duyệt câu hỏi video
+      lesson_ai.py     # lấy học liệu theo bài cho các tác vụ AI
+      grading.py       # chấm trắc nghiệm theo chỉ số lựa chọn, tự luận bằng LLM (có dự phòng)
+      evaluation.py    # Hit@K/MRR/Recall theo nguồn đúng, groundedness/correctness (judge), latency, chi phí, WER
+    rag/
+      parsers.py       # trích văn bản PDF / DOCX / PPTX
+      chunking.py      # LangChain RecursiveCharacterTextSplitter, giữ metadata trang/mục
+      embedding.py     # LangChain Embeddings: HuggingFace (local) | OpenAI | hash (test)
+      hybrid.py        # từ khóa Postgres full-text, RRF, rerank cross-encoder
+      retrieval.py     # RAG Engine: ScopedHybridRetriever lọc phạm vi + lớp, pgvector, ngưỡng điểm, nhãn nguồn [S1]
+      ingestion.py     # pipeline ingest học liệu (chạy trong job nền)
+    courses/
+      learning.py      # lộ trình học: trạng thái mục, tiến độ, XP/chuỗi ngày/bảng xếp hạng, quiz cuối bài
+      course_admin.py  # soạn khóa học: chương, bài, mục (video/slide/bài đọc/kiểm tra)
+      workflow.py      # state machine phiên xem video + Question Agent (khóa dòng, deadline phía server)
+      flashcards.py    # ôn thẻ ngắt quãng (SM-2)
+      quiz_export.py   # xuất đề DOCX / HTML, nhiều mã đề
+      progress_report.py # báo cáo tiến độ học sinh (DOCX)
+    media/
+      storage.py       # nhận file upload: kiểm tra định dạng, dung lượng, SHA-256
+      object_store.py  # kho file: Cloudflare R2 (MEDIA_STORAGE=r2) hoặc thư mục local; hỗ trợ Range để tua video
+      transcription.py # phụ đề / Whisper (ffmpeg cắt đoạn), phiên bản transcript, index KB
+    social/            # forum.py (diễn đàn lớp), messages.py (nhắn tin), notifications.py
+    system/            # accounts.py (đăng nhập, lớp, nhập CSV), jobs.py (job nền + ai_jobs), retention.py, mailer.py
+sample_data/           # bài học OOP, phụ đề video-01, bộ câu hỏi đánh giá
+tests/                 # pytest: Postgres thật trên database test riêng, LLM giả lập
 ```
 
 ## API chính

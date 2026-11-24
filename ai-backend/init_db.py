@@ -37,12 +37,12 @@ def seed() -> None:
     from app.core.security import Principal
     from app.models.documents import AIDocument
     from app.models.video_question import VideoQuestion
-    from app.services import jobs
-    from app.services.evaluation import load_default_samples
-    from app.services.ingestion import create_document, find_duplicate
-    from app.services.storage import sha256_text
-    from app.services.transcription import parse_srt, save_transcript_version
-    from app.services.video_learning import save_question
+    from app.services.ai.evaluation import load_default_samples
+    from app.services.ai.video_learning import save_question
+    from app.services.media.storage import sha256_text
+    from app.services.media.transcription import parse_srt, save_transcript_version
+    from app.services.rag.ingestion import create_document, find_duplicate
+    from app.services.system import jobs
 
     jobs.set_inline(True)
     db = SessionLocal()
@@ -109,7 +109,7 @@ def _store_sample(src: Path, key: str) -> str:
     import shutil
     import tempfile
 
-    from app.services.object_store import get_store
+    from app.services.media.object_store import get_store
 
     fd, tmp = tempfile.mkstemp(suffix=src.suffix)
     os.close(fd)
@@ -121,12 +121,13 @@ def _store_sample(src: Path, key: str) -> str:
 def seed_course(db, teacher) -> None:
     """Khóa học demo: chương 1 / bài 1 gồm video, slide, bài đọc, bài kiểm tra."""
 
-    from app.core.llm_schemas import QuestionItem
     from app.models.documents import AIDocument
     from app.models.learning import Course, MediaVideo
     from app.models.video_question import QuestionBankItem
-    from app.services import course_admin, jobs
-    from app.services.ingestion import create_document, find_duplicate
+    from app.services.ai.schemas import QuestionItem
+    from app.services.courses import course_admin
+    from app.services.rag.ingestion import create_document, find_duplicate
+    from app.services.system import jobs
 
     if db.query(Course).filter(Course.code == COURSE_ID).first():
         print("• Khóa học demo đã có, bỏ qua.")
@@ -201,7 +202,7 @@ def seed_accounts() -> None:
     """Lớp CS101 + tài khoản demo (cùng mật khẩu DEMO_PASSWORD). Đổi mật khẩu trước khi cho người khác dùng."""
     from app.core.passwords import hash_password
     from app.models.accounts import ClassRoom, User
-    from app.services.accounts import _new_code, _sync_profile
+    from app.services.system.accounts import _new_code, _sync_profile
 
     db = SessionLocal()
     try:
@@ -233,7 +234,7 @@ def create_admin(username: str) -> None:
     from app.core.errors import AppError
     from app.core.passwords import check_policy, hash_password
     from app.models.accounts import User
-    from app.services.accounts import _sync_profile, normalize_username
+    from app.services.system.accounts import _sync_profile, normalize_username
 
     try:
         uid = normalize_username(username)
@@ -289,7 +290,7 @@ def main() -> None:
     if report.get("warning"):
         print("  CẢNH BÁO:", report["warning"])
     if args.reembed:
-        from app.services.ingestion import reembed_all
+        from app.services.rag.ingestion import reembed_all
         db = SessionLocal()
         try:
             print(f"Đã tạo lại embedding cho {reembed_all(db)} chunk.")

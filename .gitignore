@@ -1,3 +1,6 @@
 
 # thư mục rác tạm khi dọn file
 _to_delete/
+
+# cấu hình Claude Code trên máy riêng
+.claude/settings.local.json

@@ -4,7 +4,7 @@ from datetime import timedelta
 from app.core.utils import utcnow
 from app.database import SessionLocal
 from app.models.learning import FlashcardReview
-from app.services.flashcards import Schedule, next_schedule
+from app.services.courses.flashcards import Schedule, next_schedule
 from tests.conftest import LESSON_TEXT, token
 from tests.test_api_core import upload
 

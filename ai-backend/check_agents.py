@@ -39,7 +39,7 @@ def check_data() -> str | None:
     from app.models.observability import AIJob, AILLMCall
     from app.models.video_question import VideoQuestion
     from app.models.workflow import VideoSession
-    from app.services.retrieval import active_transcript, transcript_window
+    from app.services.rag.retrieval import active_transcript, transcript_window
 
     db = SessionLocal()
     sample = None
@@ -91,13 +91,13 @@ def check_data() -> str | None:
 
 
 def check_llm(video_id: str | None) -> None:
-    from app.core.llm_schemas import AgentQuestionItem
-    from app.core.prompts import QUESTION_AGENT, TUTOR_EXPLAIN, wrap_documents
-    from app.services import llm
+    from app.services.ai import llm
+    from app.services.ai.prompts import QUESTION_AGENT, TUTOR_EXPLAIN, wrap_documents
+    from app.services.ai.schemas import AgentQuestionItem
 
     if video_id:
         from app.database import SessionLocal
-        from app.services.retrieval import format_segments, transcript_window
+        from app.services.rag.retrieval import format_segments, transcript_window
         db = SessionLocal()
         try:
             segs, _ = transcript_window(db, video_id, 0, settings.agent_transcript_window_seconds)

@@ -1,21 +1,19 @@
-from app.models.video_question import VideoQuestion
-
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Query, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import func
 
 from app.core.errors import AppError
-from app.core.llm_schemas import Difficulty, QuestionType
 from app.core.security import Principal, ensure_class_access, require_teacher
 from app.core.utils import clean_id, parse_uuid
 from app.database import get_db
 from app.models.learning import Lesson
-from app.services import question_gen, quiz_export
-
-from app.models.video_question import QuestionBankItem
-from sqlalchemy.sql import func
+from app.models.video_question import QuestionBankItem, VideoQuestion
+from app.services.ai import question_gen
+from app.services.ai.schemas import Difficulty, QuestionType
+from app.services.courses import quiz_export
 
 router = APIRouter(prefix="/ai", tags=["teacher"])
 

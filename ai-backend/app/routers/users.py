@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import Principal, require_teacher
 from app.database import get_db
-from app.services import accounts
+from app.services.system import accounts
 
 router = APIRouter(prefix="/ai", tags=["users"])
 

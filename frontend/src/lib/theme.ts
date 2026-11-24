@@ -1,5 +1,5 @@
 // Màu chủ đạo của giao diện, cố định là Đỏ đô (DEFAULT_THEME). Mọi sắc độ khác (nền, viền, chữ nhấn...) được suy ra từ màu đó
-// và áp lên :root bằng biến CSS mà theme.css dùng. Muốn đổi màu cả app: sửa DEFAULT_THEME.
+// và áp lên :root bằng biến CSS mà styles/theme.css dùng. Muốn đổi màu cả app: sửa DEFAULT_THEME.
 
 
 export type ThemePreset = { id: string; name: string; color: string };

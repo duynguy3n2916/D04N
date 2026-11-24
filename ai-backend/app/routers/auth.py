@@ -8,7 +8,7 @@ from app.core.errors import AppError
 from app.core.passwords import MIN_LENGTH
 from app.core.security import Principal, get_current_user
 from app.database import get_db
-from app.services import accounts, mailer
+from app.services.system import accounts, mailer
 
 router = APIRouter(prefix="/ai/auth", tags=["auth"])
 

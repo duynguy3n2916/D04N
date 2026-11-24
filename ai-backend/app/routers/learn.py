@@ -11,8 +11,8 @@ from app.core.security import Principal, get_current_user, get_user_for_media, r
 from app.core.utils import clean_id, parse_uuid
 from app.database import get_db
 from app.models.learning import Chapter, Course, Lesson, LessonItem
-from app.services import course_admin, learning
-from app.services.object_store import get_store
+from app.services.courses import course_admin, learning
+from app.services.media.object_store import get_store
 
 router = APIRouter(prefix="/ai", tags=["learning"])
 
@@ -90,7 +90,7 @@ def class_submissions(class_id: str, user: Principal = Depends(require_teacher),
 
 @router.get("/learn/flashcards/{lesson_code}/summary")
 def flashcards_summary(lesson_code: str, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.services import flashcards
+    from app.services.courses import flashcards
     return flashcards.summary(db, user, clean_id(lesson_code))
 
 
@@ -98,7 +98,7 @@ def flashcards_summary(lesson_code: str, user: Principal = Depends(get_current_u
 def flashcards_due(lesson_code: str, limit: int = 20, user: Principal = Depends(get_current_user),
                    db: Session = Depends(get_db)):
     """Các thẻ đến hạn ôn (thẻ mới xếp sau thẻ đã đến hạn lâu nhất)."""
-    from app.services import flashcards
+    from app.services.courses import flashcards
     return flashcards.due_cards(db, user, clean_id(lesson_code), limit=max(1, min(50, limit)))
 
 
@@ -109,14 +109,14 @@ class FlashcardReviewIn(BaseModel):
 @router.post("/learn/flashcards/{card_id}/review")
 def flashcards_review(card_id: str, req: FlashcardReviewIn, user: Principal = Depends(get_current_user),
                       db: Session = Depends(get_db)):
-    from app.services import flashcards
+    from app.services.courses import flashcards
     return flashcards.review(db, user, parse_uuid(card_id, "card_id"), req.rating)
 
 
 @router.get("/notifications/summary")
 def notifications_summary(user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
     """Số nội dung mới chưa đọc trong diễn đàn các lớp và số thẻ flashcard đến hạn."""
-    from app.services import notifications
+    from app.services.social import notifications
     return notifications.summary(db, user)
 
 
@@ -126,7 +126,7 @@ class SeenIn(BaseModel):
 
 @router.get("/notifications/inbox")
 def notifications_inbox(user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.services import notifications
+    from app.services.social import notifications
     return notifications.inbox(db, user)
 
 
@@ -136,13 +136,13 @@ class InboxReadIn(BaseModel):
 
 @router.post("/notifications/inbox/read")
 def notifications_inbox_read(req: InboxReadIn, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.services import notifications
+    from app.services.social import notifications
     return notifications.mark_inbox_read(db, user, parse_uuid(req.notification_id, "notification_id", required=False))
 
 
 @router.post("/notifications/seen")
 def notifications_seen(req: SeenIn, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
-    from app.services import notifications
+    from app.services.social import notifications
     return notifications.mark_seen(db, user, req.key)
 
 
@@ -154,14 +154,14 @@ class GenerateCardsIn(BaseModel):
 def generate_flashcards(lesson_code: str, req: GenerateCardsIn, user: Principal = Depends(require_teacher),
                         db: Session = Depends(get_db)):
     """AI soạn thẻ ghi nhớ từ học liệu của bài (lưu nháp, giáo viên duyệt rồi học sinh mới ôn)."""
-    from app.services import flashcards
+    from app.services.courses import flashcards
     return flashcards.generate_cards(db, user, clean_id(lesson_code), req.count)
 
 
 @router.get("/lessons/{lesson_code}/flashcards")
 def list_flashcard_cards(lesson_code: str, status: str | None = None, user: Principal = Depends(require_teacher),
                          db: Session = Depends(get_db)):
-    from app.services import flashcards
+    from app.services.courses import flashcards
     return flashcards.list_ai_cards(db, user, clean_id(lesson_code), status)
 
 
@@ -174,16 +174,18 @@ class CardUpdateIn(BaseModel):
 @router.patch("/flashcard-cards/{card_id}")
 def update_flashcard_card(card_id: str, req: CardUpdateIn, user: Principal = Depends(require_teacher),
                           db: Session = Depends(get_db)):
-    from app.services import flashcards
+    from app.services.courses import flashcards
     return flashcards.update_ai_card(db, user, parse_uuid(card_id, "card_id"), req.front, req.back, req.status)
 
 
 @router.get("/learn/progress-report")
 def progress_report(user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
     """Báo cáo tiến độ của chính học sinh, tải về dạng DOCX."""
-    from fastapi.responses import Response
     from urllib.parse import quote
-    from app.services import progress_report as pr
+
+    from fastapi.responses import Response
+
+    from app.services.courses import progress_report as pr
     content = pr.to_docx(pr.collect(db, user))
     name = quote(f"bao-cao-tien-do-{user.user_id}.docx")
     return Response(content, media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -196,6 +198,7 @@ def class_submissions_csv(class_id: str, user: Principal = Depends(require_teach
     import csv
     import io
     from urllib.parse import quote
+
     from fastapi.responses import Response
     data = learning.class_submissions(db, user, clean_id(class_id))
     labels = {"passed": "Đạt", "failed": "Chưa đạt", "in_progress": "Đang làm", "not_started": "Chưa làm"}

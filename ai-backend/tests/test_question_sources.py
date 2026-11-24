@@ -1,6 +1,6 @@
 from app.database import SessionLocal
 from app.models.documents import AIChunk, AIDocument
-from app.services.embedding import embed_texts
+from app.services.rag.embedding import embed_texts
 from tests.conftest import token
 
 

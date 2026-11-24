@@ -1,7 +1,7 @@
 """File video bài giảng (tải lên, phát với Range) và file gốc tài liệu (PDF/PPTX cho trình xem slide)."""
 import mimetypes
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import func
@@ -17,11 +17,11 @@ from app.models.learning import Lesson, LessonItem, MediaVideo
 from app.models.observability import AIJob
 from app.models.transcript import VideoTranscript
 from app.models.video_question import VideoQuestion
-from app.services import jobs
-from app.services.course_admin import link_video_sources
-from app.services.jobs import job_to_dict
-from app.services.object_store import get_store
-from app.services.storage import safe_extension, save_upload
+from app.services.courses.course_admin import link_video_sources
+from app.services.media.object_store import get_store
+from app.services.media.storage import safe_extension, save_upload
+from app.services.system import jobs
+from app.services.system.jobs import job_to_dict
 
 router = APIRouter(prefix="/ai", tags=["media"])
 VIDEO_TYPES = ("mp4", "webm", "mov", "m4v", "mkv", "mp3", "m4a", "wav", "ogg")
@@ -32,7 +32,7 @@ def _target_lesson(db: Session, user: Principal, target_lesson_id: str | None) -
         return None
     lesson = (db.query(Lesson).filter(Lesson.id == parse_uuid(target_lesson_id, "target_lesson_id"))
               .with_for_update().first())
-    from app.services import learning
+    from app.services.courses import learning
     if not lesson or not learning.can_see_course(db, user, lesson.chapter.course):
         raise AppError(404, "NOT_FOUND", "Không tìm thấy bài học để gắn video.")
     return lesson
@@ -53,7 +53,7 @@ def _attach_video(db: Session, video: MediaVideo, lesson: Lesson | None) -> None
 
 def _duration(path: str) -> float | None:
     try:
-        from app.services.transcription import _ffmpeg_exe, _media_duration
+        from app.services.media.transcription import _ffmpeg_exe, _media_duration
         exe = _ffmpeg_exe()
         return _media_duration(exe, path) if exe else None
     except Exception:
@@ -176,8 +176,8 @@ def inline_upload_video(
     class_id = clean_id(class_id)
     ensure_class_access(user, class_id)
     
-    # 1. Sinh mã video tuần tự dạng VD-000001
-    video_id = generate_sequence_code(db, MediaVideo, MediaVideo.video_id, "VD")
+    # 1. Sinh mã video
+    video_id = generate_code("VD")
     
     # 2. Kiểm tra định dạng file an toàn
     ext = safe_extension(file.filename, VIDEO_TYPES)
@@ -348,7 +348,7 @@ def document_slides(document_id: str, user: Principal = Depends(get_user_for_med
     doc = db.get(AIDocument, parse_uuid(document_id, "document_id"))
     if not doc or not doc.file_path or not user.can_access_class(doc.class_id):
         raise AppError(404, "NOT_FOUND", "Không tìm thấy tài liệu.")
-    from app.services.parsers import extract_pdf, extract_pptx
+    from app.services.rag.parsers import extract_pdf, extract_pptx
     if doc.source_type not in ("pptx", "pdf"):
         raise AppError(400, "NOT_SLIDES", "Chỉ hỗ trợ PDF / PPTX.")
     with get_store().local_path(doc.file_path) as local:

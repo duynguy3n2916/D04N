@@ -10,11 +10,11 @@ from app.core.security import Principal, ensure_class_access, get_current_user, 
 from app.core.utils import clean_id, parse_uuid
 from app.database import get_db
 from app.models.documents import AIChunk, AIDocument
-from app.services import jobs
-from app.services.ingestion import create_document, find_duplicate
-from app.services.parsers import SUPPORTED_DOC_TYPES
-from app.services.object_store import get_store
-from app.services.storage import safe_extension, save_upload, sha256_text
+from app.services.media.object_store import get_store
+from app.services.media.storage import safe_extension, save_upload, sha256_text
+from app.services.rag.ingestion import create_document, find_duplicate
+from app.services.rag.parsers import SUPPORTED_DOC_TYPES
+from app.services.system import jobs
 
 router = APIRouter(prefix="/ai", tags=["documents"])
 

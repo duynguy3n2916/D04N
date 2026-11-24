@@ -6,14 +6,14 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.context import get_request_id, set_request_id
 from app.core.errors import AppError
 from app.core.security import Principal, ensure_class_access, get_current_user, require_teacher
 from app.core.utils import clean_id, parse_uuid
-from app.core.context import get_request_id, set_request_id
 from app.database import SessionLocal, get_db
 from app.models.conversation import AIConversation, AIMessage
-from app.services import tutor
-from app.services.retrieval import RetrievalScope, retrieve
+from app.services.ai import tutor
+from app.services.rag.retrieval import RetrievalScope, retrieve
 
 router = APIRouter(prefix="/ai", tags=["chat"])
 log = logging.getLogger("app.chat")

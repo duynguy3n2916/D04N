@@ -4,9 +4,9 @@ import { App } from './App';
 import { applyReduceFx, ConfirmProvider, ToastProvider } from './components/ui';
 import { AuthProvider } from './lib/auth';
 import { applyTheme, DEFAULT_THEME } from './lib/theme';
-import './styles.css';
-import './theme.css';
-import './polish.css';
+import './styles/base.css';
+import './styles/theme.css';
+import './styles/polish.css';
 
 applyReduceFx();
 applyTheme(DEFAULT_THEME); // màu chủ đạo cố định: đỏ đô

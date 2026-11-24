@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import Principal, get_current_user
 from app.database import get_db
-from app.services import coach
+from app.services.ai import coach
 
 router = APIRouter(prefix="/ai", tags=["coach"])
 

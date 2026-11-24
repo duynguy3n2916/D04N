@@ -17,12 +17,30 @@ from app.config import settings
 from app.core.context import setup_logging
 from app.core.errors import RequestContextMiddleware, install_error_handlers
 from app.database import SessionLocal, engine
-from app.routers import (admin, auth, chat, documents, evaluation, jobs as jobs_router, learn, media, teacher, videos,
-                         users, workflow, forum, messages, coach)
-from app.services import evaluation as _ev, ingestion as _ing, jobs, transcription as _tr  # noqa: F401 (đăng ký job)
-from app.services import tutor_explain as _te  # noqa: F401 (đăng ký job tutor_explain)
-from app.services.retention import purge_expired
-from app.services.workflow import sweep_expired
+from app.routers import (
+    admin,
+    auth,
+    chat,
+    coach,
+    documents,
+    evaluation,
+    forum,
+    learn,
+    media,
+    messages,
+    teacher,
+    users,
+    videos,
+    workflow,
+)
+from app.routers import jobs as jobs_router
+from app.services.ai import evaluation as _ev  # noqa: F401 (đăng ký job)
+from app.services.ai import tutor_explain as _te  # noqa: F401 (đăng ký job tutor_explain)
+from app.services.courses.workflow import sweep_expired
+from app.services.media import transcription as _tr  # noqa: F401 (đăng ký job)
+from app.services.rag import ingestion as _ing  # noqa: F401 (đăng ký job)
+from app.services.system import jobs  # noqa: F401 (đăng ký job)
+from app.services.system.retention import purge_expired
 
 # Windows lấy kiểu file từ registry: .mjs (pdf.js worker) hay .js có thể bị trả về text/plain,
 # trình duyệt sẽ từ chối nạp như JavaScript module. Khai báo cố định để chạy giống nhau trên mọi máy.
@@ -98,7 +116,7 @@ async def lifespan(_: FastAPI):
                     "Đặt chuỗi ngẫu nhiên >= 32 ký tự trong .env.")
     if settings.allow_test_login:
         log.warning("ALLOW_TEST_LOGIN=true: ai cũng đăng nhập được không cần mật khẩu. Chỉ dùng cho kiểm thử.")
-    from app.services.embedding import warmup
+    from app.services.rag.embedding import warmup
     threading.Thread(target=warmup, daemon=True, name="embedding-warmup").start()
     stop = asyncio.Event()
     task = asyncio.create_task(_sweeper(stop))

@@ -8,9 +8,9 @@ from app.core.security import Principal, require_admin, require_teacher
 from app.core.utils import parse_uuid
 from app.database import get_db
 from app.models.evaluation import AIEvaluation, EvalSample
-from app.services import evaluation as ev
-from app.services import jobs
-from app.services.retrieval import active_transcript
+from app.services.ai import evaluation as ev
+from app.services.rag.retrieval import active_transcript
+from app.services.system import jobs
 
 router = APIRouter(prefix="/ai/evaluation", tags=["evaluation"])
 

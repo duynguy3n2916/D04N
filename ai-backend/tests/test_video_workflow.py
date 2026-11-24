@@ -49,7 +49,7 @@ def test_transcript_import_versions_rollback(client, teacher):
 
 
 def test_uploaded_video_transcription_is_available_to_player(client, teacher, monkeypatch):
-    from app.services import transcription
+    from app.services.media import transcription
 
     vid = "vid-auto-subtitles"
     monkeypatch.setattr(transcription, "transcribe_media", lambda *_args: [
@@ -253,7 +253,7 @@ def test_open_question_llm_grading_and_fallback(client, teacher, fake_llm):
 
 
 def test_sweeper_applies_timeout(client, teacher, fake_llm):
-    from app.services.workflow import sweep_expired
+    from app.services.courses.workflow import sweep_expired
     qid = _make_question(client, teacher, 90)
     student = token(client, "sv-sweep", "student", ["lop-a"])
     client.post("/ai/workflow/question-start", headers=student, json={"video_id": VID, "question_id": qid})

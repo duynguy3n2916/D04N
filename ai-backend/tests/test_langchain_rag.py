@@ -5,10 +5,10 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 from langchain_core.retrievers import BaseRetriever
 
-from app.services import llm
-from app.services.chunking import split_documents
-from app.services.embedding import embed_query, embed_texts, get_embeddings
-from app.services.retrieval import RetrievalScope, get_retriever, retrieve
+from app.services.ai import llm
+from app.services.rag.chunking import split_documents
+from app.services.rag.embedding import embed_query, embed_texts, get_embeddings
+from app.services.rag.retrieval import RetrievalScope, get_retriever, retrieve
 from tests.test_api_core import upload
 
 DOC = ("# Mẫu Factory\n\nFactory Method để lớp con quyết định lớp cụ thể nào được tạo ra. "

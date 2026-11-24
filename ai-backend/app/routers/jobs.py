@@ -6,7 +6,7 @@ from app.core.security import Principal, require_teacher
 from app.core.utils import parse_uuid
 from app.database import get_db
 from app.models.observability import AIJob
-from app.services.jobs import job_to_dict
+from app.services.system.jobs import job_to_dict
 
 router = APIRouter(prefix="/ai/jobs", tags=["jobs"])
 
