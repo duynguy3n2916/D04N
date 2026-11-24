@@ -31,6 +31,18 @@ for _ext, _type in ((".js", "text/javascript"), (".mjs", "text/javascript"), (".
     mimetypes.add_type(_type, _ext)
 
 log = logging.getLogger("app")
+
+
+class FrontendFiles(StaticFiles):
+    """Phục vụ frontend/dist. index.html luôn hỏi lại server (không bao giờ hiện bản cũ sau khi build/pull);
+    file trong assets/ có mã băm trong tên nên cho trình duyệt cache lâu."""
+
+    def file_response(self, full_path, *args, **kwargs):
+        resp = super().file_response(full_path, *args, **kwargs)
+        hashed = Path(full_path).parent.name == "assets"
+        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable" if hashed else "no-cache"
+        return resp
+
 RETENTION_INTERVAL_SECONDS = 6 * 3600  # dọn dữ liệu quá hạn lưu mỗi 6 giờ
 FRONTEND_DIST = Path(os.environ.get("FRONTEND_DIST", Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"))
 
@@ -72,8 +84,8 @@ async def _sweeper(stop: asyncio.Event) -> None:
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     setup_logging()
-    from app.migrate import migrate
-    report = migrate(verbose=False)
+    from app.migrate import migrate_if_needed
+    report = migrate_if_needed()
     if report.get("added_columns") or report.get("changed_types"):
         log.info("schema_migrated", extra={"extra_fields": report})
     if report.get("warning"):
@@ -133,7 +145,7 @@ if FRONTEND_DIST.joinpath("index.html").exists():
         return FileResponse(FRONTEND_DIST / "pdf.worker.min.mjs", media_type="text/javascript",
                             headers={"Cache-Control": "no-cache"})
 
-    app.mount("/app", StaticFiles(directory=FRONTEND_DIST, html=True), name="frontend")
+    app.mount("/app", FrontendFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 
 
 @app.get("/", include_in_schema=False)

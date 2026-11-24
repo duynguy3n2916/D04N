@@ -4,9 +4,13 @@
   backfill dữ liệu cũ, tạo index (gồm HNSW cho vector).
 - Dùng cho cả DB mới và DB đã tạo từ phiên bản trước của dự án.
 """
+import hashlib
 import logging
 
 from sqlalchemy import inspect, text
+from sqlalchemy.dialects import postgresql
+from sqlalchemy.exc import DBAPIError
+from sqlalchemy.schema import CreateIndex, CreateTable
 
 import app.models  # noqa: F401  (nạp toàn bộ model vào Base.metadata)
 from app.config import settings
@@ -168,6 +172,37 @@ def ensure_vector_index(conn) -> None:
     ))
 
 
+# Tăng số này khi sửa backfill / logic migrate mà không đổi model, để lần chạy sau migrate lại đầy đủ.
+MIGRATION_REV = 1
+STATE_DDL = ("CREATE TABLE IF NOT EXISTS app_schema_state "
+             "(key varchar(64) PRIMARY KEY, value text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now())")
+
+
+def schema_fingerprint() -> str:
+    """Dấu vân tay của schema mong muốn: đổi model, index, kiểu cột hay EMBEDDING_DIM là đổi dấu."""
+    dialect = postgresql.dialect()
+    parts = [f"rev={MIGRATION_REV}", f"dim={settings.embedding_dim}", *INDEXES, repr(TYPE_FIXES)]
+    for table in Base.metadata.sorted_tables:
+        parts.append(str(CreateTable(table).compile(dialect=dialect)))
+        parts.extend(str(CreateIndex(ix).compile(dialect=dialect)) for ix in sorted(table.indexes, key=lambda i: i.name or ""))
+    return hashlib.sha256("\n".join(parts).encode()).hexdigest()
+
+
+def _stored_fingerprint() -> str | None:
+    try:
+        with engine.connect() as conn:
+            return conn.execute(text("SELECT value FROM app_schema_state WHERE key = 'schema'")).scalar()
+    except DBAPIError:  # DB mới: chưa có bảng trạng thái
+        return None
+
+
+def migrate_if_needed() -> dict:
+    """Dùng lúc khởi động server: schema đã khớp thì chỉ tốn 1 truy vấn thay vì ~170 (nhanh hẳn với DB cloud)."""
+    if _stored_fingerprint() == schema_fingerprint():
+        return {"skipped": True}
+    return migrate(verbose=False)
+
+
 def migrate(verbose: bool = True) -> dict:
     report: dict = {}
     with engine.begin() as conn:
@@ -190,6 +225,11 @@ def migrate(verbose: bool = True) -> dict:
             )
         else:
             ensure_vector_index(conn)
+            conn.execute(text(STATE_DDL))
+            conn.execute(text(
+                "INSERT INTO app_schema_state (key, value) VALUES ('schema', :v) "
+                "ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()"
+            ), {"v": schema_fingerprint()})
     if verbose:
         for k, v in report.items():
             log.info("migrate", extra={"extra_fields": {k: v}})
