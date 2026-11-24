@@ -160,7 +160,7 @@ export interface ItemDetail extends ItemSummary {
   quiz?: { count: number; pass_ratio: number; available: number; time_limit_minutes?: number | null;
     open_at?: string | null; close_at?: string | null; window?: 'open' | 'not_yet' | 'closed' };
 }
-export interface Stats { total_xp: number; today_xp: number; week_xp: number; daily_goal_xp: number; streak_days: number; studied_today: boolean; last_7_days: { date: string; xp: number }[] }
+export interface Stats { total_xp: number; today_xp: number; week_xp: number; daily_goal_xp: number; streak_days: number; studied_today: boolean; last_7_days: { date: string; xp: number }[]; last_84_days?: { date: string; xp: number }[] }
 export interface PublicQuestion { question_id: string; video_id: string; timestamp: number; type: string; difficulty?: string; question: string; options: string[] | null; origin?: string }
 export interface SessionStatus {
   session_id: string; state: string; current_video_time: number; video_question_active: boolean; in_cooldown: boolean;

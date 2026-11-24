@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Flame, Gem, Icon } from '../components/Icon';
+import { Icon } from '../components/Icon';
 import { TutorPanel, type TutorContext } from '../components/TutorPanel';
-import { Button, CountUp, ErrorBox, IconButton, Progress, Spinner, useToast } from '../components/ui';
-import { api, errorText, storage, type ItemDetail, type LessonView, type Source, type Stats } from '../lib/api';
+import { Button, ErrorBox, IconButton, Progress, Spinner, useToast } from '../components/ui';
+import { api, errorText, storage, type ItemDetail, type LessonView, type Source } from '../lib/api';
 import { useAsync } from '../lib/hooks';
 import { navigate, useLocation } from '../lib/router';
 import { QuizItem } from './items/QuizItem';
@@ -30,13 +30,15 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
   const query = useMemo(() => new URLSearchParams(path.split('?')[1] || ''), [path]);
   const toast = useToast();
   const lesson = useAsync((s) => api<LessonView>(`/ai/learn/lessons/${lessonId}`, { signal: s }), [lessonId]);
-  const me = useAsync((s) => api<{ stats: Stats }>('/ai/learn/me', { signal: s }), []);
   const activeId = itemId || lesson.data?.items.find((i) => i.status === 'current')?.item_id || lesson.data?.items[0]?.item_id;
   const item = useAsync((s) => (activeId ? api<ItemDetail>(`/ai/learn/items/${activeId}`, { signal: s }) : Promise.resolve(null)), [activeId]);
   const [tutorOpen, setTutorOpen] = useState(() => storage.get('mam.tutorOpen') !== '0' && window.innerWidth > 900);
   const [ctx, setCtx] = useState<TutorContext>({ label: '' });
   const [quote, setQuote] = useState<string | null>(null);
   const [wide, setWideState] = useState(() => storage.get('mam.wide') === '1');
+  // Mục lục thu gọn thành dải icon để vùng học rộng hơn.
+  const [mini, setMiniState] = useState(() => storage.get('mam.outlineMini') === '1');
+  const toggleMini = () => setMiniState((v) => { storage.set('mam.outlineMini', v ? '0' : '1'); return !v; });
   const setWide = useCallback((v: boolean) => { setWideState(v); storage.set('mam.wide', v ? '1' : '0'); }, []);
   const nav = useRef<{ seek?: (t: number) => void; page?: (p: number) => void }>({});
 
@@ -49,11 +51,10 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
 
   const goNext = next ? () => navigate(`/lesson/${lessonId}/${next.item_id}`) : null;
 
-  const reloads = useRef({ lesson: lesson.reload, me: me.reload });
-  reloads.current = { lesson: lesson.reload, me: me.reload };
+  const reloads = useRef({ lesson: lesson.reload });
+  reloads.current = { lesson: lesson.reload };
   const onCompleted = useCallback((xp?: number) => {
     reloads.current.lesson();
-    reloads.current.me();
     if (xp) toast(`+${xp} XP`, 'xp');
   }, [toast]);
 
@@ -80,7 +81,6 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
     }
   };
 
-  const stats = me.data?.stats;
   const courseId = lesson.data?.course_id;
 
   return (
@@ -94,34 +94,35 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
         <div className="lesson-top-stats">
           {lesson.data && (
             <>
-              <span className="muted" style={{ fontWeight: 800, fontSize: 15 }}>{lesson.data.items_done}/{lesson.data.items_total} mục</span>
-              <div style={{ width: 150 }}><Progress value={lesson.data.items_done / Math.max(1, lesson.data.items_total)} label="Tiến độ bài học" /></div>
+              <span className="lesson-top-count">{lesson.data.items_done}/{lesson.data.items_total} mục</span>
+              <div style={{ width: 140 }}><Progress value={lesson.data.items_done / Math.max(1, lesson.data.items_total)} label="Tiến độ bài học" /></div>
             </>
           )}
-          <span className="stat" style={{ fontSize: 16 }}><Flame size={22} dim={!stats?.studied_today} /><CountUp value={stats?.streak_days ?? 0} /></span>
-          <span className="stat" style={{ fontSize: 16 }}><Gem size={20} /><CountUp value={stats?.total_xp ?? 0} /></span>
         </div>
-        <Button variant="ghost" icon="refresh" disabled={!lesson.data} onClick={() => navigate(`/flashcards/${encodeURIComponent(lesson.data?.code || '')}`)}>Ôn thẻ</Button>
-        <Button variant={tutorOpen ? 'soft' : 'blue'} icon="sparkle" aria-pressed={tutorOpen} onClick={() => setTutorOpen((v) => !v)}>Hỏi Tutor AI</Button>
+        <Button variant="ghost" size="sm" icon="refresh" disabled={!lesson.data} onClick={() => navigate(`/flashcards/${encodeURIComponent(lesson.data?.code || '')}`)}>Ôn thẻ</Button>
+        <Button variant={tutorOpen ? 'soft' : 'blue'} size="sm" icon="sparkle" aria-pressed={tutorOpen} onClick={() => setTutorOpen((v) => !v)}>Hỏi Tutor AI</Button>
       </header>
 
       <div className="lesson-body">
-        <nav className="outline" aria-label="Nội dung bài học" hidden={wide}>
-          <span className="outline-title">NỘI DUNG BÀI HỌC</span>
+        <nav className={`outline ${mini ? 'outline-mini' : ''}`} aria-label="Nội dung bài học" hidden={wide}>
+          <div className="outline-head">
+            <span className="outline-title">Nội dung bài học</span>
+            <IconButton icon={mini ? 'chevronRight' : 'chevronLeft'} label={mini ? 'Mở rộng mục lục' : 'Thu gọn mục lục'} onClick={toggleMini} />
+          </div>
           {items.map((it) => {
             const locked = it.status === 'locked';
             const on = it.item_id === activeId;
             const inner = (
               <>
                 <span className={`type-ico type-${it.type}`}><Icon name={locked ? 'lock' : TYPE_ICON[it.type]} size={19} /></span>
-                <span style={{ minWidth: 0 }}><strong>{it.title}</strong><span className="sub">{it.meta_text}</span></span>
+                <span className="outline-text"><strong>{it.title}</strong><span className="sub">{it.meta_text}</span></span>
                 {it.status === 'done' && <span className="done-dot" aria-label="Đã xong"><Icon name="check" size={14} stroke={3.4} /></span>}
               </>
             );
             return locked ? (
-              <span key={it.item_id} className="outline-item outline-locked" title="Hoàn thành mục trước để mở">{inner}</span>
+              <span key={it.item_id} className="outline-item outline-locked" title={mini ? `${it.title} · chưa mở` : 'Hoàn thành mục trước để mở'}>{inner}</span>
             ) : (
-              <a key={it.item_id} href={`#/lesson/${lessonId}/${it.item_id}`} className={`outline-item ${on ? 'outline-on' : ''}`} aria-current={on ? 'page' : undefined}>{inner}</a>
+              <a key={it.item_id} href={`#/lesson/${lessonId}/${it.item_id}`} title={mini ? it.title : undefined} className={`outline-item ${on ? 'outline-on' : ''}`} aria-current={on ? 'page' : undefined}>{inner}</a>
             );
           })}
         </nav>

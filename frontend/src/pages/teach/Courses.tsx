@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { PageHeader } from '../../components/AppShell';
 import { Icon } from '../../components/Icon';
 import { Markdown } from '../../components/Markdown';
+import { PillSelect } from '../../components/Manage';
 import { Badge, Button, confirmDialog, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
 import { api, errorText, mediaUrl, pollJob, type ClassInfo, type ItemType } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
@@ -46,7 +47,7 @@ function uploadCover(courseId: string, file: File) {
 }
 
 /** Ảnh bìa khóa học; chưa có ảnh thì hiện nền màu kèm biểu tượng. */
-function CourseCover({ url, tone = 'var(--green)', className = '' }: { url?: string | null; tone?: string; className?: string }) {
+function CourseCover({ url, tone = 'var(--brand)', className = '' }: { url?: string | null; tone?: string; className?: string }) {
   return (
     <span className={`cover ${className}`} style={url ? undefined : { background: tone }}>
       {url ? <img src={mediaUrl(url)} alt="" /> : <Icon name="list" size={40} />}
@@ -154,12 +155,14 @@ type Dialog =
   | { kind: 'lesson'; chapterId: string; lesson?: AdminLesson }
   | { kind: 'item'; lesson: AdminLesson; item?: AdminItem }
   | { kind: 'course' };
+type Sel = { kind: 'course' } | { kind: 'chapter' | 'lesson' | 'item'; id: string };
 
 export function CourseEditor({ courseId }: { courseId: string }) {
   const toast = useToast();
   const tree = useAsync((s) => api<AdminCourse>(`/ai/courses/${courseId}`, { signal: s }), [courseId]);
   const [dlg, setDlg] = useState<Dialog | null>(null);
   const [addQuizLesson, setAddQuizLesson] = useState<string | null>(null);
+  const [sel, setSel] = useState<Sel | null>(null);
 
   const run = async (p: Promise<AdminCourse>, msg?: string) => {
     try { tree.setData(await p); if (msg) toast(msg, 'success'); } catch (e) { toast(errorText(e), 'error'); }
@@ -181,71 +184,130 @@ export function CourseEditor({ courseId }: { courseId: string }) {
       <div className="row" style={{ marginBottom: 8 }}><Link to="/teach/courses" className="muted small" style={{ fontWeight: 800 }}>← Tất cả khóa học</Link></div>
       <PageHeader title={c?.title || 'Đang tải…'} sub={c ? `${c.code}${c.class_id ? ` · lớp ${c.class_id}` : ' · mọi lớp'}${c.description ? ` · ${c.description}` : ''}` : undefined}
         actions={c && <>
-          <Button variant="ghost" icon="edit" onClick={() => setDlg({ kind: 'course' })}>Sửa thông tin</Button>
           <Button variant="ghost" icon="play" onClick={() => navigate(`/learn/${c.course_id}`)}>Xem như học sinh</Button>
-          <Button icon="plus" onClick={() => setDlg({ kind: 'chapter' })}>Thêm chương</Button>
         </>} />
-      {c && <CoverEditor course={c} onChanged={tree.setData} />}
-      {c && <CourseClasses course={c} onChanged={tree.setData} />}
       {tree.loading && !c && <Spinner />}
       {tree.error && <ErrorBox message={tree.error} onRetry={tree.reload} />}
-      {c && !c.chapters.length &&<Empty title="Khóa học chưa có chương nào">Thêm chương, sau đó thêm bài và các mục học.</Empty>}
-      <div className="col" style={{ gap: 16 }}>
-        {c?.chapters.map((ch, ci) => (
-          <section key={ch.chapter_id} className="tree-chapter" aria-label={`Chương ${ci + 1}`}>
-            <div className="row">
-              <Badge tone="green">Chương {ci + 1}</Badge>
-              <h2 style={{ fontSize: 19, flex: 1 }}>{ch.title}</h2>
-              <Reorder onUp={() => move('chapters', ch.chapter_id, -1)} onDown={() => move('chapters', ch.chapter_id, 1)} first={ci === 0} last={ci === c.chapters.length - 1} />
-              <IconButton icon="edit" label="Đổi tên chương" onClick={() => setDlg({ kind: 'chapter', chapterId: ch.chapter_id, title: ch.title })} />
-              <IconButton icon="trash" label="Xóa chương" onClick={() => del('chapters', ch.chapter_id, `chương “${ch.title}”`)} />
+      {c && (() => {
+        // Tìm nút đang chọn trong cây; mặc định là bài đầu tiên.
+        const chapters = c.chapters;
+        const findLesson = (id: string) => { for (const ch of chapters) { const i = ch.lessons.findIndex((l) => l.lesson_id === id); if (i >= 0) return { ch, ls: ch.lessons[i], li: i }; } return null; };
+        const findItem = (id: string) => { for (const ch of chapters) for (const ls of ch.lessons) { const i = ls.items.findIndex((x) => x.item_id === id); if (i >= 0) return { ch, ls, it: ls.items[i], ii: i }; } return null; };
+        const first = chapters.find((ch) => ch.lessons.length)?.lessons[0];
+        let s: Sel = sel || (first ? { kind: 'lesson', id: first.lesson_id } : { kind: 'course' });
+        if ((s.kind === 'lesson' && !findLesson(s.id)) || (s.kind === 'item' && !findItem(s.id)) || (s.kind === 'chapter' && !chapters.some((x) => x.chapter_id === (s as { id: string }).id))) s = { kind: 'course' };
+        const on = (k: Sel['kind'], id?: string) => s.kind === k && (k === 'course' || (s as { id: string }).id === id);
+
+        const itemRow = (ls: AdminLesson, it: AdminItem, ii: number) => {
+          const isQuiz = it.type === 'quiz';
+          const requiredCount = it.meta?.count ?? 5;
+          const currentCount = it.meta?.bank_count ?? 0;
+          const isQuizFull = currentCount >= requiredCount;
+          return (
+            <div key={it.item_id} className="tree-item">
+              <span className={`type-ico type-${it.type}`}><Icon name={TYPE_ICON[it.type]} size={18} /></span>
+              <button type="button" className="ce-link" onClick={() => setSel({ kind: 'item', id: it.item_id })}><strong>{it.title}</strong><span className="td-sub">{TYPE_LABEL[it.type]} · {itemMeta(it)}</span></button>
+              <Reorder onUp={() => move('items', it.item_id, -1)} onDown={() => move('items', it.item_id, 1)} first={ii === 0} last={ii === ls.items.length - 1} />
+              {isQuiz && (
+                <span title={isQuizFull ? 'Số lượng câu hỏi của bài kiểm tra đã đủ' : `Thêm câu hỏi (${currentCount}/${requiredCount})`}>
+                  <IconButton icon="plus" label="Thêm câu hỏi" disabled={isQuizFull} onClick={() => setAddQuizLesson(ls.code)} />
+                </span>
+              )}
+              {it.type === 'video' && it.video_id && <IconButton icon="question" label="Quản lý câu hỏi video" onClick={() => navigate(`/teach/videos/${encodeURIComponent(it.video_id!)}`)} />}
+              <IconButton icon="edit" label="Sửa mục" onClick={() => setDlg({ kind: 'item', lesson: ls, item: it })} />
+              <IconButton icon="trash" label="Xóa mục" onClick={() => del('items', it.item_id, `mục “${it.title}”`)} />
             </div>
-            {ch.lessons.map((ls, li) => (
-              <div key={ls.lesson_id} className="tree-lesson">
-                <div className="row">
-                  <strong style={{ flex: 1, fontSize: 16 }}>{ls.title} <span className="muted small">· {ls.code}</span></strong>
+          );
+        };
+
+        let detail: ReactNode = null;
+        if (s.kind === 'course') {
+          detail = (<>
+            <div className="ce-head"><span className="oc-kicker">Khóa học</span><h2>{c.title}</h2>{c.description && <p className="muted">{c.description}</p>}</div>
+            <CoverEditor course={c} onChanged={tree.setData} />
+            <CourseClasses course={c} onChanged={tree.setData} />
+            <div className="row"><Button variant="ghost" icon="edit" onClick={() => setDlg({ kind: 'course' })}>Sửa thông tin</Button><span className="grow" /><Button variant="danger-ghost" icon="trash" onClick={delCourse}>Xóa khóa học</Button></div>
+          </>);
+        } else if (s.kind === 'chapter') {
+          const ci = chapters.findIndex((x) => x.chapter_id === s.id); const ch = chapters[ci];
+          detail = (<>
+            <div className="ce-head"><span className="oc-kicker">Chương {ci + 1}</span><h2>{ch.title}</h2><p className="muted">{ch.lessons.length} bài · {ch.lessons.reduce((n, l) => n + l.items.length, 0)} mục học</p></div>
+            <div className="row">
+              <Button variant="ghost" icon="edit" onClick={() => setDlg({ kind: 'chapter', chapterId: ch.chapter_id, title: ch.title })}>Đổi tên</Button>
+              <Reorder onUp={() => move('chapters', ch.chapter_id, -1)} onDown={() => move('chapters', ch.chapter_id, 1)} first={ci === 0} last={ci === chapters.length - 1} />
+              <span className="grow" />
+              <Button variant="danger-ghost" icon="trash" onClick={() => del('chapters', ch.chapter_id, `chương “${ch.title}”`)}>Xóa chương</Button>
+            </div>
+            <div className="card ce-list">
+              {ch.lessons.map((ls, li) => (
+                <div key={ls.lesson_id} className="tree-item">
+                  <span className="ol-code">{ls.code}</span>
+                  <button type="button" className="ce-link" onClick={() => setSel({ kind: 'lesson', id: ls.lesson_id })}><strong>{ls.title}</strong><span className="td-sub">{ls.items.length} mục học</span></button>
                   <Reorder onUp={() => move('lessons', ls.lesson_id, -1)} onDown={() => move('lessons', ls.lesson_id, 1)} first={li === 0} last={li === ch.lessons.length - 1} />
-                  <IconButton icon="edit" label="Sửa bài" onClick={() => setDlg({ kind: 'lesson', chapterId: ch.chapter_id, lesson: ls })} />
-                  <IconButton icon="trash" label="Xóa bài" onClick={() => del('lessons', ls.lesson_id, `bài “${ls.title}”`)} />
                 </div>
-                {ls.items.map((it, ii) => {
-                  const isQuiz = it.type === 'quiz';
-                  const requiredCount = it.meta?.count ?? 5;
-                  const currentCount = it.meta?.bank_count ?? 0; 
-                  const isQuizFull = currentCount >= requiredCount;
+              ))}
+              {!ch.lessons.length && <p className="muted" style={{ padding: '8px 12px' }}>Chương chưa có bài.</p>}
+            </div>
+            <div><Button variant="soft" icon="plus" onClick={() => setDlg({ kind: 'lesson', chapterId: ch.chapter_id })}>Thêm bài</Button></div>
+          </>);
+        } else if (s.kind === 'lesson') {
+          const { ch, ls, li } = findLesson(s.id)!;
+          detail = (<>
+            <div className="ce-head"><span className="oc-kicker">{ch.title} · {ls.code}</span><h2>{ls.title}</h2>{ls.description && <p className="muted">{ls.description}</p>}</div>
+            <div className="row">
+              <Button variant="ghost" icon="edit" onClick={() => setDlg({ kind: 'lesson', chapterId: ch.chapter_id, lesson: ls })}>Sửa bài</Button>
+              <Button variant="ghost" icon="question" onClick={() => navigate(`/teach/questions?lesson=${encodeURIComponent(ls.code)}`)}>Câu hỏi của bài</Button>
+              <Reorder onUp={() => move('lessons', ls.lesson_id, -1)} onDown={() => move('lessons', ls.lesson_id, 1)} first={li === 0} last={li === ch.lessons.length - 1} />
+              <span className="grow" />
+              <Button variant="danger-ghost" icon="trash" onClick={() => del('lessons', ls.lesson_id, `bài “${ls.title}”`)}>Xóa bài</Button>
+            </div>
+            <div className="card ce-list">
+              {ls.items.map((it, ii) => itemRow(ls, it, ii))}
+              {!ls.items.length && <p className="muted" style={{ padding: '8px 12px' }}>Bài chưa có mục học. Thêm video, slide, bài đọc hoặc bài kiểm tra.</p>}
+            </div>
+            <div><Button icon="plus" onClick={() => setDlg({ kind: 'item', lesson: ls })}>Thêm mục học</Button></div>
+          </>);
+        } else {
+          const { ls, it, ii } = findItem(s.id)!;
+          detail = (<>
+            <div className="ce-head"><span className="oc-kicker">{ls.code} · {TYPE_LABEL[it.type]}</span><h2>{it.title}</h2><p className="muted">{itemMeta(it)}{it.has_content ? '' : ' · chưa có nội dung'}</p></div>
+            <div className="card ce-list">{itemRow(ls, it, ii)}</div>
+            <div className="row">
+              <Button icon="edit" onClick={() => setDlg({ kind: 'item', lesson: ls, item: it })}>Sửa nội dung</Button>
+              <Button variant="ghost" icon="chevronLeft" onClick={() => setSel({ kind: 'lesson', id: ls.lesson_id })}>Về bài {ls.code}</Button>
+            </div>
+          </>);
+        }
 
-                  return (
-                    <div key={it.item_id} className="tree-item">
-                      <span className={`type-ico type-${it.type}`}><Icon name={TYPE_ICON[it.type]} size={18} /></span>
-                      <strong>{it.title}</strong>
-                      <span className="muted small">{itemMeta(it)}</span>
-                      
-                      {isQuiz && (
-                        <span title={isQuizFull ? "Số lượng câu hỏi của bài kiểm tra đã đủ" : `Thêm câu hỏi (${currentCount}/${requiredCount})`}>
-                          <IconButton 
-                            icon="plus" 
-                            label="Thêm câu hỏi" 
-                            disabled={isQuizFull} 
-                            onClick={() => setAddQuizLesson(ls.code)}  
-                          />
-                        </span>
-                      )}
-
-                      <Reorder onUp={() => move('items', it.item_id, -1)} onDown={() => move('items', it.item_id, 1)} first={ii === 0} last={ii === ls.items.length - 1} />
-                      {it.type === 'video' && it.video_id && <IconButton icon="question" label="Quản lý câu hỏi video" onClick={() => navigate(`/teach/videos/${encodeURIComponent(it.video_id!)}`)} />}
-                      <IconButton icon="edit" label="Sửa mục" onClick={() => setDlg({ kind: 'item', lesson: ls, item: it })} />
-                      <IconButton icon="trash" label="Xóa mục" onClick={() => del('items', it.item_id, `mục “${it.title}”`)} />
+        return (
+          <div className="ce-layout">
+            <nav className="card ce-tree" aria-label="Cấu trúc khóa học">
+              <button type="button" className={`ce-node ce-course ${on('course') ? 'on' : ''}`} onClick={() => setSel({ kind: 'course' })}><Icon name="settings" size={16} />Thông tin khóa học</button>
+              {chapters.map((ch, ci) => (
+                <div key={ch.chapter_id} className="ce-group">
+                  <button type="button" className={`ce-node ce-chapter ${on('chapter', ch.chapter_id) ? 'on' : ''}`} onClick={() => setSel({ kind: 'chapter', id: ch.chapter_id })}>
+                    <span className="ol-code">C{ci + 1}</span>{ch.title}</button>
+                  {ch.lessons.map((ls) => (
+                    <div key={ls.lesson_id}>
+                      <button type="button" className={`ce-node ce-lesson ${on('lesson', ls.lesson_id) ? 'on' : ''}`} onClick={() => setSel({ kind: 'lesson', id: ls.lesson_id })}>
+                        <span className="ol-code">{ls.code}</span>{ls.title}<span className="ce-n">{ls.items.length}</span></button>
+                      {(on('lesson', ls.lesson_id) || ls.items.some((x) => on('item', x.item_id))) && ls.items.map((it) => (
+                        <button key={it.item_id} type="button" className={`ce-node ce-item ${on('item', it.item_id) ? 'on' : ''}`} onClick={() => setSel({ kind: 'item', id: it.item_id })}>
+                          <Icon name={TYPE_ICON[it.type]} size={15} />{it.title}</button>
+                      ))}
                     </div>
-                  );
-                })}
-                <div><Button size="sm" variant="ghost" icon="plus" onClick={() => setDlg({ kind: 'item', lesson: ls })}>Thêm mục học</Button></div>
-              </div>
-            ))}
-            <div><Button size="sm" variant="soft" icon="plus" onClick={() => setDlg({ kind: 'lesson', chapterId: ch.chapter_id })}>Thêm bài</Button></div>
-          </section>
-        ))}
-      </div>
-      {c && <div className="row" style={{ marginTop: 28 }}><Button variant="danger-ghost" icon="trash" onClick={delCourse}>Xóa khóa học</Button></div>}
+                  ))}
+                </div>
+              ))}
+              <Button size="sm" variant="soft" icon="plus" onClick={() => setDlg({ kind: 'chapter' })}>Thêm chương</Button>
+            </nav>
+            <div className="ce-detail">
+              {!chapters.length && s.kind === 'course' && <Empty title="Khóa học chưa có chương nào">Bấm “Thêm chương” ở cột trái, sau đó thêm bài và các mục học.</Empty>}
+              {detail}
+            </div>
+          </div>
+        );
+      })()}
 
       {c && dlg?.kind === 'course' && <CourseDialog course={c} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); }} onCoverChanged={tree.setData} />}
       {c && dlg?.kind === 'chapter' && (
@@ -388,16 +450,16 @@ function CourseClasses({ course, onChanged }: { course: AdminCourse; onChanged: 
         {linked.map((cid) => (
           <span key={cid} className="chip">
             {cid}{cid === course.class_id ? ' (lớp chính)' : ''}
-            {cid !== course.class_id && <button className="iconbtn" style={{ marginLeft: 6 }} aria-label={`Gỡ lớp ${cid}`} onClick={() => remove(cid)}>×</button>}
+            {cid !== course.class_id && <button className="chip-x" aria-label={`Gỡ lớp ${cid}`} onClick={() => remove(cid)}>×</button>}
           </span>
         ))}
       </div>
       {!!addable.length && (
         <div className="row" style={{ gap: 8 }}>
-          <select value={pick} onChange={(e) => setPick(e.target.value)} aria-label="Chọn lớp để thêm">
-            <option value="">— Chọn lớp của bạn —</option>
+          <PillSelect label="Chọn lớp để thêm" value={pick} onChange={setPick}>
+            <option value="">Chọn lớp của bạn…</option>
             {addable.map((c) => <option key={c.class_id} value={c.class_id}>{c.class_id} · {c.name}</option>)}
-          </select>
+          </PillSelect>
           <Button size="sm" variant="soft" disabled={!pick} onClick={add}>Thêm lớp</Button>
         </div>
       )}

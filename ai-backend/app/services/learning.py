@@ -94,6 +94,9 @@ def stats(db: Session, user: Principal) -> dict:
         "studied_today": bool(per_day.get(today)),
         "last_7_days": [{"date": (today - timedelta(days=i)).isoformat(), "xp": int(per_day.get(today - timedelta(days=i), 0))}
                         for i in range(6, -1, -1)],
+        # 12 tuần gần nhất cho biểu đồ nhiệt ở trang Hồ sơ
+        "last_84_days": [{"date": (today - timedelta(days=i)).isoformat(), "xp": int(per_day.get(today - timedelta(days=i), 0))}
+                         for i in range(83, -1, -1)],
     }
 
 

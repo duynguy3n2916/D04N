@@ -49,7 +49,7 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
   return (
     <div className="shell">
       <nav className="sidenav" aria-label="Điều hướng chính">
-        <Link to={teacher && !path.startsWith('/learn') && !path.startsWith('/profile') ? '/teach/courses' : '/learn'} className="sidenav-logo" aria-label="Trang chủ"><Logo size={48} /></Link>
+        <Link to={teacher && !path.startsWith('/learn') && !path.startsWith('/profile') && !path.startsWith('/settings') ? '/teach/courses' : '/learn'} className="sidenav-logo" aria-label="Trang chủ"><Logo size={34} /></Link>
         <div className="sidenav-group">
           {teacher && <span className="sidenav-title">Học sinh</span>}
           {nav(STUDENT)}
@@ -66,6 +66,7 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
             <strong>{user?.name || user?.user_id}</strong>
             <span>{user?.role === 'student' ? 'Học sinh' : user?.role === 'teacher' ? 'Giáo viên' : 'Quản trị'}{user?.class_ids?.length ? ` · ${user.class_ids.join(', ')}` : ''}</span>
           </span>
+          <Link to="/settings" className={`iconbtn ${path.startsWith('/settings') ? 'iconbtn-on' : ''}`} aria-label="Cài đặt" title="Cài đặt"><Icon name="settings" size={20} /></Link>
           <IconButton icon="sparkle" label={reduceFx ? 'Bật hiệu ứng' : 'Giảm hiệu ứng'} active={reduceFx} onClick={toggleFx} />
           <button className="iconbtn" onClick={() => logout()} aria-label="Đăng xuất" title="Đăng xuất"><Icon name="logout" size={20} /></button>
         </div>
