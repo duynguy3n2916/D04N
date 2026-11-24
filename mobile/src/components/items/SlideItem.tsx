@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Linking, Text, View } from 'react-native';
+import { Linking, View } from 'react-native';
+import { Text } from '../Text';
 import { Button, Card, ErrorBox, Muted, Row, Screen, Spinner } from '../ui';
 import { api, errorText, mediaUrl } from '../../lib/api';
 import { C } from '../../lib/theme';

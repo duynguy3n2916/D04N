@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../../components/Text';
 import { Card, Empty, Muted, Row, Screen } from '../../components/ui';
 import { refreshNotifications, useNotifications } from '../../lib/notifications';
 import { C } from '../../lib/theme';

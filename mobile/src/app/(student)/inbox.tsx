@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useRef } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '../../components/Text';
 import { Button, Empty, ErrorBox, Muted, Screen, Spinner, type IconName } from '../../components/ui';
 import { api, timeAgo } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';

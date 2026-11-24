@@ -1,6 +1,7 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../../components/Text';
 import { QuizItem } from '../../components/items/QuizItem';
 import { ReadingItem } from '../../components/items/ReadingItem';
 import { SlideItem } from '../../components/items/SlideItem';

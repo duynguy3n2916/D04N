@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../../components/Text';
 import { Button, Card, Empty, ErrorBox, Muted, Pill, Row, Screen, Spinner, Tag } from '../../components/ui';
 import { api, errorText } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';

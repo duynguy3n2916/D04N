@@ -1,7 +1,7 @@
 # D04N Mobile
 
-App điện thoại (Android / iOS) cho **học sinh** và **giáo viên**, viết bằng React Native + [Expo](https://expo.dev) (SDK 58).
-App dùng chung backend FastAPI trong `ai-backend/`, không có server riêng. Tông màu đỏ đô giống bản web.
+App điện thoại **mầm** (Android / iOS) cho **học sinh** và **giáo viên**, viết bằng React Native + [Expo](https://expo.dev) (SDK 58).
+App dùng chung backend FastAPI trong `ai-backend/`, không có server riêng. Giao diện bám theo bản web: tông đỏ đô, chữ Bricolage Grotesque, logo mầm, thẻ trắng bo tròn.
 
 Bản điện thoại là bản rút gọn. Những việc soạn nội dung và quản trị vẫn làm trên web.
 
@@ -85,5 +85,20 @@ npx expo-doctor              # kiểm tra cấu hình và phiên bản thư vi�
 ```
 
 Chỉ dùng thư viện có sẵn trong Expo Go (xem danh sách trong tài liệu Expo SDK 58) để giữ được cách chạy thử bằng Expo Go.
-Muốn tạo file cài đặt `.apk` để gửi cho người khác: dùng EAS Build (`npx eas-cli build -p android --profile preview`), cần tài khoản Expo miễn phí.
-Bản `.apk` nên trỏ tới máy chủ `https://` (bản đã deploy), vì Android chặn kết nối `http://` thường trong app cài đặt (Expo Go thì không chặn).
+## Xuất file APK (Android)
+
+Dùng EAS Build: Expo build trên máy chủ của họ, không cần Android Studio. Cấu hình có sẵn trong `eas.json`.
+
+```powershell
+cd mobile
+npx eas-cli login                                   # tài khoản Expo miễn phí (expo.dev)
+npx eas-cli build -p android --profile preview      # lần đầu hỏi tạo project + khoá ký: chọn Yes
+```
+
+Khoảng 10–20 phút sau, terminal và trang expo.dev hiện link tải `.apk`. Gửi link (hoặc mã QR) cho ai cũng cài được trên Android
+(cho phép "Cài ứng dụng không rõ nguồn gốc" khi máy hỏi). Gói miễn phí có giới hạn số lượt build mỗi tháng, đủ cho đồ án.
+
+App đã cho phép kết nối `http://` (cấu hình `usesCleartextTraffic` trong `app.json`) nên bản `.apk` vẫn dùng được với backend chạy
+trong mạng Wi-Fi nội bộ khi demo. Khi có máy chủ thật thì nên dùng địa chỉ `https://`.
+
+Bản `production` (file `.aab`) chỉ cần khi đưa lên Google Play.

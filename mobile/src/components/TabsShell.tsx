@@ -4,18 +4,18 @@ import type { ReactNode } from 'react';
 import { ScrollView, type ColorValue } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '../lib/auth';
-import { C } from '../lib/theme';
+import { C, F } from '../lib/theme';
 import { ChangePassword } from './ChangePassword';
 import { H1, type IconName } from './ui';
 
 export const tabScreenOptions = {
   tabBarActiveTintColor: C.brand,
   tabBarInactiveTintColor: C.muted,
-  tabBarStyle: { backgroundColor: C.card, borderTopColor: C.line },
-  tabBarLabelStyle: { fontSize: 11, fontWeight: '600' as const },
+  tabBarStyle: { backgroundColor: C.bg, borderTopColor: C.cardLine },
+  tabBarLabelStyle: { fontSize: 11, fontFamily: F[600] },
   headerStyle: { backgroundColor: C.bg },
   headerShadowVisible: false,
-  headerTitleStyle: { color: C.ink, fontWeight: '700' as const, fontSize: 20 },
+  headerTitleStyle: { color: C.ink, fontFamily: F[800], fontSize: 22, letterSpacing: -0.5 },
   headerTitleAlign: 'left' as const,
   sceneStyle: { backgroundColor: C.bg },
 };

@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text } from '../../components/Text';
 import { Markdown } from '../../components/Markdown';
 import { Button, Empty, ErrorBox, Muted, Progress, Row, Screen, Spinner, Tag } from '../../components/ui';
 import { api, errorText } from '../../lib/api';

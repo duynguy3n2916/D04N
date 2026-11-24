@@ -1,6 +1,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import { Text, TextInput } from '../Text';
 import { Button, Card, ErrorBox, H1, Muted, Progress, Row, Screen, st } from '../ui';
 import { api, ApiError, errorText } from '../../lib/api';
 import { C } from '../../lib/theme';

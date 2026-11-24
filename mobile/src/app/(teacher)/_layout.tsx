@@ -1,4 +1,5 @@
 import { PasswordGate, Tabs, tabIcon, tabScreenOptions } from '../../components/TabsShell';
+import { Logo } from '../../components/ui';
 import { useNotifications } from '../../lib/notifications';
 
 export default function TeacherTabs() {
@@ -6,7 +7,7 @@ export default function TeacherTabs() {
   return (
     <PasswordGate>
       <Tabs screenOptions={tabScreenOptions}>
-        <Tabs.Screen name="index" options={{ title: 'Lớp học', headerTitle: 'Tiến độ lớp', tabBarIcon: tabIcon('people-outline', 'people') }} />
+        <Tabs.Screen name="index" options={{ title: 'Lớp học', headerTitle: () => <Logo size={28} />, tabBarIcon: tabIcon('people-outline', 'people') }} />
         <Tabs.Screen name="forum" options={{ title: 'Diễn đàn', tabBarIcon: tabIcon('chatbubbles-outline', 'chatbubbles'),
           tabBarBadge: n?.forum_new ? n.forum_new : undefined }} />
         <Tabs.Screen name="questions" options={{ title: 'Duyệt câu', headerTitle: 'Duyệt câu hỏi', tabBarIcon: tabIcon('checkmark-circle-outline', 'checkmark-circle') }} />

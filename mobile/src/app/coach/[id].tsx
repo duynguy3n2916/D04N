@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View, type ScrollViewInstance } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, View, type ScrollViewInstance } from 'react-native';
+import { Text, TextInput } from '../../components/Text';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { Markdown } from '../../components/Markdown';
 import { Muted } from '../../components/ui';
@@ -22,7 +23,7 @@ function sourceText(s: Source) {
 }
 
 export default function CoachChat() {
-  const params = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams<{ id: string; q?: string }>();
   const [convId, setConvId] = useState<string | null>(params.id === 'new' ? null : params.id);
   const [title, setTitle] = useState('Trợ lý học tập');
   const [msgs, setMsgs] = useState<Msg[]>([]);
@@ -32,6 +33,10 @@ export default function CoachChat() {
   const [thinking, setThinking] = useState(0);
   const scrollRef = useRef<ScrollViewInstance>(null);
   const headerHeight = useHeaderHeight();
+
+  // mở từ gợi ý ở màn Trợ lý: gửi luôn câu hỏi
+  const sentQ = useRef(false);
+  useEffect(() => { if (params.id === 'new' && params.q && !sentQ.current) { sentQ.current = true; send(params.q); } }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (params.id === 'new') return;
@@ -77,7 +82,7 @@ export default function CoachChat() {
         {loading && <ActivityIndicator color={C.brand} style={{ marginTop: 32 }} />}
         {!loading && !msgs.length && (
           <View style={{ gap: 10, marginTop: 24 }}>
-            <Text style={{ fontSize: 24, fontWeight: '800', color: C.ink }}>Mình giúp gì cho việc học của bạn?</Text>
+            <Text style={{ fontSize: 26, fontWeight: '800', letterSpacing: -0.8 }}>Mình giúp gì cho việc học của bạn?</Text>
             {SUGGESTIONS.map((s) => (
               <Pressable key={s} onPress={() => send(s)} style={({ pressed }) => ({ padding: 14, borderRadius: 16, borderWidth: 1, borderColor: C.line, backgroundColor: pressed ? C.wash : C.card })}>
                 <Text style={{ color: C.ink, fontSize: 15 }}>{s}</Text>
@@ -86,11 +91,17 @@ export default function CoachChat() {
           </View>
         )}
         {msgs.map((m, i) => m.role === 'user' ? (
-          <View key={i} style={{ alignSelf: 'flex-end', maxWidth: '85%', backgroundColor: C.brand, borderRadius: 20, borderBottomRightRadius: 6, paddingVertical: 10, paddingHorizontal: 14 }}>
-            <Text style={{ color: C.white, fontSize: 16, lineHeight: 22 }}>{m.content}</Text>
+          <View key={i} style={{ alignSelf: 'flex-end', maxWidth: '85%', backgroundColor: C.brandSoft, borderRadius: 22, borderBottomRightRadius: 6, paddingVertical: 10, paddingHorizontal: 16 }}>
+            <Text style={{ fontSize: 16, lineHeight: 22 }}>{m.content}</Text>
           </View>
         ) : (
           <View key={i} style={{ gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' }}>
+                <Ionicons name="sparkles" size={13} color={C.white} />
+              </View>
+              <Text style={{ fontWeight: '700', fontSize: 14 }}>Trợ lý</Text>
+            </View>
             {m.error ? <Text style={{ color: C.wrong }}>{m.content}</Text> : <Markdown text={m.content} />}
             {!!m.res?.actions?.length && (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -116,9 +127,9 @@ export default function CoachChat() {
           </View>
         )}
       </ScrollView>
-      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, padding: 12, borderTopWidth: 1, borderTopColor: C.line, backgroundColor: C.card }}>
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, margin: 12, marginTop: 4, padding: 6, paddingLeft: 4, borderRadius: 26, borderWidth: 1.5, borderColor: C.brandTint, backgroundColor: C.card }}>
         <TextInput value={text} onChangeText={setText} placeholder="Hỏi Trợ lý…" placeholderTextColor={C.muted} multiline
-          style={{ flex: 1, maxHeight: 120, fontSize: 16, color: C.ink, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 20, backgroundColor: C.wash }} />
+          style={{ flex: 1, maxHeight: 120, fontSize: 16, color: C.ink, paddingHorizontal: 14, paddingVertical: 10 }} />
         <Pressable onPress={() => send()} disabled={busy || !text.trim()} accessibilityLabel="Gửi"
           style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center', opacity: busy || !text.trim() ? 0.4 : 1 }}>
           <Ionicons name="arrow-up" size={22} color={C.white} />

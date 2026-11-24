@@ -1,7 +1,8 @@
 import { useEventListener } from 'expo';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FlatList, Linking, Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { FlatList, Linking, Modal, Pressable, ScrollView, View } from 'react-native';
+import { Text, TextInput } from '../Text';
 import { Button, Card, Muted, Pill, Row, st } from '../ui';
 import { api, ApiError, errorText, fmtTime, mediaUrl, type AnswerResult, type PublicQuestion, type TranscriptSegment } from '../../lib/api';
 import { C } from '../../lib/theme';

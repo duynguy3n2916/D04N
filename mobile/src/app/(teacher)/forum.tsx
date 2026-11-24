@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../../components/Text';
 import { ClassPicker } from '../../components/teacher/ClassPicker';
 import { Card, Empty, ErrorBox, Muted, Pill, Row, Screen, Spinner, Tag } from '../../components/ui';
 import { api, timeAgo, type ClassInfo } from '../../lib/api';

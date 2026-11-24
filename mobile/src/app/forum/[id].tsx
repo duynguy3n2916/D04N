@@ -1,7 +1,8 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'react-native';
+import { Text, TextInput } from '../../components/Text';
 import { useHeaderHeight } from 'expo-router/react-navigation';
 import { Avatar, Button, Card, ErrorBox, Muted, Row, Spinner, Tag } from '../../components/ui';
 import { api, errorText, timeAgo } from '../../lib/api';

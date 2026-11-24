@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Alert, Text, TextInput } from 'react-native';
+import { Alert } from 'react-native';
+import { Text, TextInput } from './Text';
 import { api, errorText, getServer, type ClassInfo, type User } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useAsync } from '../lib/hooks';

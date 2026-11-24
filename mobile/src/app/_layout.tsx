@@ -1,9 +1,10 @@
+import { BricolageGrotesque_400Regular, BricolageGrotesque_500Medium, BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold, useFonts } from '@expo-google-fonts/bricolage-grotesque';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ActivityIndicator, View } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, isTeacher, useAuth } from '../lib/auth';
-import { C } from '../lib/theme';
+import { C, F } from '../lib/theme';
 
 function RootStack() {
   const { user } = useAuth();
@@ -14,7 +15,7 @@ function RootStack() {
   return (
     <Stack screenOptions={{
       headerTintColor: C.brand, headerStyle: { backgroundColor: C.bg }, headerShadowVisible: false,
-      headerTitleStyle: { color: C.ink, fontWeight: '700' }, contentStyle: { backgroundColor: C.bg }, headerBackTitle: 'Quay lại',
+      headerTitleStyle: { color: C.ink, fontFamily: F[700], fontSize: 17 }, contentStyle: { backgroundColor: C.bg }, headerBackTitle: 'Quay lại',
     }}>
       <Stack.Protected guard={!user}>
         <Stack.Screen name="login" options={{ headerShown: false }} />
@@ -38,6 +39,11 @@ function RootStack() {
 }
 
 export default function RootLayout() {
+  // chữ Bricolage Grotesque giống bản web; chưa tải xong thì hiện vòng quay
+  const [fontsLoaded, fontError] = useFonts({ BricolageGrotesque_400Regular, BricolageGrotesque_500Medium, BricolageGrotesque_600SemiBold, BricolageGrotesque_700Bold, BricolageGrotesque_800ExtraBold });
+  if (!fontsLoaded && !fontError) {
+    return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: C.bg }}><ActivityIndicator color={C.brand} size="large" /></View>;
+  }
   return (
     <SafeAreaProvider>
       <AuthProvider>

@@ -1,5 +1,6 @@
 import { Fragment, type ReactElement } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from './Text';
 import { C } from '../lib/theme';
 
 // Trình hiển thị Markdown tối giản (tiêu đề, đoạn, danh sách, khối code, **đậm**, *nghiêng*, `code`).

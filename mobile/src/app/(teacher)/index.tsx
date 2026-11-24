@@ -1,8 +1,9 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../../components/Text';
 import { ClassPicker } from '../../components/teacher/ClassPicker';
-import { Avatar, Card, Empty, ErrorBox, Muted, Pill, Progress, Row, Screen, Spinner, Tag } from '../../components/ui';
+import { Avatar, Card, PageHead, Empty, ErrorBox, Muted, Pill, Progress, Row, Screen, Spinner, Tag } from '../../components/ui';
 import { api, type ClassInfo } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { C } from '../../lib/theme';
@@ -36,6 +37,7 @@ export default function ClassProgress() {
 
   return (
     <Screen onRefresh={() => { classes.reload(); data.reload(); }} refreshing={data.loading && !!data.data}>
+      <PageHead kicker="Lớp học" title="Tiến độ bài kiểm tra" />
       {classes.error && <ErrorBox message={classes.error} onRetry={classes.reload} />}
       <ClassPicker classes={classes.data || []} value={cid} onChange={setPicked} />
       {classes.data && !classes.data.length && <Empty title="Chưa có lớp nào">Tạo lớp và thêm học sinh trên bản web.</Empty>}
