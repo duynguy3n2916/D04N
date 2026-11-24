@@ -52,13 +52,15 @@ log = logging.getLogger("app")
 
 
 class FrontendFiles(StaticFiles):
-    """Phục vụ frontend/dist. index.html luôn hỏi lại server (không bao giờ hiện bản cũ sau khi build/pull);
-    file trong assets/ có mã băm trong tên nên cho trình duyệt cache lâu."""
+    """Phục vụ frontend/dist và tắt hẳn cache trình duyệt: mỗi lần mở trang luôn nhận bản build mới nhất.
+    Chạy trên máy (localhost) nên tải lại vài trăm KB mỗi lần không đáng kể; cache này không liên quan tốc độ khởi động server."""
 
-    def file_response(self, full_path, *args, **kwargs):
-        resp = super().file_response(full_path, *args, **kwargs)
-        hashed = Path(full_path).parent.name == "assets"
-        resp.headers["Cache-Control"] = "public, max-age=31536000, immutable" if hashed else "no-cache"
+    def file_response(self, *args, **kwargs):
+        resp = super().file_response(*args, **kwargs)
+        resp.headers["Cache-Control"] = "no-store"
+        for h in ("etag", "last-modified"):
+            if h in resp.headers:
+                del resp.headers[h]
         return resp
 
 RETENTION_INTERVAL_SECONDS = 6 * 3600  # dọn dữ liệu quá hạn lưu mỗi 6 giờ
@@ -161,7 +163,7 @@ if FRONTEND_DIST.joinpath("index.html").exists():
     def pdf_worker():
         """Worker của pdf.js (trình xem slide): luôn trả đúng kiểu JavaScript, kể cả trên Windows."""
         return FileResponse(FRONTEND_DIST / "pdf.worker.min.mjs", media_type="text/javascript",
-                            headers={"Cache-Control": "no-cache"})
+                            headers={"Cache-Control": "no-store"})
 
     app.mount("/app", FrontendFiles(directory=FRONTEND_DIST, html=True), name="frontend")
 

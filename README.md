@@ -136,7 +136,7 @@ cd ..
 ```
 
 `run.ps1` tự build lại giao diện nếu `frontend/src` mới hơn `frontend/dist` (cần Node.js), nên lúc nào cũng chạy bản mới
-nhất. Trình duyệt luôn hỏi lại `index.html` (không cache), còn file trong `assets/` có mã băm nên được cache lâu.
+nhất. Server tắt cache trình duyệt cho giao diện (`Cache-Control: no-store`), nên mở lại trang là thấy bản mới.
 
 Khi khởi động, app tự tạo extension `vector` và đồng bộ schema (xem `app/migrate.py`). Nếu schema không đổi so với lần trước
 (dấu vân tay lưu ở bảng `app_schema_state`), bước này chỉ tốn một truy vấn nên khởi động nhanh hơn nhiều với DB cloud.
