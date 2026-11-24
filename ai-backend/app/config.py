@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     # --- Guardrail / lưu trữ ---
     quiz_guard_minutes: int = 90  # bài kiểm tra đang làm dở trong khoảng này thì Tutor chỉ gợi ý, không nói đáp án
     redact_pii: bool = True  # che email / số điện thoại trong câu hỏi trước khi lưu và gửi LLM
+    coach_max_steps: int = 5  # Study Coach: số lượt gọi tool tối đa trong một câu hỏi
+    coach_history_turns: int = 4  # Study Coach: số lượt hỏi-đáp gần nhất gửi kèm
     chat_retention_days: int = 365  # xóa tin nhắn Tutor cũ hơn N ngày (0 = giữ mãi)
     llm_log_retention_days: int = 180  # xóa nhật ký ai_llm_calls cũ hơn N ngày (0 = giữ mãi)
 

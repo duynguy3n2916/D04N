@@ -23,6 +23,9 @@ thích đáp án; giáo viên dùng AI để soạn câu hỏi và quản lý l�
   câu hỏi trong video hoặc bài kiểm tra, Tutor chỉ gợi ý, không nói đáp án.
 - **Bài kiểm tra** cuối bài từ ngân hàng câu hỏi đã duyệt; có thể giới hạn thời gian (đếm ngược, tự nộp) và lịch mở / đóng.
   Câu hay làm sai được ưu tiên xuất hiện lại ở lượt sau (luyện tập thích ứng).
+- **Trợ lý học tập (Study Coach Agent):** học sinh hỏi kiểu “mai kiểm tra, mình nên ôn gì?”; agent tự gọi tool (xem tiến độ,
+  câu hay sai, thẻ đến hạn, tìm học liệu, bài luyện tập, đưa câu sai vào lịch ôn) rồi trả kế hoạch ôn kèm nguồn và nút mở đúng mục.
+  Giới hạn số bước, chỉ đọc dữ liệu của chính học sinh, không nêu đáp án và tạm dừng khi đang làm bài kiểm tra.
 - **Ôn thẻ ghi nhớ** theo lịch lặp lại ngắt quãng (SM-2): thẻ từ câu hỏi đã duyệt và thẻ AI soạn đã được giáo viên duyệt.
 - **Mạng xã hội học tập của lớp:** bảng tin câu hỏi / bài chia sẻ / thông báo của giáo viên, sắp xếp Mới nhất · Nổi bật ·
   Chưa có trả lời, tìm kiếm, lọc theo #thẻ hoặc theo bài học; thả tim bài và bình luận; bình luận lồng (trả lời một bình luận);
@@ -173,6 +176,7 @@ schema `public` của database test rồi tạo lại (không tạo hay xóa dat
 | `RAG_HYBRID`, `RAG_RERANK`, `RAG_QUERY_REWRITE` | bật tìm từ khóa + RRF (mặc định bật); rerank `none`/`cross_encoder`; ghép câu hỏi nối tiếp `history`/`none` |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`, `PUBLIC_APP_URL` | gửi email đặt lại mật khẩu (để trống `SMTP_HOST` = tắt) |
 | `QUIZ_GUARD_MINUTES` | bài kiểm tra làm dở trong khoảng này thì Tutor chỉ gợi ý, không nói đáp án (mặc định 90) |
+| `COACH_MAX_STEPS`, `COACH_HISTORY_TURNS` | số lượt gọi tool tối đa của Trợ lý học tập (mặc định 5); số lượt hội thoại gửi kèm (mặc định 4) |
 | `REDACT_PII` | che email / số điện thoại trong câu hỏi trước khi lưu và gửi LLM (mặc định bật) |
 | `CHAT_RETENTION_DAYS`, `LLM_LOG_RETENTION_DAYS` | thời hạn lưu tin nhắn Tutor / nhật ký gọi LLM, 0 = giữ mãi (mặc định 365 / 180) |
 

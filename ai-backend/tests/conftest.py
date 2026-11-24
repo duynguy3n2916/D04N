@@ -89,6 +89,7 @@ def fake_llm(monkeypatch):
         yield (in_tok, out_tok, model)
 
     monkeypatch.setattr(llm, "_stream_provider", fake_stream)
+    monkeypatch.setattr(llm, "_tools_provider", fake.tools)
     return fake
 
 

@@ -39,6 +39,25 @@ class FakeLLM:
             return (r if isinstance(r, str) else json.dumps(r, ensure_ascii=False)), 100, 50, "fake-model"
         return self.default(kind, user), 100, 50, "fake-model"
 
+    def tools(self, system, messages, tools, max_tokens, temperature):
+        """Thay llm._tools_provider. Override loại "coach": dict {"content", "tool_calls"} hoặc chuỗi (trả lời luôn)."""
+        user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+        self.calls.append({"kind": "coach", "user": user, "messages": list(messages), "tools": [t["name"] for t in tools]})
+        if self.overrides.get("coach"):
+            r = self.overrides["coach"].pop(0)
+            if isinstance(r, Exception):
+                raise r
+            msg = {"content": r, "tool_calls": []} if isinstance(r, str) else {"content": r.get("content"),
+                                                                                "tool_calls": r.get("tool_calls", [])}
+            return msg, 100, 50, "fake-model"
+        if tools and not any(m["role"] == "tool" for m in messages):
+            return {"content": None, "tool_calls": [
+                {"id": "call_1", "name": "get_progress", "arguments": "{}"},
+                {"id": "call_2", "name": "get_weak_points", "arguments": "{}"},
+            ]}, 100, 50, "fake-model"
+        return {"content": "Kế hoạch ôn: 1. Xem lại phần đóng gói [S1]. 2. Ôn thẻ đến hạn. 3. Làm lại bài kiểm tra.",
+                "tool_calls": []}, 100, 50, "fake-model"
+
     @staticmethod
     def mcq(q="Câu hỏi kiểm tra về đóng gói?", ans="B"):
         return {"type": "multiple_choice", "difficulty": "medium", "question": q,
