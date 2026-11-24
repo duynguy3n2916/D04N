@@ -91,7 +91,7 @@ function CoverPicker({ file, onChange }: { file: File | null; onChange: (f: File
 
 export function Courses() {
   const toast = useToast();
-  const list = useAsync((s) => api<CourseRow[]>('/ai/courses', { signal: s }), []);
+  const list = useAsync((s) => api<CourseRow[]>('/ai/courses', { signal: s }), [], 'teach/courses');
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ title: '', description: '', class_id: '' });
   const [cover, setCover] = useState<File | null>(null);
@@ -159,7 +159,7 @@ type Sel = { kind: 'course' } | { kind: 'chapter' | 'lesson' | 'item'; id: strin
 
 export function CourseEditor({ courseId }: { courseId: string }) {
   const toast = useToast();
-  const tree = useAsync((s) => api<AdminCourse>(`/ai/courses/${courseId}`, { signal: s }), [courseId]);
+  const tree = useAsync((s) => api<AdminCourse>(`/ai/courses/${courseId}`, { signal: s }), [courseId], `teach/course/${courseId}`);
   const [dlg, setDlg] = useState<Dialog | null>(null);
   const [addQuizLesson, setAddQuizLesson] = useState<string | null>(null);
   const [sel, setSel] = useState<Sel | null>(null);

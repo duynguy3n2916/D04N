@@ -54,7 +54,7 @@ export function QuestionBank() {
   const lessons = useLessonCodes();
 
   const bank = useAsync((s) => api<BankItem[]>(`/ai/teacher/question-bank?${new URLSearchParams({ ...(lesson && { lesson_id: lesson }), ...(status && { status }) })}`, { signal: s }), [lesson, status]);
-  const stats = useAsync((s) => api<Stats>('/ai/teacher/stats', { signal: s }), []);
+  const stats = useAsync((s) => api<Stats>('/ai/teacher/stats', { signal: s }), [], 'teach/qstats');
 
   useEffect(() => {
     const focusId = getUrlParams().get('focus');

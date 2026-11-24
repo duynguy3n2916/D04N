@@ -1,5 +1,6 @@
-// Màu chủ đạo của giao diện, cố định là Đỏ đô (DEFAULT_THEME). Mọi sắc độ khác (nền, viền, chữ nhấn...) được suy ra từ màu đó
-// và áp lên :root bằng biến CSS mà styles/theme.css dùng. Muốn đổi màu cả app: sửa DEFAULT_THEME.
+// Màu chủ đạo của giao diện: mặc định Đỏ đô (DEFAULT_THEME), người dùng đổi được trong Cài đặt (lưu ở trình duyệt).
+// Mọi sắc độ khác (nền, viền, chữ nhấn...) được suy ra từ màu đó và áp lên :root bằng biến CSS mà styles/theme.css dùng.
+import { storage } from './api';
 
 
 export type ThemePreset = { id: string; name: string; color: string };
@@ -69,4 +70,19 @@ export function applyTheme(color: string) {
   for (const [k, v] of Object.entries(themeVars(color))) root.style.setProperty(k, v);
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', themeVars(color)['--brand']);
+}
+
+const THEME_KEY = 'mam.theme';
+
+/** Màu người dùng đã chọn (hoặc mặc định). */
+export function savedTheme(): string {
+  const v = storage.get(THEME_KEY);
+  return v && isValidColor(v) ? v : DEFAULT_THEME;
+}
+
+/** Đổi màu chủ đạo ngay lập tức và nhớ lựa chọn. */
+export function setTheme(color: string) {
+  if (!isValidColor(color)) return;
+  storage.set(THEME_KEY, color.toUpperCase() === DEFAULT_THEME.toUpperCase() ? null : color);
+  applyTheme(color);
 }

@@ -20,7 +20,7 @@ const RATINGS: { key: string; label: string; hint: string; tone: string }[] = [
 /** Ôn thẻ ngắt quãng: lật thẻ, tự chấm mức nhớ, hệ thống tự lên lịch lần ôn tiếp theo. */
 export function Flashcards({ lessonCode }: { lessonCode: string }) {
   const toast = useToast();
-  const summary = useAsync((s) => api<Summary>(`/ai/learn/flashcards/${encodeURIComponent(lessonCode)}/summary`, { signal: s }), [lessonCode]);
+  const summary = useAsync((s) => api<Summary>(`/ai/learn/flashcards/${encodeURIComponent(lessonCode)}/summary`, { signal: s }), [lessonCode], `fc-summary/${lessonCode}`);
   const due = useAsync((s) => api<Due>(`/ai/learn/flashcards/${encodeURIComponent(lessonCode)}/due`, { signal: s }), [lessonCode]);
   const [queue, setQueue] = useState<Card[]>([]);
   const [flipped, setFlipped] = useState(false);

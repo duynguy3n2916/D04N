@@ -26,7 +26,7 @@ function groupOf(iso: string | null) {
 /** Hộp thông báo: được @nhắc tên, có người bình luận bài / trả lời bình luận của mình. */
 export function Inbox() {
   const toast = useToast();
-  const list = useAsync((s) => api<Noti[]>('/ai/notifications/inbox', { signal: s }), []);
+  const list = useAsync((s) => api<Noti[]>('/ai/notifications/inbox', { signal: s }), [], 'inbox');
   const markAll = async () => {
     try { await api('/ai/notifications/inbox/read', { json: {} }); list.reload(); refreshNotifications(); } catch (e) { toast(errorText(e), 'error'); }
   };

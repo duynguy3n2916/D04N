@@ -29,9 +29,9 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
   const path = useLocation();
   const query = useMemo(() => new URLSearchParams(path.split('?')[1] || ''), [path]);
   const toast = useToast();
-  const lesson = useAsync((s) => api<LessonView>(`/ai/learn/lessons/${lessonId}`, { signal: s }), [lessonId]);
+  const lesson = useAsync((s) => api<LessonView>(`/ai/learn/lessons/${lessonId}`, { signal: s }), [lessonId], `lesson/${lessonId}`);
   const activeId = itemId || lesson.data?.items.find((i) => i.status === 'current')?.item_id || lesson.data?.items[0]?.item_id;
-  const item = useAsync((s) => (activeId ? api<ItemDetail>(`/ai/learn/items/${activeId}`, { signal: s }) : Promise.resolve(null)), [activeId]);
+  const item = useAsync((s) => (activeId ? api<ItemDetail>(`/ai/learn/items/${activeId}`, { signal: s }) : Promise.resolve(null)), [activeId], `item/${activeId || ''}`);
   const [tutorOpen, setTutorOpen] = useState(() => storage.get('mam.tutorOpen') !== '0' && window.innerWidth > 900);
   const [ctx, setCtx] = useState<TutorContext>({ label: '' });
   const [quote, setQuote] = useState<string | null>(null);

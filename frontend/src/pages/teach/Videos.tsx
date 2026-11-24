@@ -27,7 +27,7 @@ interface CourseDestination extends CourseChoice {
 
 type VFilter = '' | 'no-sub' | 'draft' | 'no-file';
 export function Videos() {
-  const list = useAsync((s) => api<VideoRow[]>('/ai/media/videos', { signal: s }), []);
+  const list = useAsync((s) => api<VideoRow[]>('/ai/media/videos', { signal: s }), [], 'teach/videos');
   const [open, setOpen] = useState(false);
   const [dropped, setDropped] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);

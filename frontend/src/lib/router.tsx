@@ -1,5 +1,6 @@
 // Router dạng hash (#/duong-dan) — không cần cấu hình phía server, chạy được khi FastAPI phục vụ file tĩnh.
-import { useEffect, useState, type AnchorHTMLAttributes, type ReactNode } from 'react';
+import { useSyncExternalStore, type AnchorHTMLAttributes, type ReactNode } from 'react';
+import { flushSync } from 'react-dom';
 
 function current() { return window.location.hash.replace(/^#/, '') || '/'; }
 
@@ -10,14 +11,28 @@ export function navigate(path: string, replace = false) {
   if (replace) window.dispatchEvent(new HashChangeEvent('hashchange'));
 }
 
+// Một nguồn đường dẫn dùng chung cho cả app. Khi đổi trang, trình duyệt hỗ trợ View Transitions (Chrome, Edge...)
+// sẽ chụp trang cũ rồi chuyển mượt sang trang mới (hiệu ứng trong styles/polish.css); trình duyệt khác đổi ngay.
+let currentPath = current();
+const listeners = new Set<() => void>();
+
+function reducedMotion() {
+  return document.documentElement.classList.contains('reduce-fx') || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+
+window.addEventListener('hashchange', () => {
+  const next = current();
+  if (next === currentPath) return;
+  const apply = () => { currentPath = next; listeners.forEach((l) => l()); };
+  const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
+  if (doc.startViewTransition && !reducedMotion() && document.visibilityState === 'visible') doc.startViewTransition(() => flushSync(apply));
+  else apply();
+});
+
+function subscribe(l: () => void) { listeners.add(l); return () => { listeners.delete(l); }; }
+
 export function useLocation(): string {
-  const [path, setPath] = useState(current());
-  useEffect(() => {
-    const on = () => setPath(current());
-    window.addEventListener('hashchange', on);
-    return () => window.removeEventListener('hashchange', on);
-  }, []);
-  return path;
+  return useSyncExternalStore(subscribe, () => currentPath);
 }
 
 /** So khớp mẫu '/lesson/:lessonId/:itemId?' → params hoặc null. */

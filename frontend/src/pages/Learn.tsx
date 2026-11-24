@@ -68,7 +68,7 @@ function Ring({ value, size = 64, stroke = 7, label }: { value: number; size?: n
 }
 
 export function StatsAside({ stats, compact }: { stats: Stats | null; compact?: boolean }) {
-  const { data: board } = useAsync((s) => api<{ scope: string; rows: { rank: number; name: string; xp: number; me: boolean }[] }>('/ai/learn/leaderboard', { signal: s }), []);
+  const { data: board } = useAsync((s) => api<{ scope: string; rows: { rank: number; name: string; xp: number; me: boolean }[] }>('/ai/learn/leaderboard', { signal: s }), [], 'learn/leaderboard');
   const goal = stats?.daily_goal_xp || 50;
   const today = stats?.today_xp ?? 0;
   return (
@@ -262,10 +262,10 @@ function CourseCatalog({ courses }: { courses: CourseSummary[] }) {
 
 export function Learn({ path, courseId }: { path: string; courseId?: string }) {
   const { user } = useAuth();
-  const me = useAsync((s) => api<{ stats: Stats }>('/ai/learn/me', { signal: s }), [path]);
-  const courses = useAsync((s) => api<CourseSummary[]>('/ai/learn/courses', { signal: s }), [path]);
+  const me = useAsync((s) => api<{ stats: Stats }>('/ai/learn/me', { signal: s }), [path], 'learn/me');
+  const courses = useAsync((s) => api<CourseSummary[]>('/ai/learn/courses', { signal: s }), [path], 'learn/courses');
   const selected = courseId;
-  const tree = useAsync((s) => (selected ? api<CourseTree>(`/ai/learn/courses/${selected}`, { signal: s }) : Promise.resolve(null)), [selected, path]);
+  const tree = useAsync((s) => (selected ? api<CourseTree>(`/ai/learn/courses/${selected}`, { signal: s }) : Promise.resolve(null)), [selected, path], `learn/course/${selected || ''}`);
   const [filter, setFilter] = useState<Filter>('all');
 
   const progress = useMemo(() => tree.data ? tree.data.items_done / Math.max(1, tree.data.items_total) : 0, [tree.data]);

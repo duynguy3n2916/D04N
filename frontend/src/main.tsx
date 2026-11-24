@@ -3,13 +3,13 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { applyReduceFx, ConfirmProvider, ToastProvider } from './components/ui';
 import { AuthProvider } from './lib/auth';
-import { applyTheme, DEFAULT_THEME } from './lib/theme';
+import { applyTheme, savedTheme } from './lib/theme';
 import './styles/base.css';
 import './styles/theme.css';
 import './styles/polish.css';
 
 applyReduceFx();
-applyTheme(DEFAULT_THEME); // màu chủ đạo cố định: đỏ đô
+applyTheme(savedTheme()); // màu chủ đạo: đỏ đô mặc định, đổi được trong Cài đặt
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ToastProvider>

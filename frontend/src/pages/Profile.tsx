@@ -7,6 +7,8 @@ import { useAuth } from '../lib/auth';
 import { useAsync } from '../lib/hooks';
 import { navigate } from '../lib/router';
 import { AccountSection } from './Account';
+import { Icon } from '../components/Icon';
+import { savedTheme, setTheme, THEME_PRESETS } from '../lib/theme';
 
 const GOALS = [{ v: 10, t: 'Nhẹ nhàng' }, { v: 20, t: 'Vừa phải' }, { v: 30, t: 'Nghiêm túc' }, { v: 50, t: 'Chăm chỉ' }, { v: 100, t: 'Thử thách' }];
 const DOW = ['CN', 'T2', 'T3', 'T4', 'T5', 'T6', 'T7'];
@@ -40,7 +42,7 @@ function Heatmap({ days, goal }: { days: { date: string; xp: number }[]; goal: n
 export function Profile() {
   const { user } = useAuth();
   const toast = useToast();
-  const me = useAsync((s) => api<{ name: string; stats: Stats }>('/ai/learn/me', { signal: s }), []);
+  const me = useAsync((s) => api<{ name: string; stats: Stats }>('/ai/learn/me', { signal: s }), [], 'learn/me-profile');
   const [saving, setSaving] = useState<number | null>(null);
   const stats = me.data?.stats;
   const max = Math.max(10, ...(stats?.last_7_days.map((d) => d.xp) || [0]));
@@ -115,12 +117,42 @@ export function Profile() {
 }
 
 /** Trang Cài đặt: thông tin cá nhân, lớp học, mật khẩu, phiên đăng nhập. */
+function AppearanceSection() {
+  const [color, setColor] = useState(savedTheme);
+  const pick = (c: string) => { setColor(c); setTheme(c); };
+  const preset = THEME_PRESETS.find((t) => t.color.toLowerCase() === color.toLowerCase());
+  return (
+    <section className="card col theme-card" style={{ gap: 14 }} aria-label="Giao diện">
+      <div className="card-title" style={{ marginBottom: 0 }}><h2>Giao diện</h2><span className="muted small">{preset ? preset.name : 'Màu tự chọn'}</span></div>
+      <p className="muted small" style={{ margin: 0 }}>Chọn màu chủ đạo cho nút, menu và điểm nhấn. Lựa chọn được lưu trên trình duyệt này.</p>
+      <div className="theme-swatches" role="radiogroup" aria-label="Màu chủ đạo">
+        {THEME_PRESETS.map((t) => {
+          const on = t.color.toLowerCase() === color.toLowerCase();
+          return (
+            <button key={t.id} type="button" role="radio" aria-checked={on} className={`theme-swatch ${on ? 'on' : ''}`} onClick={() => pick(t.color)}>
+              <span className="theme-dot" style={{ background: t.color }}>{on && <Icon name="check" size={16} />}</span>
+              <span>{t.name}</span>
+            </button>
+          );
+        })}
+        <label className={`theme-swatch ${preset ? '' : 'on'}`}>
+          <span className="theme-dot theme-dot-custom" style={preset ? undefined : { background: color }}>
+            <input type="color" value={color} onChange={(e) => pick(e.target.value)} aria-label="Chọn màu khác" />
+            {!preset && <Icon name="check" size={16} />}
+          </span>
+          <span>Màu khác</span>
+        </label>
+      </div>
+    </section>
+  );
+}
+
 export function Settings() {
   return (
     <div className="settings-page">
       <PageHeader title="Cài đặt" sub="Thông tin cá nhân, lớp học và bảo mật tài khoản."
         actions={<Button variant="ghost" icon="user" onClick={() => navigate('/profile')}>Về hồ sơ</Button>} />
-      <div className="settings-body"><AccountSection /></div>
+      <div className="settings-body"><AppearanceSection /><AccountSection /></div>
     </div>
   );
 }

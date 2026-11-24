@@ -26,7 +26,7 @@ function fmtTime(iso: string | null) {
 /** Giáo viên: học viên trong lớp đã làm, chưa làm hoặc đạt bài kiểm tra nào. */
 export function Submissions() {
   const toast = useToast();
-  const classes = useAsync((s) => api<ClassInfo[]>('/ai/classes', { signal: s }), []);
+  const classes = useAsync((s) => api<ClassInfo[]>('/ai/classes', { signal: s }), [], 'classes');
   const [classId, setClassId] = useState('');
   const [status, setStatus] = useState<St>('');
   const [quiz, setQuiz] = useState('');

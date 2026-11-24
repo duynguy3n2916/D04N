@@ -27,7 +27,7 @@ export function Users() {
   const admin = user?.role === 'admin';
   const [tab, setTab] = useState<'users' | 'classes'>('users');
   const [classFilter, setClassFilter] = useState('');
-  const classes = useAsync((s) => api<ClassInfo[]>('/ai/classes', { signal: s }), []);
+  const classes = useAsync((s) => api<ClassInfo[]>('/ai/classes', { signal: s }), [], 'classes');
 
   const toast = useToast();
   const cur = classes.data?.find((c) => c.class_id === classFilter);
@@ -83,7 +83,7 @@ function UsersTab({ classes, classFilter }: { classes: ClassInfo[]; classFilter:
   const [role, setRole] = useState('');
   const [status, setStatus] = useState('');
   const params = new URLSearchParams({ ...(q.trim() && { q: q.trim() }), ...(role && { role }), ...(classFilter && { class_id: classFilter }), ...(status && { active: status }) });
-  const list = useAsync((s) => api<UserRow[]>(`/ai/users?${params}`, { signal: s }), [params.toString()]);
+  const list = useAsync((s) => api<UserRow[]>(`/ai/users?${params}`, { signal: s }), [params.toString()], `teach/users?${params}`);
   const [edit, setEdit] = useState<UserRow | 'new' | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [secret, setSecret] = useState<{ user: string; password: string; title: string } | null>(null);
