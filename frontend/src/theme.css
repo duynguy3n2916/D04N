@@ -745,6 +745,18 @@ i.ln-mid { background: var(--brand-line); }
 
 /* ===================== Trợ lý học tập (Study Coach) kiểu ChatGPT/Claude ===================== */
 .shell-main:has(> .cc) { padding: 0; }
+/* menu chính dạng dải icon ở trang Trợ lý */
+@media (min-width: 901px) {
+  .shell-compact .sidenav { flex: 0 0 76px; width: 76px; padding: 18px 10px; align-items: center; gap: 10px; }
+  .shell-compact .sidenav-logo { padding: 0 0 8px; }
+  .shell-compact .sidenav-logo .logo-text, .shell-compact .sidenav-logo span:not(:first-child) { display: none; }
+  .shell-compact .sidenav-title, .shell-compact .nav-item span:not(.nav-badge), .shell-compact .sidenav-user-text { display: none; }
+  .shell-compact .sidenav-group { align-items: center; width: 100%; }
+  .shell-compact .nav-item { position: relative; justify-content: center; width: 52px; min-height: 48px; padding: 0; gap: 0; }
+  .shell-compact .nav-badge { position: absolute; top: 4px; right: 4px; }
+  .shell-compact .sidenav-user { flex-direction: column; padding: 10px 0 0; gap: 8px; width: 100%; align-items: center; }
+  .shell-compact .sidenav-group + .sidenav-group { border-top: 1px solid var(--line); padding-top: 10px; }
+}
 .cc { display: flex; height: 100vh; min-height: 520px; position: relative; background: var(--paper); }
 .cc-side { flex: 0 0 272px; display: flex; flex-direction: column; gap: 10px; padding: 16px 12px; border-right: 1px solid var(--line);
   background: var(--t-wash); min-width: 0; transition: margin-left .22s var(--ease, ease), opacity .2s; }
