@@ -7,7 +7,7 @@ import { useAsync } from '../lib/hooks';
 import { navigate } from '../lib/router';
 
 interface Card { card_id: string; front: string; back: string; explanation: string; new: boolean }
-interface Summary { lesson_code: string; total: number; new: number; due: number; learned: number }
+interface Summary { lesson_code: string; lesson_title?: string | null; total: number; new: number; due: number; learned: number }
 interface Due { lesson_code: string; cards: Card[]; remaining: number }
 
 const RATINGS: { key: string; label: string; hint: string; tone: string }[] = [
@@ -60,7 +60,7 @@ export function Flashcards({ lessonCode }: { lessonCode: string }) {
   const total = done + queue.length;
   return (
     <div className="fc-page">
-      <PageHeader title="Ôn thẻ ghi nhớ" sub={`Bài ${lessonCode} · lật thẻ, tự chấm mức nhớ. Thẻ bạn quên sẽ quay lại sớm, thẻ nhớ tốt sẽ giãn ra.`}
+      <PageHeader title="Ôn thẻ ghi nhớ" sub={`${summary.data?.lesson_title || 'Bài học'} · lật thẻ, tự chấm mức nhớ. Thẻ bạn quên sẽ quay lại sớm, thẻ nhớ tốt sẽ giãn ra.`}
         actions={<Button variant="ghost" icon="chevronLeft" onClick={() => navigate('/learn')}>Về trang học</Button>} />
       {loading && <Spinner />}
       {error && <ErrorBox message={error} onRetry={() => { summary.reload(); due.reload(); }} />}
@@ -85,7 +85,7 @@ export function Flashcards({ lessonCode }: { lessonCode: string }) {
               <div className={`fc-stack ${queue.length > 1 ? 'fc-stack-more' : ''}`}>
                 <button type="button" className={`fc-card ${flipped ? 'fc-flipped' : ''}`} onClick={() => setFlipped(true)} disabled={flipped}
                   aria-label={flipped ? undefined : 'Lật thẻ'}>
-                  <span className="fc-kicker">{card.new ? 'Thẻ mới' : 'Ôn lại'} · {lessonCode}</span>
+                  <span className="fc-kicker">{card.new ? 'Thẻ mới' : 'Ôn lại'}{summary.data?.lesson_title ? ` · ${summary.data.lesson_title}` : ''}</span>
                   <span className="fc-front">{card.front}</span>
                   {flipped ? (
                     <span className="fc-back">

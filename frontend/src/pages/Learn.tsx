@@ -160,7 +160,6 @@ function CourseOutline({ tree, filter }: { tree: CourseTree; filter: Filter }) {
                 <Fragment key={ls.lesson_id}>
                   <button type="button" className={`ol ${isOpen ? 'ol-open' : ''}`} aria-expanded={isOpen} onClick={() => toggle(ls.lesson_id)}>
                     <span className="ol-caret" aria-hidden="true">{isOpen ? '▾' : '▸'}</span>
-                    <span className="ol-code">{ls.code}</span>
                     <span className="ol-title">{ls.title}</span>
                     <span className="ol-bar" aria-hidden="true"><i style={{ width: `${p * 100}%` }} /></span>
                     <span className="ol-count">{ls.items_done}/{ls.items_total}</span>

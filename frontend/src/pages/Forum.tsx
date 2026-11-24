@@ -149,8 +149,8 @@ function Feed({ classId, moderator }: { classId: string; moderator: boolean }) {
         {!!lessons.data?.length && <>
           <span className="oc-kicker">Bài học</span>
           {lessons.data.slice(0, 8).map((l) => (
-            <button key={l.code} className={`fl-item ${lesson === l.code ? 'on' : ''}`} aria-pressed={lesson === l.code} onClick={() => setLesson(lesson === l.code ? '' : l.code)}>
-              <span className="fl-code">{l.code}</span>{l.title}
+            <button key={l.code} className={`fl-item ${lesson === l.code ? 'on' : ''}`} title={l.title} aria-pressed={lesson === l.code} onClick={() => setLesson(lesson === l.code ? '' : l.code)}>
+              <span className="fl-text"><span className="fl-title">{l.title}</span>{l.course_title && <small className="fl-course">{l.course_title}</small>}</span>
             </button>
           ))}
         </>}

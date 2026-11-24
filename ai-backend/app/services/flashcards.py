@@ -104,7 +104,9 @@ def summary(db: Session, user: Principal, lesson_code: str) -> dict:
     now = utcnow()
     due = sum(1 for c in cards if c.id not in reviews or as_aware(reviews[c.id].due_at) <= now)
     new = sum(1 for c in cards if c.id not in reviews)
-    return {"lesson_code": lesson_code, "total": len(cards), "new": new, "due": due,
+    lesson = db.query(Lesson).filter(Lesson.code == lesson_code).first()
+    return {"lesson_code": lesson_code, "lesson_title": lesson.title if lesson else None,
+            "total": len(cards), "new": new, "due": due,
             "learned": sum(1 for c in cards if c.id in reviews and reviews[c.id].reps >= 2)}
 
 
