@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { storage } from '../lib/api';
 import { isTeacher, useAuth } from '../lib/auth';
 import { useNotifications } from '../lib/notifications';
-import { Link } from '../lib/router';
-import { useState } from 'react';
+import { Link, navigate } from '../lib/router';
+import { useEffect, useRef, useState } from 'react';
 import { Icon, type IconName } from './Icon';
 import { Logo } from './Logo';
 import { IconButton, setReduceFx } from './ui';
@@ -43,6 +43,8 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
   const [navPref, setNavPref] = useState(() => storage.get(NAV_KEY));
   const compact = navPref ? navPref === 'mini' : path.startsWith('/coach');
   const toggleNav = () => { const next = compact ? 'full' : 'mini'; storage.set(NAV_KEY, next); setNavPref(next); };
+  // số mục menu: CSS chia chiều cao màn hình cho đủ hiện hết, không phải cuộn
+  const navCount = STUDENT.length + (teacher ? TEACHER.filter((n) => !n.admin || user?.role === 'admin').length : 0);
   const badge: Record<string, number> = { '/forum': noti?.forum_new || 0, '/messages': noti?.dm_unread || 0, '/inbox': noti?.inbox_unread || 0 };
   const nav = (items: NavItem[]) => items
     .filter((n) => !n.admin || user?.role === 'admin')
@@ -56,7 +58,7 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
     ));
   return (
     <div className={`shell ${compact ? 'shell-compact' : ''}`}>
-      <nav className="sidenav" aria-label="Điều hướng chính">
+      <nav className="sidenav" aria-label="Điều hướng chính" style={{ '--nav-n': navCount } as CSSProperties}>
         <div className="sidenav-top">
           <Link to={teacher && !path.startsWith('/learn') && !path.startsWith('/profile') && !path.startsWith('/settings') ? '/teach/courses' : '/learn'} className="sidenav-logo" aria-label="Trang chủ"><Logo size={34} /></Link>
           <IconButton icon={compact ? 'chevronRight' : 'chevronLeft'} label={compact ? 'Mở rộng menu' : 'Thu gọn menu'} onClick={toggleNav} className="sidenav-toggle" />
@@ -71,19 +73,53 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
             {nav(TEACHER)}
           </div>
         )}
-        <div className="sidenav-user">
-          <span className="avatar" aria-hidden="true">{(user?.name || user?.user_id || '?').slice(0, 1).toUpperCase()}</span>
-          <span className="sidenav-user-text">
-            <strong>{user?.name || user?.user_id}</strong>
-            <span>{user?.role === 'student' ? 'Học sinh' : user?.role === 'teacher' ? 'Giáo viên' : 'Quản trị'}{user?.class_ids?.length ? ` · ${user.class_ids.join(', ')}` : ''}</span>
-          </span>
-          <Link to="/settings" className={`iconbtn ${path.startsWith('/settings') ? 'iconbtn-on' : ''}`} aria-label="Cài đặt" title="Cài đặt"><Icon name="settings" size={20} /></Link>
-          <IconButton icon="sparkle" label={reduceFx ? 'Bật hiệu ứng' : 'Giảm hiệu ứng'} active={reduceFx} onClick={toggleFx} />
-          <button className="iconbtn" onClick={() => logout()} aria-label="Đăng xuất" title="Đăng xuất"><Icon name="logout" size={20} /></button>
-        </div>
+        <UserMenu name={user?.name || user?.user_id || ''}
+          role={`${user?.role === 'student' ? 'Học sinh' : user?.role === 'teacher' ? 'Giáo viên' : 'Quản trị'}${user?.class_ids?.length ? ` · ${user.class_ids.join(', ')}` : ''}`}
+          compact={compact} settingsOn={path.startsWith('/settings')} reduceFx={reduceFx} onToggleFx={toggleFx} onLogout={() => logout()} />
       </nav>
       <main className="shell-main">{children}</main>
       {aside && <aside className="shell-aside">{aside}</aside>}
+    </div>
+  );
+}
+
+/** Góc dưới menu: chỉ hiện avatar + tên; bấm vào mới mở các nút Cài đặt / Hiệu ứng / Đăng xuất. */
+function UserMenu({ name, role, compact, settingsOn, reduceFx, onToggleFx, onLogout }: {
+  name: string; role: string; compact: boolean; settingsOn: boolean; reduceFx: boolean; onToggleFx: () => void; onLogout: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => { if (box.current && !box.current.contains(e.target as Node)) setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onDown); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+  const pick = (fn: () => void) => () => { setOpen(false); fn(); };
+  return (
+    <div className="sidenav-user" ref={box}>
+      <button type="button" className={`user-chip ${open ? 'on' : ''}`} onClick={() => setOpen(!open)} aria-haspopup="menu" aria-expanded={open}
+        title={compact ? name : undefined}>
+        <span className="avatar" aria-hidden="true">{(name || '?').slice(0, 1).toUpperCase()}</span>
+        <span className="sidenav-user-text"><strong>{name}</strong><span>{role}</span></span>
+        <Icon name="chevronDown" size={16} className="user-chip-caret" />
+      </button>
+      {open && (
+        <div className="user-menu" role="menu">
+          <div className="user-menu-head"><strong>{name}</strong><span>{role}</span></div>
+          <button type="button" role="menuitem" className={settingsOn ? 'on' : ''} onClick={pick(() => navigate('/settings'))}>
+            <Icon name="settings" size={18} /> Cài đặt
+          </button>
+          <button type="button" role="menuitem" onClick={pick(onToggleFx)}>
+            <Icon name="sparkle" size={18} /> {reduceFx ? 'Bật hiệu ứng' : 'Giảm hiệu ứng'}
+          </button>
+          <button type="button" role="menuitem" className="danger" onClick={pick(onLogout)}>
+            <Icon name="logout" size={18} /> Đăng xuất
+          </button>
+        </div>
+      )}
     </div>
   );
 }
