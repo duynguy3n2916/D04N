@@ -742,3 +742,59 @@ i.ln-mid { background: var(--brand-line); }
 .errorbox + .settings-layout, .errorbox + .split { margin-top: 14px; }
 .chip-x { border: 0; background: transparent; color: var(--t-muted); width: 22px; height: 22px; margin-left: 4px; border-radius: 999px; cursor: pointer; font-size: 15px; line-height: 1; display: inline-grid; place-items: center; }
 .chip-x:hover { background: var(--brand-soft); color: var(--brand); }
+
+/* ===================== Trang Học: danh mục khóa học dạng thẻ ===================== */
+.lc-count { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 99px; font-size: 12px; font-weight: 700;
+  background: rgba(0,0,0,.06); text-align: center; }
+.pill-on .lc-count { background: rgba(255,255,255,.18); }
+.lc-cover { position: relative; display: block; aspect-ratio: 16 / 9; width: 100%; overflow: hidden; background: var(--brand-soft); }
+.lc-cover img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .35s ease; }
+.lc-cover-blank { background:
+  radial-gradient(120% 90% at 100% 0%, rgba(255,255,255,.16), transparent 55%),
+  radial-gradient(80% 70% at 0% 100%, rgba(0,0,0,.22), transparent 60%),
+  linear-gradient(135deg, var(--brand), var(--brand-strong)); }
+.lc-cover-text { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: 6px; padding: 16px 18px;
+  color: rgba(255,255,255,.92); }
+.lc-cover-text b { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; }
+
+.lc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 18px; }
+.lc-card { position: relative; display: flex; flex-direction: column; background: #fff; border: 1px solid var(--line); border-radius: 22px; overflow: hidden;
+  text-decoration: none; color: var(--ink); transition: transform .18s ease, box-shadow .18s ease, border-color .18s; }
+.lc-card:hover { transform: translateY(-3px); box-shadow: 0 14px 34px rgba(60, 20, 30, .10); border-color: var(--brand-line); }
+.lc-card:hover .lc-cover img { transform: scale(1.04); }
+.lc-state { position: absolute; top: 12px; left: 12px; padding: 4px 10px; border-radius: 99px; font-size: 12px; font-weight: 700;
+  background: rgba(255,255,255,.94); color: var(--ink); box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+.lc-state-doing { color: var(--brand-strong); }
+.lc-state-done { color: var(--ok-text); }
+.lc-body { display: flex; flex-direction: column; gap: 6px; padding: 16px 18px 18px; flex: 1; }
+.lc-code { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--brand); }
+.lc-body h3 { font-size: 19px; line-height: 1.25; letter-spacing: -.02em; }
+.lc-desc { color: var(--muted); font-size: 14px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.lc-progress { display: flex; align-items: center; gap: 10px; margin-top: auto; padding-top: 8px; }
+.lc-bar { flex: 1; height: 7px; border-radius: 99px; background: var(--brand-soft); overflow: hidden; }
+.lc-bar i { display: block; height: 100%; border-radius: inherit; background: var(--brand); transition: width .5s ease; }
+.lc-cta { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; font-weight: 700; font-size: 14.5px; color: var(--brand-strong); }
+
+.lc-resume { display: grid; grid-template-columns: 220px 1fr auto; align-items: center; gap: 22px; padding: 14px 22px 14px 14px; text-decoration: none; color: var(--ink);
+  transition: box-shadow .18s, border-color .18s; }
+.lc-resume:hover { box-shadow: 0 12px 30px rgba(60, 20, 30, .09); }
+.lc-resume-cover { border-radius: 16px; }
+.lc-resume-body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.lc-resume-body h2 { font-size: 24px; letter-spacing: -.025em; }
+.lc-resume .lc-progress { padding-top: 4px; max-width: 420px; }
+
+.lc-back { display: inline-flex; align-items: center; gap: 4px; align-self: flex-start; font-weight: 700; font-size: 14px; color: var(--muted); text-decoration: none;
+  padding: 6px 10px 6px 6px; border-radius: 10px; }
+.lc-back:hover { background: var(--bg-soft); color: var(--ink); }
+.lc-detail-head { align-items: center; flex-wrap: nowrap; background: #fff; border: 1px solid var(--line); border-radius: 24px; padding: 14px 22px 14px 14px; }
+.lc-detail-head h1 { font-size: 30px; }
+.lc-detail-cover { width: 200px; flex: none; border-radius: 16px; }
+.lc-detail-desc { margin-top: 6px; max-width: 640px; line-height: 1.5; }
+
+@media (max-width: 900px) {
+  .lc-resume { grid-template-columns: 1fr; padding: 12px; gap: 12px; }
+  .lc-resume .btn { justify-self: start; }
+  .lc-detail-head { flex-wrap: wrap; padding: 12px; }
+  .lc-detail-cover { width: 100%; }
+  .lc-grid { grid-template-columns: 1fr; }
+}

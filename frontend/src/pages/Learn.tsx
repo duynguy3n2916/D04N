@@ -2,7 +2,7 @@ import { Fragment, useMemo, useState } from 'react';
 import { AppShell } from '../components/AppShell';
 import { Icon, type IconName } from '../components/Icon';
 import { Badge, Button, CountUp, Empty, ErrorBox, Spinner, useToast } from '../components/ui';
-import { api, apiBlob, errorText, type CourseSummary, type CourseTree, type ItemSummary, type Stats } from '../lib/api';
+import { api, apiBlob, errorText, mediaUrl, type CourseSummary, type CourseTree, type ItemSummary, type Stats } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useNotifications } from '../lib/notifications';
 import { useAsync } from '../lib/hooks';
@@ -179,11 +179,94 @@ function CourseOutline({ tree, filter }: { tree: CourseTree; filter: Filter }) {
   );
 }
 
+type CourseFilter = 'all' | 'doing' | 'new' | 'done';
+const courseState = (c: CourseSummary): Exclude<CourseFilter, 'all'> =>
+  c.items_total > 0 && c.items_done >= c.items_total ? 'done' : c.items_done > 0 ? 'doing' : 'new';
+const STATE_LABEL: Record<Exclude<CourseFilter, 'all'>, string> = { doing: 'Đang học', new: 'Chưa bắt đầu', done: 'Đã xong' };
+
+/** Ảnh bìa khóa học; chưa có ảnh thì hiện nền màu chủ đạo kèm mã khóa học. */
+export function CourseCoverArt({ course, className = '' }: { course: Pick<CourseSummary, 'cover_url' | 'title' | 'code'>; className?: string }) {
+  return (
+    <span className={`lc-cover ${course.cover_url ? '' : 'lc-cover-blank'} ${className}`}>
+      {course.cover_url
+        ? <img src={mediaUrl(course.cover_url)} alt="" loading="lazy" />
+        : <span className="lc-cover-text" aria-hidden="true"><Icon name="book" size={30} /><b>{course.code}</b></span>}
+    </span>
+  );
+}
+
+function CourseCard({ c }: { c: CourseSummary }) {
+  const st = courseState(c);
+  const p = c.items_done / Math.max(1, c.items_total);
+  return (
+    <Link to={`/learn/${c.course_id}`} className="lc-card">
+      <CourseCoverArt course={c} />
+      <span className={`lc-state lc-state-${st}`}>{STATE_LABEL[st]}</span>
+      <div className="lc-body">
+        <span className="lc-code">{c.code}</span>
+        <h3>{c.title}</h3>
+        {c.description && <p className="lc-desc">{c.description}</p>}
+        <div className="lc-progress">
+          <span className="lc-bar" aria-hidden="true"><i style={{ width: `${p * 100}%` }} /></span>
+          <span className="muted small">{c.items_done}/{c.items_total} mục</span>
+        </div>
+        <span className="lc-cta">{st === 'done' ? 'Ôn lại' : st === 'doing' ? 'Học tiếp' : 'Bắt đầu học'} <Icon name="chevronRight" size={16} /></span>
+      </div>
+    </Link>
+  );
+}
+
+/** Trang Học khi chưa chọn khóa: danh mục khóa học dạng thẻ có ảnh bìa, khóa đang học nổi bật ở đầu. */
+function CourseCatalog({ courses }: { courses: CourseSummary[] }) {
+  const { user } = useAuth();
+  const [filter, setFilter] = useState<CourseFilter>('all');
+  const resume = courses.find((c) => courseState(c) === 'doing');
+  const shown = courses.filter((c) => filter === 'all' || courseState(c) === filter);
+  const count = (f: CourseFilter) => f === 'all' ? courses.length : courses.filter((c) => courseState(c) === f).length;
+  const name = (user?.display_name || user?.name || '').trim().split(/\s+/).pop();
+  return (
+    <>
+      <header className="learn-head">
+        <div className="grow">
+          <span className="oc-kicker" style={{ color: 'var(--brand)' }}>Học</span>
+          <h1>{name ? `Chào ${name}, học gì hôm nay?` : 'Khóa học của bạn'}</h1>
+        </div>
+      </header>
+      {resume && (
+        <Link to={`/learn/${resume.course_id}`} className="lc-resume card">
+          <CourseCoverArt course={resume} className="lc-resume-cover" />
+          <div className="lc-resume-body">
+            <span className="oc-kicker">Đang học dở</span>
+            <h2>{resume.title}</h2>
+            <div className="lc-progress">
+              <span className="lc-bar" aria-hidden="true"><i style={{ width: `${(resume.items_done / Math.max(1, resume.items_total)) * 100}%` }} /></span>
+              <span className="muted small">{resume.items_done}/{resume.items_total} mục · {Math.round((resume.items_done / Math.max(1, resume.items_total)) * 100)}%</span>
+            </div>
+          </div>
+          <span className="btn btn-md btn-green"><Icon name="play" size={16} /> Học tiếp</span>
+        </Link>
+      )}
+      <div className="learn-toolbar">
+        <div className="row" role="group" aria-label="Lọc khóa học">
+          {([['all', 'Tất cả'], ['doing', 'Đang học'], ['new', 'Chưa bắt đầu'], ['done', 'Đã xong']] as [CourseFilter, string][]).map(([k, l]) => (
+            <button key={k} type="button" className={`pill ${filter === k ? 'pill-on' : ''}`} aria-pressed={filter === k} onClick={() => setFilter(k)}>
+              {l} <span className="lc-count">{count(k)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      {shown.length
+        ? <div className="lc-grid">{shown.map((c) => <CourseCard key={c.course_id} c={c} />)}</div>
+        : <p className="muted">Không có khóa học nào ở mục này.</p>}
+    </>
+  );
+}
+
 export function Learn({ path, courseId }: { path: string; courseId?: string }) {
   const { user } = useAuth();
   const me = useAsync((s) => api<{ stats: Stats }>('/ai/learn/me', { signal: s }), [path]);
   const courses = useAsync((s) => api<CourseSummary[]>('/ai/learn/courses', { signal: s }), [path]);
-  const selected = courseId || courses.data?.[0]?.course_id;
+  const selected = courseId;
   const tree = useAsync((s) => (selected ? api<CourseTree>(`/ai/learn/courses/${selected}`, { signal: s }) : Promise.resolve(null)), [selected, path]);
   const [filter, setFilter] = useState<Filter>('all');
 
@@ -193,18 +276,17 @@ export function Learn({ path, courseId }: { path: string; courseId?: string }) {
   return (
     <AppShell path={path} aside={<StatsAside stats={me.data?.stats ?? null} />}>
       <div className="learn-page">
-        {courses.data && courses.data.length > 1 && (
-          <div className="row">
-            {courses.data.map((c) => (
-              <button key={c.course_id} className={`pill ${c.course_id === selected ? 'pill-on' : ''}`} onClick={() => navigate(`/learn/${c.course_id}`)}>{c.title}</button>
-            ))}
-          </div>
+        {!selected && courses.data && courses.data.length > 0 && <CourseCatalog courses={courses.data} />}
+        {selected && (
+          <Link to="/learn" className="lc-back"><Icon name="chevronLeft" size={16} /> Tất cả khóa học</Link>
         )}
         {tree.data && (
-          <header className="learn-head">
+          <header className="learn-head lc-detail-head">
+            <CourseCoverArt course={tree.data} className="lc-detail-cover" />
             <div className="grow">
               <span className="oc-kicker" style={{ color: 'var(--brand)' }}>Khóa học · {tree.data.code}</span>
               <h1>{tree.data.title}</h1>
+              {tree.data.description && <p className="muted lc-detail-desc">{tree.data.description}</p>}
             </div>
             <div className="learn-head-stat">
               <div><strong>{tree.data.items_done}/{tree.data.items_total}</strong><span className="muted small">mục đã xong</span></div>
