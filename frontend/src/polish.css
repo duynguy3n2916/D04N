@@ -1,0 +1,49 @@
+/* ===================== Tinh chỉnh cho gọn mắt (nạp SAU theme.css) =====================
+   Mục tiêu: bớt mảng màu đậm và viền đen dày, tiêu đề vừa phải, một điểm nhấn mỗi màn hình. */
+
+/* Tiêu đề trang vừa phải, khoảng cách đều */
+.page-head { margin-bottom: 20px; align-items: center; }
+.page-head h1, .learn-head h1 { font-size: 30px; letter-spacing: -.03em; line-height: 1.15; }
+.page-head p { font-size: 15px; }
+.thread-page .page-head h1 { font-size: 28px; }
+
+/* Menu bên: mục đang chọn dùng nền đỏ nhạt thay vì khối đen */
+.nav-item { font-size: 15px; font-weight: 600; min-height: 42px; }
+.nav-on, .nav-on:hover { background: var(--brand-soft); border-color: transparent; color: var(--brand-strong); }
+.nav-on .nav-badge { background: var(--brand); color: #fff; }
+.sidenav-title { font-size: 11px; letter-spacing: .08em; color: var(--muted); opacity: .8; }
+
+/* Nút viền: viền mảnh màu xám thay vì viền đen 2px */
+.btn-ghost { background: #fff; color: var(--ink); border: 1px solid var(--line); }
+.btn-ghost:hover:not(:disabled) { background: var(--brand-soft); border-color: var(--brand-line); color: var(--brand-strong); }
+.course-banner .btn-ghost, .m-bulk .btn-ghost, .join-code .btn-ghost { background: transparent; }
+
+/* Nhóm lọc dạng viên: nhẹ, mục chọn nền mực */
+.pill { border: 1px solid var(--line); background: #fff; color: var(--muted); font-weight: 600; min-height: 36px; padding: 6px 14px; }
+.pill-on, .pill-on:hover { background: var(--ink); border-color: var(--ink); color: var(--paper); }
+
+/* Thẻ số liệu: không tô kín màu đỏ, chỉ số được nhấn màu */
+.kpi-brand { background: #fff; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--brand-tint); }
+.kpi-brand strong { color: var(--brand); }
+.kpi-brand .kpi-label, .kpi-brand .m-kpi-hint { color: var(--muted); }
+.kpi-row .kpi strong { font-size: 30px; }
+.forum-side-brand { background: #fff; color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--brand-tint); }
+.forum-side-brand .oc-kicker { color: var(--brand); }
+.forum-side-brand strong { color: var(--brand); }
+.forum-side-brand .linkbtn { color: var(--brand-strong); }
+
+/* Thẻ: viền mảnh để tách khỏi nền, bóng nhẹ hơn */
+.card { box-shadow: none; border: 1px solid var(--line); }
+.kpi { border: 1px solid var(--line); }
+.kpi-brand { border-color: transparent; }
+
+/* Nhắc nhở: bỏ nền vàng gắt */
+.notice { background: var(--t-wash); color: var(--ink); border: 1px solid var(--line); font-weight: 600 !important; font-size: 14px; }
+
+/* Cột phải trang Học: gọn lại */
+.shell-aside { gap: 14px; }
+.goal-card h2 { font-size: 17px; }
+.kpi strong { font-size: 26px; }
+
+/* Bảng: chữ thường đậm vừa */
+.table th, table th { font-weight: 600; color: var(--muted); }

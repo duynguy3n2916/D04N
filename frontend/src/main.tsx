@@ -6,6 +6,7 @@ import { AuthProvider } from './lib/auth';
 import { applyTheme, DEFAULT_THEME } from './lib/theme';
 import './styles.css';
 import './theme.css';
+import './polish.css';
 
 applyReduceFx();
 applyTheme(DEFAULT_THEME); // màu chủ đạo cố định: đỏ đô
