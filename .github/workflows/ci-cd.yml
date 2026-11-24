@@ -2,7 +2,7 @@ name: CI/CD
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]   # develop: chạy test để bắt lỗi trước khi gộp vào main (build/deploy chỉ chạy trên main)
   pull_request:
     branches: [main]
   workflow_dispatch:
@@ -11,7 +11,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: deploy-main
+  group: ci-${{ github.ref }}
   cancel-in-progress: false
 
 env:
