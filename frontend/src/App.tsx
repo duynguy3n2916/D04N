@@ -45,7 +45,7 @@ export function App() {
 
   let page: ReactElement;
   if ((m = match('/learn/:courseId?', path))) page = <Learn path={path} courseId={m.courseId} />;
-  else if (match('/coach', path)) page = <Coach />;
+  else if ((m = match('/coach/:conversationId?', path))) page = <Coach conversationId={m.conversationId} />;
   else if (match('/profile', path)) page = <Profile />;
   else if (match('/settings', path)) page = <Settings />;
   else if (match('/forum', path)) page = <Forum />;
