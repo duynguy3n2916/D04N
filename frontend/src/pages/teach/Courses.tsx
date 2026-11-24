@@ -645,7 +645,8 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
       )}
 
       {type === 'video' && (
-        <Field label="Video" hint="Tải video mới ở mục Video, rồi chọn ở đây. Câu hỏi giữa video quản lý theo video.">
+        <>
+        <Field label="Video" hint="Chọn video đã có, hoặc tải video mới ngay bên dưới. Câu hỏi giữa video quản lý theo video.">
           {videos.loading ? <Spinner /> : (
             <select value={videoId} onChange={(e) => setVideoId(e.target.value)}>
               <option value="">— Chọn video —</option>
@@ -657,6 +658,12 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
             </select>
           )}
         </Field>
+        <Field label="…hoặc tải video mới (MP4, WebM)">
+          <input ref={videoFileRef} type="file" accept="video/*" disabled={uploadingVideo}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadVideoInline(f); }} />
+        </Field>
+        {upload && <p className="small" style={{ fontWeight: 700 }} aria-live="polite">{upload}</p>}
+        </>
       )}
 
       {type === 'slide' && (
@@ -690,6 +697,10 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
             ? <div className="card" style={{ maxHeight: 420, overflow: 'auto' }}><Markdown source={content} /></div>
             : <textarea className="input" style={{ minHeight: 360, fontFamily: 'var(--mono)', fontSize: 14 }} value={content} onChange={(e) => setMd(e.target.value)}
                 placeholder={'# Tiêu đề\n\n## Mục 1\nNội dung…\n\n```java\nclass A {}\n```'} aria-label="Nội dung Markdown" />}
+          <Field label="…hoặc nhập nội dung từ file Markdown (.md)">
+            <input ref={mdFileRef} type="file" accept=".md,text/markdown" disabled={uploadingMd}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadMarkdownInline(f); }} />
+          </Field>
           <span className="field-hint">Khi lưu, bài đọc được nạp vào Knowledge Base để Tutor trả lời và trích nguồn.</span>
         </>
       )}
@@ -701,6 +712,10 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
             <Field label="Số câu mỗi lượt"><input type="number" min={1} max={20} value={count} onChange={(e) => setCount(Number(e.target.value))} /></Field>
             <Field label="Ngưỡng qua bài (%)"><input type="number" min={10} max={100} step={5} value={passPct} onChange={(e) => setPassPct(Number(e.target.value))} /></Field>
             <Field label="Giới hạn thời gian (phút)" hint="0 = không giới hạn. Hết giờ bài tự nộp."><input type="number" min={0} max={240} value={timeLimit} onChange={(e) => setTimeLimit(Number(e.target.value))} /></Field>
+          </div>
+          <div className="form-grid">
+            <Field label="Mở lúc" hint="Để trống = mở ngay."><input type="datetime-local" value={openAt} onChange={(e) => setOpenAt(e.target.value)} /></Field>
+            <Field label="Đóng lúc" hint="Để trống = không hạn chót."><input type="datetime-local" value={closeAt} onChange={(e) => setCloseAt(e.target.value)} /></Field>
           </div>
           <p className="muted small" style={{ fontWeight: 700 }}>
             Câu hỏi lấy ngẫu nhiên từ ngân hàng câu hỏi <b>đã duyệt</b> của bài {lesson.code}. Sinh và duyệt câu hỏi ở mục <Link to="/teach/questions">Câu hỏi</Link>.
