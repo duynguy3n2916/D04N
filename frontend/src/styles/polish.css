@@ -94,7 +94,7 @@
   .shell-compact .sidenav-user { padding: 10px 0 0; }
   .shell-compact .user-chip { justify-content: center; padding: 6px; width: auto; margin: 0 auto; }
   .shell-compact .user-chip-caret { display: none; }
-  .shell-compact .user-menu { left: calc(100% + 8px); right: auto; bottom: 0; width: 220px; }
+  .shell-compact .user-menu { position: fixed; left: 84px; right: auto; bottom: 12px; width: 220px; }
 }
 @media (max-width: 900px) {
   .sidenav-user { padding: 0; margin: 0 0 0 auto; }
@@ -121,3 +121,6 @@
   .sidenav-group .nav-item svg { width: 20px; height: 20px; }
   .sidenav-logo .logo-text { font-size: 28px; }
 }
+/* popup tài khoản phải nổi trên nội dung trang */
+.sidenav { position: sticky; z-index: 40; }
+@media (max-width: 900px) { .sidenav { position: relative; overflow: visible; } }
