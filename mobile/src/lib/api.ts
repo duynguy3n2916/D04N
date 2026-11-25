@@ -1,5 +1,8 @@
 // Lớp gọi API backend FastAPI (dùng chung backend với bản web).
-// Khác bản web: app không chạy cùng origin nên cần địa chỉ máy chủ (người dùng nhập ở màn đăng nhập, lưu trong SecureStore).
+// Khác bản web: app không chạy cùng origin nên cần địa chỉ máy chủ. Người dùng không phải nhập:
+// - EXPO_PUBLIC_API_URL hoặc expo.extra.apiUrl (bản build) nếu có;
+// - khi chạy thử bằng Expo, lấy IP máy tính đang chạy Expo và ghép cổng backend 8000.
+// Chỉ khi không tự tìm được (hoặc người dùng tự đổi) mới dùng địa chỉ lưu trong SecureStore.
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
 
@@ -13,10 +16,20 @@ export interface AuthResponse { access_token: string; user: User }
 
 const KEY_TOKEN = 'd04n.token';
 const KEY_USER = 'd04n.user';
-const KEY_SERVER = 'd04n.server';
+// Khoá mới: bỏ qua địa chỉ cũ người dùng từng gõ (có thể sai) ở khoá 'd04n.server'.
+const KEY_SERVER = 'd04n.server.custom';
+const BACKEND_PORT = 8000;
 
-/** Địa chỉ mặc định: biến EXPO_PUBLIC_API_URL, hoặc expo.extra.apiUrl trong app.json. */
-const DEFAULT_SERVER: string = process.env.EXPO_PUBLIC_API_URL || (Constants.expoConfig?.extra as any)?.apiUrl || '';
+/** Khi chạy thử bằng Expo: hostUri có dạng "172.20.10.4:8081" (máy đang chạy Metro), backend chạy cùng máy ở cổng 8000. */
+function devServer(): string {
+  const c = Constants as any;
+  const host: string | undefined = c.expoConfig?.hostUri || c.expoGoConfig?.debuggerHost || c.manifest2?.extra?.expoGo?.debuggerHost;
+  const name = host?.split(':')[0];
+  return name ? `http://${name}:${BACKEND_PORT}` : '';
+}
+
+/** Địa chỉ mặc định: EXPO_PUBLIC_API_URL, expo.extra.apiUrl trong app.json, hoặc máy đang chạy Expo. */
+const DEFAULT_SERVER: string = process.env.EXPO_PUBLIC_API_URL || (Constants.expoConfig?.extra as any)?.apiUrl || devServer();
 
 let token: string | null = null;
 let server = DEFAULT_SERVER;
@@ -36,12 +49,18 @@ export async function loadSession(): Promise<User | null> {
 }
 export function getToken() { return token; }
 export function getServer() { return server; }
+export function hasDefaultServer() { return !!DEFAULT_SERVER; }
 export function normalizeServer(raw: string) {
   let s = raw.trim().replace(/\/+$/, '');
   if (s && !/^https?:\/\//i.test(s)) s = 'http://' + s;
   return s;
 }
-export async function setServer(raw: string) { server = normalizeServer(raw); await writeKey(KEY_SERVER, server); }
+/** Người dùng tự đổi máy chủ. Để trống thì quay về địa chỉ tự tìm. */
+export async function setServer(raw: string) {
+  const s = normalizeServer(raw);
+  server = s || DEFAULT_SERVER;
+  await writeKey(KEY_SERVER, s && s !== DEFAULT_SERVER ? s : null);
+}
 export async function setSession(t: string | null, user: User | null) {
   token = t;
   await Promise.all([writeKey(KEY_TOKEN, t), writeKey(KEY_USER, user ? JSON.stringify(user) : null)]);
@@ -59,7 +78,7 @@ export class ApiError extends Error {
 type Opts = { method?: string; json?: unknown; signal?: AbortSignal; timeoutMs?: number };
 
 export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
-  if (!server) throw new ApiError(0, { detail: 'Chưa nhập địa chỉ máy chủ.' });
+  if (!server) throw new ApiError(0, { detail: 'Chưa có địa chỉ máy chủ.' });
   const headers: Record<string, string> = { Accept: 'application/json' };
   if (token) headers.Authorization = `Bearer ${token}`;
   let body: string | undefined;
@@ -73,7 +92,7 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
     res = await fetch(server + path, { method: opts.method || (body ? 'POST' : 'GET'), headers, body, signal: ctrl.signal });
   } catch (e: any) {
     if (opts.signal?.aborted) throw e;
-    throw new ApiError(0, { detail: `Không kết nối được máy chủ ${server}. Điện thoại và máy tính có chung Wi-Fi không? Backend đã chạy với --host 0.0.0.0 chưa?` });
+    throw new ApiError(0, { detail: `Không kết nối được máy chủ ${server}. Điện thoại và máy tính có chung Wi-Fi không? Backend đã chạy bằng scripts/run.ps1 -Lan chưa?` });
   } finally { clearTimeout(timer); }
   const data = res.status === 204 ? null : await res.json().catch(() => null);
   if (res.status === 401 && token && !path.startsWith('/ai/auth/login')) {

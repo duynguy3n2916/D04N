@@ -4,7 +4,7 @@ import { KeyboardAvoidingView, Platform, Pressable, ScrollView, View } from 'rea
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Text, TextInput } from '../components/Text';
 import { Button, Logo } from '../components/ui';
-import { api, errorText, getServer, setServer } from '../lib/api';
+import { ApiError, api, errorText, getServer, hasDefaultServer, setServer } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { C } from '../lib/theme';
 
@@ -16,7 +16,9 @@ const DARK_LINE = '#3D2B31';
 export default function Login() {
   const { login, notice } = useAuth();
   const [server, setServerText] = useState(getServer());
+  // Ô máy chủ ẩn khi app tự tìm được địa chỉ; chỉ hiện khi không tìm được, hoặc khi người dùng bấm "Đổi máy chủ" sau lỗi kết nối.
   const [showServer, setShowServer] = useState(!getServer());
+  const [offline, setOffline] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -37,8 +39,8 @@ export default function Login() {
   const submit = async () => {
     if (!username.trim() || !password) { setError('Nhập tên đăng nhập và mật khẩu.'); return; }
     setBusy(true); setError(null);
-    try { await setServer(server); await login(username.trim(), password); }
-    catch (e) { setError(errorText(e)); } finally { setBusy(false); }
+    try { if (showServer) await setServer(server); setOffline(false); await login(username.trim(), password); }
+    catch (e) { setOffline(e instanceof ApiError && e.status === 0); setError(errorText(e)); } finally { setBusy(false); }
   };
 
   const field = (name: string) => ({
@@ -84,13 +86,11 @@ export default function Login() {
                     <Ionicons name={checking ? 'hourglass-outline' : serverOk ? 'checkmark' : 'wifi'} size={20} color={C.white} />
                   </Pressable>
                 </View>
-                <Text style={{ color: '#8E7F83', fontSize: 12 }}>Chạy thử: IP Wi-Fi của máy tính đang chạy backend (cùng mạng với điện thoại).</Text>
+                <Text style={{ color: '#8E7F83', fontSize: 12 }}>
+                  IP Wi-Fi của máy tính đang chạy backend, vd. 192.168.1.10:8000.{hasDefaultServer() ? ' Để trống để tự tìm.' : ''}
+                </Text>
               </View>
-            ) : (
-              <Text onPress={() => setShowServer(true)} style={{ color: '#8E7F83', fontSize: 13 }}>
-                Máy chủ: {getServer()} · <Text style={{ color: C.brandMid, fontWeight: '700' }}>Đổi</Text>
-              </Text>
-            )}
+            ) : null}
 
             <View style={{ gap: 6 }}>
               <Text style={{ color: C.white, fontWeight: '700', fontSize: 14 }}>Tên đăng nhập hoặc email</Text>
@@ -109,7 +109,12 @@ export default function Login() {
             {error && (
               <View style={{ flexDirection: 'row', gap: 8, padding: 12, borderRadius: 14, backgroundColor: 'rgba(180,83,9,0.18)' }}>
                 <Ionicons name="alert-circle" size={18} color="#F0A35E" />
-                <Text style={{ color: '#F7D2B0', flex: 1, fontSize: 14 }}>{error}</Text>
+                <Text style={{ color: '#F7D2B0', flex: 1, fontSize: 14 }}>
+                  {error}
+                  {offline && !showServer ? (
+                    <Text onPress={() => { setServerText(getServer()); setShowServer(true); }} style={{ color: C.white, fontWeight: '700' }}> Đổi máy chủ</Text>
+                  ) : null}
+                </Text>
               </View>
             )}
             <Button title="Vào học" iconRight="arrow-forward" onPress={submit} busy={busy} style={{ marginTop: 6, paddingVertical: 16 }} />

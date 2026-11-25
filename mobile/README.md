@@ -25,7 +25,7 @@ Cần: Node.js 20+ trên máy tính, điện thoại cài app **Expo Go** (CH Pl
 ./scripts/run.sh --lan        # macOS / Linux
 ```
 
-Script in ra địa chỉ dạng `192.168.1.10:8000`. Đó là địa chỉ máy chủ sẽ nhập trên điện thoại.
+Backend phải chạy trên cùng máy với Expo: app tự tìm địa chỉ máy đó và gọi cổng 8000.
 Lần đầu Windows hỏi tường lửa cho Python: chọn **Cho phép** với mạng Private.
 
 **2. Chạy app:**
@@ -37,17 +37,18 @@ npm start
 ```
 
 Terminal hiện mã QR. Android: mở Expo Go → *Scan QR code*. iPhone: mở app Camera quét mã.
+Trên iPhone, Expo Go chỉ mở dự án khi máy tính đã chạy `npx expo login` và Expo Go đăng nhập cùng tài khoản.
 
-**3. Trên điện thoại:** nhập địa chỉ máy chủ ở bước 1 → *Kiểm tra kết nối* → đăng nhập bằng tài khoản demo
-(`sv-01` hoặc `gv-demo`, mật khẩu `Demo@2026` nếu đã chạy `init_db.py --seed`).
+**3. Trên điện thoại:** đăng nhập bằng tài khoản demo (`sv-01` hoặc `gv-demo`, mật khẩu `Demo@2026`
+nếu đã chạy `init_db.py --seed`). Không cần nhập địa chỉ máy chủ.
 
-Địa chỉ máy chủ được nhớ lại, lần sau không cần nhập. Muốn đổi thì bấm *Đổi* ở màn đăng nhập.
-Có thể đặt sẵn bằng biến môi trường: `EXPO_PUBLIC_API_URL=http://192.168.1.10:8000 npm start`.
+Nếu backend chạy ở máy khác: đặt `EXPO_PUBLIC_API_URL=http://192.168.1.10:8000 npm start`, hoặc khi gặp lỗi kết nối
+bấm *Đổi máy chủ* ở màn đăng nhập. Bản build (APK) dùng `expo.extra.apiUrl` trong `app.json` hoặc `EXPO_PUBLIC_API_URL` lúc build.
 
 ### Gặp lỗi
 
 - **"Không kết nối được máy chủ"**: kiểm tra cùng Wi-Fi, backend chạy với `-Lan`, tường lửa cho phép Python, mở thử `http://<IP>:8000/health` bằng trình duyệt điện thoại.
-- **Wi-Fi trường / quán cà phê chặn các máy nhìn thấy nhau**: dùng `npm run tunnel` cho app, và đưa backend lên một địa chỉ công khai (máy chủ đã deploy hoặc một tunnel như ngrok / Cloudflare Tunnel), rồi nhập địa chỉ `https://...` đó trên điện thoại.
+- **Wi-Fi trường / quán cà phê chặn các máy nhìn thấy nhau**: dùng `npm run tunnel` cho app, và đưa backend lên một địa chỉ công khai (máy chủ đã deploy hoặc một tunnel như ngrok / Cloudflare Tunnel), rồi đặt địa chỉ `https://...` đó qua `EXPO_PUBLIC_API_URL` (hoặc *Đổi máy chủ* trên điện thoại).
 - **Expo Go báo "SDK version not supported"**: cập nhật Expo Go lên bản mới nhất (app dùng SDK 58).
 
 ---
