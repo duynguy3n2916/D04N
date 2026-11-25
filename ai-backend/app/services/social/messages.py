@@ -54,7 +54,8 @@ def start(db: Session, user: Principal, other_id: str) -> dict:
     class_id = _shared_class(user, other)
     if class_id is None:
         raise AppError(403, "NOT_CLASSMATE", "Chỉ nhắn tin được với thành viên cùng lớp.")
-    if _blocked(db, user.user_id, other_id):
+    # người kia chặn mình thì không mở được; mình chặn người kia thì vẫn mở (để bấm "Bỏ chặn"), chỉ không gửi được tin
+    if db.query(DirectBlock.id).filter(DirectBlock.blocker_id == other_id, DirectBlock.blocked_id == user.user_id).first():
         raise AppError(403, "BLOCKED", "Không thể nhắn tin với người này.")
     a, b = sorted([user.user_id, other_id])
     c = db.query(DirectConversation).filter(DirectConversation.user_a == a, DirectConversation.user_b == b).first()

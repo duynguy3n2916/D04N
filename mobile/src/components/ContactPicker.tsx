@@ -65,16 +65,16 @@ export function ContactPicker({ replace, header }: { replace?: boolean; header?:
       {!!error && <ErrorBox message={error} />}
       <View style={{ backgroundColor: C.card, borderRadius: R.lg, borderWidth: 1, borderColor: C.cardLine, overflow: 'hidden' }}>
         {!shown.length ? <Muted style={{ padding: 16 }}>Không có ai khớp.</Muted> : shown.map((p, i) => (
-          <Pressable key={p.user_id} onPress={() => open(p)} disabled={!!opening || p.blocked}
+          <Pressable key={p.user_id} onPress={() => open(p)} disabled={!!opening}
             style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14,
-              borderTopWidth: i ? 1 : 0, borderTopColor: C.cardLine, backgroundColor: pressed ? C.wash : C.card, opacity: p.blocked ? 0.5 : 1 })}>
+              borderTopWidth: i ? 1 : 0, borderTopColor: C.cardLine, backgroundColor: pressed ? C.wash : C.card })}>
             <Avatar name={p.name} size={42} />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={{ fontSize: 16, fontWeight: '700' }} numberOfLines={1}>{p.name}</Text>
-              <Muted style={{ fontSize: 13 }} numberOfLines={1}>@{p.user_id}{classes.length > 1 ? ` · ${p.class_ids.join(', ')}` : ''}</Muted>
+              <Muted style={{ fontSize: 13 }} numberOfLines={1}>@{p.user_id}{classes.length > 1 ? ` · ${p.class_ids.join(', ')}` : ''}{p.blocked ? ' · Bạn đã chặn' : ''}</Muted>
             </View>
             {isTeacher(p) && <Tag label="Giáo viên" tone="brand" />}
-            {opening === p.user_id ? <ActivityIndicator color={C.brand} /> : <Ionicons name={p.blocked ? 'ban' : p.conversation_id ? 'chatbubble' : 'chatbubble-outline'} size={20} color={C.brand} />}
+            {opening === p.user_id ? <ActivityIndicator color={C.brand} /> : <Ionicons name={p.blocked ? 'ban' : p.conversation_id ? 'chatbubble' : 'chatbubble-outline'} size={20} color={p.blocked ? C.muted : C.brand} />}
           </Pressable>
         ))}
       </View>

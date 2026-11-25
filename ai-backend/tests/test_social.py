@@ -188,3 +188,20 @@ def test_message_contacts_by_class(client, teacher):
     people = {p["user_id"]: p for p in client.get("/ai/messages/contacts", headers=a).json()["people"]}
     assert people["ct-b"]["conversation_id"] == conv["conversation_id"]
     assert client.get("/ai/messages/contacts", headers=none).json() == {"classes": [], "people": []}
+
+
+def test_blocker_can_still_open_chat_to_unblock(client, teacher):
+    a = token(client, "bk-a", "student", ["lop-bk"])
+    b = token(client, "bk-b", "student", ["lop-bk"])
+    client.post("/ai/messages/blocks", headers=a, json={"user_id": "bk-b", "blocked": True})
+    people = {p["user_id"]: p for p in client.get("/ai/messages/contacts", headers=a).json()["people"]}
+    assert people["bk-b"]["blocked"] is True
+    # người chặn vẫn mở được hội thoại (để bỏ chặn) nhưng không gửi được tin
+    conv = client.post("/ai/messages/conversations", headers=a, json={"user_id": "bk-b"})
+    assert conv.status_code == 200
+    cid = conv.json()["conversation_id"]
+    assert client.post(f"/ai/messages/conversations/{cid}", headers=a, json={"body": "hi"}).status_code == 403
+    # người bị chặn thì không mở được hội thoại mới
+    assert client.post("/ai/messages/conversations", headers=b, json={"user_id": "bk-a"}).status_code in (200, 403)
+    client.post("/ai/messages/blocks", headers=a, json={"user_id": "bk-b", "blocked": False})
+    assert client.post(f"/ai/messages/conversations/{cid}", headers=a, json={"body": "hi"}).status_code == 201

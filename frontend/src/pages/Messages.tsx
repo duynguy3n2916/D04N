@@ -182,14 +182,14 @@ export function ContactPicker({ onPicked, compact }: { onPicked?: () => void; co
       </div>
       <div className="cp-list" role="list">
         {!shown.length ? <p className="muted small" style={{ padding: 8 }}>Không có ai khớp.</p> : shown.map((p) => (
-          <button key={p.user_id} role="listitem" type="button" className="cp-person" onClick={() => open(p)} disabled={opening === p.user_id || p.blocked}>
+          <button key={p.user_id} role="listitem" type="button" className="cp-person" onClick={() => open(p)} disabled={opening === p.user_id}>
             <Avatar name={p.name} id={p.user_id} size={40} />
             <span className="grow" style={{ minWidth: 0 }}>
               <strong className="dm-name">{p.name}</strong>
               <span className="cp-sub">@{p.user_id}<span className="cp-role-inline">{isTeacher(p) ? ' · Giáo viên' : ''}</span>{classes.length > 1 && ` · ${p.class_ids.join(', ')}`}</span>
             </span>
             {isTeacher(p) && <span className="cp-role"><Badge tone="blue">Giáo viên</Badge></span>}
-            <span className="cp-go">{p.blocked ? 'Đã chặn' : p.conversation_id ? 'Mở' : 'Nhắn'}</span>
+            <span className="cp-go">{p.blocked ? 'Đã chặn · Mở' : p.conversation_id ? 'Mở' : 'Nhắn'}</span>
           </button>
         ))}
       </div>
