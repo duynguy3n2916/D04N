@@ -167,3 +167,24 @@ def test_lesson_tags_on_posts(client):
     _post(client, a, "lop-sn4", title="Bài khác")
     feed = client.get(f"/ai/forum/classes/lop-sn4/threads?lesson_code={lesson['code']}", headers=a).json()
     assert [t["thread_id"] for t in feed] == [tid] and feed[0]["lesson_code"] == lesson["code"]
+
+
+def test_message_contacts_by_class(client, teacher):
+    a = token(client, "ct-a", "student", ["lop-ct1", "lop-ct2"])
+    token(client, "ct-b", "student", ["lop-ct1"])
+    token(client, "ct-gv", "teacher", ["lop-ct2"])
+    token(client, "ct-x", "student", ["lop-ct-khac"])
+    none = token(client, "ct-none", "student", [])
+
+    r = client.get("/ai/messages/contacts", headers=a).json()
+    assert [c["class_id"] for c in r["classes"]] == ["lop-ct1", "lop-ct2"]
+    people = {p["user_id"]: p for p in r["people"]}
+    assert set(people) == {"ct-b", "ct-gv"}  # không có chính mình, không có người khác lớp
+    assert people["ct-gv"]["role"] == "teacher" and people["ct-gv"]["class_ids"] == ["lop-ct2"]
+    assert {c["class_id"]: c["count"] for c in r["classes"]} == {"lop-ct1": 1, "lop-ct2": 1}
+    assert people["ct-b"]["conversation_id"] is None
+
+    conv = client.post("/ai/messages/conversations", headers=a, json={"user_id": "ct-b"}).json()
+    people = {p["user_id"]: p for p in client.get("/ai/messages/contacts", headers=a).json()["people"]}
+    assert people["ct-b"]["conversation_id"] == conv["conversation_id"]
+    assert client.get("/ai/messages/contacts", headers=none).json() == {"classes": [], "people": []}

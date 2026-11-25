@@ -2,12 +2,12 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useRef } from 'react';
 import { Pressable, View } from 'react-native';
-import { Text } from '../../components/Text';
-import { Button, Empty, ErrorBox, Muted, Screen, Spinner, type IconName } from '../../components/ui';
-import { api, timeAgo } from '../../lib/api';
-import { useAsync } from '../../lib/hooks';
-import { refreshNotifications } from '../../lib/notifications';
-import { C } from '../../lib/theme';
+import { Text } from '../components/Text';
+import { Button, Empty, ErrorBox, Muted, Screen, Spinner, type IconName } from '../components/ui';
+import { api, timeAgo } from '../lib/api';
+import { useAsync } from '../lib/hooks';
+import { refreshNotifications } from '../lib/notifications';
+import { C } from '../lib/theme';
 
 interface Noti { notification_id: string; kind: 'mention' | 'reply' | 'dm'; text: string; thread_id: string | null; read: boolean; created_at: string | null }
 const ICON: Record<Noti['kind'], IconName> = { mention: 'at', reply: 'return-down-forward', dm: 'chatbubble-outline' };

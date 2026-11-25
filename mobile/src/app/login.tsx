@@ -9,9 +9,9 @@ import { useAuth } from '../lib/auth';
 import { C } from '../lib/theme';
 
 // Màn đăng nhập theo bản web: phần trên nền kem với khẩu hiệu lớn, khung đăng nhập nền mực bo góc ở dưới.
-const DARK = '#1E1418';
-const DARK_FIELD = '#2A1D22';
-const DARK_LINE = '#3D2B31';
+const DARK = '#151A12';
+const DARK_FIELD = '#20271D';
+const DARK_LINE = '#333D2F';
 
 export default function Login() {
   const { login, notice } = useAuth();
@@ -47,17 +47,17 @@ export default function Login() {
     onFocus: () => setFocus(name), onBlur: () => setFocus(null),
     style: { backgroundColor: DARK_FIELD, borderWidth: 2, borderColor: focus === name ? C.brand : DARK_LINE, borderRadius: 16,
       paddingHorizontal: 16, paddingVertical: 14, fontSize: 16, fontWeight: '600' as const, color: C.white, flex: 1 },
-    placeholderTextColor: '#8E7F83',
+    placeholderTextColor: '#8A9285',
   });
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: C.bg }} edges={['top']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled" bounces={false}>
-          <View style={{ paddingHorizontal: 24, paddingTop: 16, paddingBottom: 28, gap: 22 }}>
+          <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: 24, gap: 16 }}>
             <Logo size={30} />
-            <Text style={{ fontSize: 46, fontWeight: '800', letterSpacing: -2.2, lineHeight: 46 }}>
-              Học cùng <Text style={{ color: C.brand, fontWeight: '800' }}>AI</Text>,{'\n'}mỗi ngày{'\n'}một chút.
+            <Text style={{ fontSize: 38, fontWeight: '800', letterSpacing: -1.6, lineHeight: 40 }}>
+              Học cùng <Text style={{ color: C.brand, fontWeight: '800' }}>AI</Text>,{'\n'}mỗi ngày một chút.
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {[['play', 'Video có câu hỏi'], ['sparkles', 'Trợ lý có nguồn'], ['layers', 'Thẻ ghi nhớ']].map(([icon, label]) => (
@@ -69,10 +69,10 @@ export default function Login() {
             </View>
           </View>
 
-          <View style={{ flexGrow: 1, backgroundColor: DARK, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40, gap: 14 }}>
+          <View style={{ flexGrow: 1, backgroundColor: DARK, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 32, gap: 14 }}>
             <View style={{ gap: 4, marginBottom: 4 }}>
-              <Text style={{ color: C.white, fontSize: 34, fontWeight: '800', letterSpacing: -1.2 }}>Đăng nhập</Text>
-              <Text style={{ color: '#A89A9E', fontSize: 15 }}>Dùng tài khoản học sinh hoặc giáo viên trường cấp cho bạn.</Text>
+              <Text style={{ color: C.white, fontSize: 30, fontWeight: '800', letterSpacing: -1 }}>Đăng nhập</Text>
+              <Text style={{ color: '#A3AB9E', fontSize: 15 }}>Dùng tài khoản học sinh hoặc giáo viên trường cấp cho bạn.</Text>
             </View>
 
             {showServer ? (
@@ -86,7 +86,7 @@ export default function Login() {
                     <Ionicons name={checking ? 'hourglass-outline' : serverOk ? 'checkmark' : 'wifi'} size={20} color={C.white} />
                   </Pressable>
                 </View>
-                <Text style={{ color: '#8E7F83', fontSize: 12 }}>
+                <Text style={{ color: '#8A9285', fontSize: 12 }}>
                   IP Wi-Fi của máy tính đang chạy backend, vd. 192.168.1.10:8000.{hasDefaultServer() ? ' Để trống để tự tìm.' : ''}
                 </Text>
               </View>
@@ -102,7 +102,7 @@ export default function Login() {
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <TextInput {...field('pw')} value={password} onChangeText={setPassword} secureTextEntry={!showPw}
                   textContentType="password" autoComplete="password" returnKeyType="go" onSubmitEditing={submit} />
-                <Text onPress={() => setShowPw((v) => !v)} style={{ position: 'absolute', right: 16, color: '#A89A9E', fontSize: 14 }}>{showPw ? 'Ẩn' : 'Hiện'}</Text>
+                <Text onPress={() => setShowPw((v) => !v)} style={{ position: 'absolute', right: 16, color: '#A3AB9E', fontSize: 14 }}>{showPw ? 'Ẩn' : 'Hiện'}</Text>
               </View>
             </View>
 
@@ -118,7 +118,7 @@ export default function Login() {
               </View>
             )}
             <Button title="Vào học" iconRight="arrow-forward" onPress={submit} busy={busy} style={{ marginTop: 6, paddingVertical: 16 }} />
-            <Text style={{ color: '#8E7F83', textAlign: 'center', fontSize: 13 }}>Quên mật khẩu hay tạo tài khoản: dùng bản web.</Text>
+            <Text style={{ color: '#8A9285', textAlign: 'center', fontSize: 13 }}>Quên mật khẩu hay tạo tài khoản: dùng bản web.</Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -4,7 +4,6 @@ import { useNotifications } from '../../lib/notifications';
 
 export default function StudentTabs() {
   const n = useNotifications();
-  const unread = (n?.inbox_unread || 0) + (n?.dm_unread || 0);
   return (
     <PasswordGate>
       <Tabs screenOptions={tabScreenOptions}>
@@ -12,8 +11,8 @@ export default function StudentTabs() {
         <Tabs.Screen name="review" options={{ title: 'Ôn thẻ', headerTitle: 'Ôn thẻ ghi nhớ', tabBarIcon: tabIcon('layers-outline', 'layers'),
           tabBarBadge: n?.flashcards_due ? n.flashcards_due : undefined }} />
         <Tabs.Screen name="coach" options={{ title: 'Trợ lý', headerTitle: 'Trợ lý học tập', tabBarIcon: tabIcon('sparkles-outline', 'sparkles') }} />
-        <Tabs.Screen name="inbox" options={{ title: 'Thông báo', tabBarIcon: tabIcon('notifications-outline', 'notifications'),
-          tabBarBadge: unread ? unread : undefined }} />
+        <Tabs.Screen name="messages" options={{ title: 'Tin nhắn', tabBarIcon: tabIcon('chatbubble-ellipses-outline', 'chatbubble-ellipses'),
+          tabBarBadge: n?.dm_unread ? n.dm_unread : undefined }} />
         <Tabs.Screen name="account" options={{ title: 'Tôi', headerTitle: 'Tài khoản', tabBarIcon: tabIcon('person-circle-outline', 'person-circle') }} />
       </Tabs>
     </PasswordGate>

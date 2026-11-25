@@ -164,7 +164,7 @@ export function VideoItem({ item, onCompleted, goNext }: ItemProps) {
       )}
 
       <Modal visible={!!popup} transparent animationType="slide" onRequestClose={() => { if (popup?.result) resume(); }}>
-        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(34,19,26,0.45)' }}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(25,29,19,0.45)' }}>
           <View style={{ backgroundColor: C.bg, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, gap: 12, maxHeight: '85%' }}>
             <ScrollView contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled">
               <Text style={{ color: C.brand, fontWeight: '800', fontSize: 12 }}>CÂU HỎI TẠI {fmtTime(popup?.question.timestamp)}</Text>

@@ -7,12 +7,13 @@ Quy tắc an toàn:
 - Tin nhắn cũ bị xóa theo CHAT_RETENTION_DAYS (xem services/retention.py).
 """
 from sqlalchemy import and_, func, or_
+from sqlalchemy.dialects.postgresql import array
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.core.security import Principal
 from app.core.utils import clean_id, utcnow
-from app.models.accounts import User
+from app.models.accounts import ClassRoom, User
 from app.models.social import DirectBlock, DirectConversation, DirectMessage, DirectRead, DirectReport
 
 MAX_BODY = 2000
@@ -63,6 +64,25 @@ def start(db: Session, user: Principal, other_id: str) -> dict:
         db.commit()
         db.refresh(c)
     return {"conversation_id": str(c.id), "other_id": other_id, "other_name": other.display_name or other_id}
+
+
+def contacts(db: Session, user: Principal) -> dict:
+    """Danh bạ để chọn người nhắn tin: các lớp của tôi (làm thẻ lọc) và mọi thành viên cùng lớp, kèm lớp chung."""
+    my_classes = [c for c in (user.class_ids or []) if c]
+    if not my_classes:
+        return {"classes": [], "people": []}
+    names = {c.class_id: c.name for c in db.query(ClassRoom).filter(ClassRoom.class_id.in_(my_classes)).all()}
+    rows = (db.query(User).filter(User.class_ids.has_any(array(my_classes)), User.is_active.is_(True), User.user_id != user.user_id)
+            .order_by(User.display_name, User.user_id).limit(1000).all())
+    blocked = {b for (b,) in db.query(DirectBlock.blocked_id).filter(DirectBlock.blocker_id == user.user_id).all()}
+    convs = {_other(c, user.user_id): str(c.id) for c in db.query(DirectConversation).filter(
+        or_(DirectConversation.user_a == user.user_id, DirectConversation.user_b == user.user_id)).all()}
+    people = [{"user_id": u.user_id, "name": u.display_name or u.user_id, "role": u.role,
+               "class_ids": [c for c in (u.class_ids or []) if c in my_classes],
+               "conversation_id": convs.get(u.user_id), "blocked": u.user_id in blocked} for u in rows]
+    counts = {c: sum(1 for p in people if c in p["class_ids"]) for c in my_classes}
+    return {"classes": [{"class_id": c, "name": names.get(c) or c, "count": counts[c]} for c in my_classes],
+            "people": people}
 
 
 def _unread(db: Session, c: DirectConversation, me: str) -> int:

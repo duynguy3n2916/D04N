@@ -9,7 +9,7 @@ import './styles/theme.css';
 import './styles/polish.css';
 
 applyReduceFx();
-applyTheme(savedTheme()); // màu chủ đạo: đỏ đô mặc định, đổi được trong Cài đặt
+applyTheme(savedTheme()); // màu chủ đạo: xanh mầm mặc định, đổi được trong Cài đặt
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ToastProvider>

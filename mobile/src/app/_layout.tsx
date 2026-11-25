@@ -33,6 +33,9 @@ function RootStack() {
       </Stack.Protected>
       <Stack.Protected guard={!!user}>
         <Stack.Screen name="forum/[id]" options={{ title: 'Thảo luận' }} />
+        <Stack.Screen name="dm/[id]" options={{ title: 'Tin nhắn' }} />
+        <Stack.Screen name="dm/new" options={{ title: 'Tin nhắn mới' }} />
+        <Stack.Screen name="notifications" options={{ title: 'Thông báo' }} />
       </Stack.Protected>
     </Stack>
   );

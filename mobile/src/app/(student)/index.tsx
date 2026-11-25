@@ -3,7 +3,8 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Text } from '../../components/Text';
-import { Button, Card, Cover, Empty, ErrorBox, PageHead, Pill, Progress, Ring, Row, Screen, Spinner, Stat } from '../../components/ui';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Card, Empty, ErrorBox, PageHead, Pill, Progress, Ring, Row, Screen, Spinner } from '../../components/ui';
 import { api, type CourseSummary, type Stats } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { useAsync } from '../../lib/hooks';
@@ -35,40 +36,48 @@ export default function Learn() {
 
   return (
     <Screen onRefresh={data.reload} refreshing={data.loading && !!data.data}>
-      <PageHead kicker="Học" title={`Chào ${first || 'bạn'}, học gì hôm nay?`} />
+      <PageHead kicker={`Chào ${first || 'bạn'} 👋`} title="Hôm nay học gì?" />
       {data.loading && !data.data && <Spinner />}
       {data.error && <ErrorBox message={data.error} onRetry={data.reload} />}
 
       {resume && (
-        <Card style={{ padding: 10 }} onPress={() => router.push(`/item/${resume.current_item_id}`)}>
-          <Cover title={resume.title} height={128} radius={18} />
-          <View style={{ padding: 6, gap: 8 }}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: C.muted, letterSpacing: 1 }}>ĐANG HỌC DỞ</Text>
-            <Text style={{ fontSize: 22, fontWeight: '800', letterSpacing: -0.6 }}>{resume.title}</Text>
+        <Pressable onPress={() => router.push(`/item/${resume.current_item_id}`)} style={({ pressed }) => ({ opacity: pressed ? 0.94 : 1 })}>
+          <LinearGradient colors={[C.brandLight, C.brand, C.brandStrong]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 24, padding: 18, gap: 12, overflow: 'hidden' }}>
+            <View style={{ position: 'absolute', top: -50, right: -40, width: 170, height: 170, borderRadius: 85, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+            <Text style={{ fontSize: 12, fontWeight: '800', color: 'rgba(255,255,255,0.8)', letterSpacing: 1.2 }}>ĐANG HỌC DỞ</Text>
+            <Text style={{ fontSize: 21, fontWeight: '800', letterSpacing: -0.5, color: C.white }} numberOfLines={2}>{resume.title}</Text>
             <Row>
-              <Progress value={resume.items_done / Math.max(1, resume.items_total)} style={{ flex: 1 }} />
-              <Text style={{ fontSize: 13, color: C.muted }}>{resume.items_done}/{resume.items_total} mục · {Math.round((resume.items_done / Math.max(1, resume.items_total)) * 100)}%</Text>
+              <Progress value={resume.items_done / Math.max(1, resume.items_total)} style={{ flex: 1 }} light />
+              <Text style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', fontWeight: '600' }}>{resume.items_done}/{resume.items_total} mục</Text>
             </Row>
-            <Button title="Học tiếp" icon="play" onPress={() => router.push(`/item/${resume.current_item_id}`)} style={{ alignSelf: 'flex-start', marginTop: 2 }} />
-          </View>
-        </Card>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: C.white, borderRadius: 999, paddingVertical: 12 }}>
+              <Ionicons name="play" size={16} color={C.brand} />
+              <Text style={{ color: C.brand, fontWeight: '800', fontSize: 16 }}>Học tiếp</Text>
+            </View>
+          </LinearGradient>
+        </Pressable>
       )}
 
       {s && (
-        <>
-          <Row style={{ gap: 10 }}>
-            <Stat icon="star" label="Chuỗi" value={`${s.streak_days} ngày`} brand />
-            <Stat icon="sparkles" label="Tổng XP" value={s.total_xp.toLocaleString('vi-VN')} />
-          </Row>
-          <Card style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-            <Ring value={goal} />
-            <View style={{ flex: 1, gap: 2 }}>
-              <Text style={{ fontSize: 17, fontWeight: '700' }}>Mục tiêu hôm nay</Text>
-              <Text style={{ color: C.muted }}>{s.today_xp} / {s.daily_goal_xp} XP{goal < 1 ? ` · còn ${s.daily_goal_xp - s.today_xp} XP` : ' · đã đạt'}</Text>
-              <Text style={{ color: C.muted, fontSize: 13 }}>Tuần này {s.week_xp} XP</Text>
+        <Card style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 14, gap: 0 }}>
+          <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+            <Row style={{ gap: 4 }}><Ionicons name="flame" size={14} color={C.brand} /><Text style={{ fontSize: 12, color: C.muted, fontWeight: '600' }}>Chuỗi</Text></Row>
+            <Text style={{ fontSize: 20, fontWeight: '800', color: C.brand, letterSpacing: -0.5 }}>{s.streak_days} ngày</Text>
+          </View>
+          <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: C.cardLine }} />
+          <View style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+            <Row style={{ gap: 4 }}><Ionicons name="sparkles" size={14} color={C.muted} /><Text style={{ fontSize: 12, color: C.muted, fontWeight: '600' }}>Tổng XP</Text></Row>
+            <Text style={{ fontSize: 20, fontWeight: '800', letterSpacing: -0.5 }}>{s.total_xp.toLocaleString('vi-VN')}</Text>
+          </View>
+          <View style={{ width: 1, alignSelf: 'stretch', backgroundColor: C.cardLine }} />
+          <View style={{ flex: 1.2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <Ring value={goal} size={44} stroke={6} label={`${Math.round(Math.min(1, goal) * 100)}%`} />
+            <View>
+              <Text style={{ fontSize: 12, color: C.muted, fontWeight: '600' }}>Hôm nay</Text>
+              <Text style={{ fontSize: 14, fontWeight: '800' }}>{s.today_xp}/{s.daily_goal_xp} XP</Text>
             </View>
-          </Card>
-        </>
+          </View>
+        </Card>
       )}
 
       {!!noti?.flashcards?.length && (
@@ -94,20 +103,20 @@ export default function Learn() {
         const st = state(c);
         return (
           <Pressable key={c.course_id} onPress={() => router.push(`/course/${c.course_id}`)}
-            style={({ pressed }) => [{ backgroundColor: C.card, borderRadius: 24, borderWidth: 1, borderColor: C.cardLine, overflow: 'hidden' }, pressed && { opacity: 0.92 }]}>
-            <Cover title={c.title} radius={0} chip={st === 'done' ? 'Đã xong' : st === 'doing' ? 'Đang học' : 'Mới'} />
-            <View style={{ padding: 16, gap: 8 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', letterSpacing: -0.3 }}>{c.title}</Text>
-              {!!c.description && <Text style={{ color: C.muted, fontSize: 14, lineHeight: 20 }} numberOfLines={2}>{c.description}</Text>}
+            style={({ pressed }) => [{ flexDirection: 'row', gap: 14, alignItems: 'center', backgroundColor: C.card, borderRadius: 22, borderWidth: 1, borderColor: C.cardLine, padding: 10 }, pressed && { opacity: 0.92 }]}>
+            <LinearGradient colors={[C.brandLight, C.brand, C.brandStrong]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+              style={{ width: 76, height: 76, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
+              <Ionicons name={st === 'done' ? 'checkmark-done' : 'book-outline'} size={26} color={C.white} />
+            </LinearGradient>
+            <View style={{ flex: 1, minWidth: 0, gap: 6, paddingRight: 4 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', letterSpacing: -0.2 }} numberOfLines={2}>{c.title}</Text>
               <Row>
                 <Progress value={c.items_done / Math.max(1, c.items_total)} style={{ flex: 1 }} />
-                <Text style={{ fontSize: 13, color: C.muted }}>{c.items_done}/{c.items_total} mục</Text>
+                <Text style={{ fontSize: 12, color: C.muted }}>{c.items_done}/{c.items_total}</Text>
               </Row>
-              <Row style={{ gap: 2 }}>
-                <Text style={{ fontWeight: '700', color: C.brand }}>{st === 'new' ? 'Bắt đầu học' : st === 'done' ? 'Xem lại' : 'Học tiếp'}</Text>
-                <Ionicons name="chevron-forward" size={16} color={C.brand} />
-              </Row>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: st === 'new' ? C.brand : C.muted }}>{st === 'new' ? 'Mới · Bắt đầu học' : st === 'done' ? 'Đã xong · Xem lại' : 'Đang học · Học tiếp'}</Text>
             </View>
+            <Ionicons name="chevron-forward" size={18} color={C.muted} />
           </Pressable>
         );
       })}

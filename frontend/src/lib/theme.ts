@@ -1,4 +1,4 @@
-// Màu chủ đạo của giao diện: mặc định Đỏ đô (DEFAULT_THEME), người dùng đổi được trong Cài đặt (lưu ở trình duyệt).
+// Màu chủ đạo của giao diện: mặc định Xanh mầm (DEFAULT_THEME), người dùng đổi được trong Cài đặt (lưu ở trình duyệt).
 // Mọi sắc độ khác (nền, viền, chữ nhấn...) được suy ra từ màu đó và áp lên :root bằng biến CSS mà styles/theme.css dùng.
 import { storage } from './api';
 
@@ -6,9 +6,9 @@ import { storage } from './api';
 export type ThemePreset = { id: string; name: string; color: string };
 
 export const THEME_PRESETS: ThemePreset[] = [
+  { id: 'xanh-mam', name: 'Xanh mầm', color: '#2B8A3E' },
   { id: 'do-do', name: 'Đỏ đô', color: '#8B1E2D' },
   { id: 'cam-dat', name: 'Cam đất', color: '#C2410C' },
-  { id: 'xanh-mam', name: 'Xanh mầm', color: '#2B8A3E' },
   { id: 'xanh-ngoc', name: 'Xanh ngọc', color: '#0B7285' },
   { id: 'xanh-duong', name: 'Xanh dương', color: '#3B5BDB' },
   { id: 'tim', name: 'Tím', color: '#6741D9' },

@@ -1,10 +1,10 @@
 /* ===================== Giao diện mới (bản 5): nền sáng, chữ Bricolage Grotesque, một màu chủ đạo do người dùng chọn =====================
    File này nạp SAU styles.css và ghi đè token + kiểu thành phần. Màu chủ đạo (--brand...) do lib/theme.ts đặt lên :root;
-   giá trị dưới đây là mặc định (Đỏ đô) khi JS chưa chạy. */
+   giá trị dưới đây là mặc định (Xanh mầm) khi JS chưa chạy. */
 :root {
-  --brand: #8B1E2D; --brand-hover: #7D1B29; --brand-strong: #6C1723; --brand-mid: #B6707A; --brand-line: #D5A0A7;
-  --brand-tint: #EBCFD3; --brand-soft: #F5E6E8;
-  --t-bg: #FCF8F8; --t-wash: #FAF4F4; --t-ink: #22131A; --t-muted: #6A5A5C; --t-line: #E6DDDD;
+  --brand: #287F39; --brand-hover: #247233; --brand-strong: #1F632C; --brand-mid: #73AC7E; --brand-line: #ADCEB4;
+  --brand-tint: #D8E8DB; --brand-soft: #ECF3ED;
+  --t-bg: #F7FBF8; --t-wash: #F2F7F3; --t-ink: #191D13; --t-muted: #62655B; --t-line: #D8DAD2;
   /* đúng/sai giữ màu riêng, không đổi theo màu chủ đạo */
   --ok: #2F9E44; --ok-dark: #237A33; --ok-soft: #E6F6EA; --ok-line: #9BD8A8; --ok-text: #1F7A33;
 
@@ -821,8 +821,8 @@ i.ln-mid { background: var(--brand-line); }
 
 .cc-bottom { width: min(780px, 100%); margin: 0 auto; padding: 0 24px 14px; }
 .cc-composer { position: relative; display: flex; align-items: flex-end; gap: 8px; background: #fff; border: 1px solid var(--line); border-radius: 26px;
-  padding: 8px 8px 8px 20px; box-shadow: 0 6px 24px rgba(60, 20, 30, .07); transition: border-color .15s, box-shadow .15s; }
-.cc-composer:focus-within { border-color: var(--brand-line); box-shadow: 0 6px 28px rgba(139, 30, 45, .12); }
+  padding: 8px 8px 8px 20px; box-shadow: 0 6px 24px rgba(20, 20, 20, .07); transition: border-color .15s, box-shadow .15s; }
+.cc-composer:focus-within { border-color: var(--brand-line); box-shadow: 0 6px 28px color-mix(in srgb, var(--brand) 12%, transparent); }
 .cc-composer textarea { flex: 1; min-width: 0; border: 0; outline: none; resize: none; background: transparent; font: inherit; font-size: 16px;
   line-height: 1.5; padding: 8px 0; max-height: 200px; color: var(--ink); }
 .cc-send { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--brand); color: #fff;

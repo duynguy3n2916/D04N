@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { PageHeader } from '../components/AppShell';
 import { Icon } from '../components/Icon';
-import { Avatar, timeAgo, useMembers } from '../components/Social';
+import { Avatar, timeAgo } from '../components/Social';
 import { Badge, Button, confirmDialog, Empty, ErrorBox, Modal, Spinner, useToast } from '../components/ui';
 import { api, errorText } from '../lib/api';
-import { useAuth } from '../lib/auth';
 import { useAsync, useInterval } from '../lib/hooks';
 import { refreshNotifications } from '../lib/notifications';
 import { navigate } from '../lib/router';
@@ -23,10 +22,10 @@ export function Messages({ conversationId }: { conversationId?: string }) {
     <>
       <PageHeader title="Tin nhắn" sub="Nhắn riêng với bạn cùng lớp. Hãy lịch sự; tin nhắn bị báo cáo sẽ được giáo viên xem xét."
         actions={<Button size="sm" icon="plus" onClick={() => setPicking(true)}>Tin nhắn mới</Button>} />
-      <div className={`dm-layout ${conversationId ? 'dm-has-open' : ''}`}>
+      <div className={`dm-layout ${conversationId ? 'dm-has-open' : ''} ${!conversationId && list.data && !list.data.length ? 'dm-none' : ''}`}>
         <aside className="card dm-list" aria-label="Cuộc trò chuyện">
           {list.loading && !list.data ? <Spinner /> : list.error ? <ErrorBox message={list.error} onRetry={list.reload} /> : !list.data?.length ? (
-            <div className="muted small" style={{ padding: 8 }}>Chưa có cuộc trò chuyện nào. Bấm “Tin nhắn mới” để bắt đầu.</div>
+            <div className="muted small" style={{ padding: 8 }}>Chưa có cuộc trò chuyện nào. Chọn một người trong lớp để bắt đầu.</div>
           ) : list.data.map((c) => (
             <button key={c.conversation_id} className={`dm-item ${c.conversation_id === conversationId ? 'on' : ''}`} onClick={() => navigate(`/messages/${c.conversation_id}`)}>
               <Avatar name={c.other_name} id={c.other_id} size={40} />
@@ -44,7 +43,7 @@ export function Messages({ conversationId }: { conversationId?: string }) {
         </aside>
         <section className="card dm-chat">
           {conversationId ? <Chat key={conversationId} conversationId={conversationId} onChange={list.reload} />
-            : <Empty title="Chọn một cuộc trò chuyện">Hoặc bấm “Tin nhắn mới” để nhắn cho bạn cùng lớp.</Empty>}
+            : <div className="dm-start"><h2 className="dm-start-title">Bắt đầu trò chuyện</h2><p className="muted small">Chọn lớp, giáo viên hay học sinh, rồi bấm vào tên.</p><ContactPicker /></div>}
         </section>
       </div>
       {picking && <MemberPicker onClose={() => setPicking(false)} />}
@@ -128,35 +127,80 @@ function Chat({ conversationId, onChange }: { conversationId: string; onChange: 
   );
 }
 
-function MemberPicker({ onClose }: { onClose: () => void }) {
-  const { user } = useAuth();
+interface Contact { user_id: string; name: string; role: string; class_ids: string[]; conversation_id: string | null; blocked: boolean }
+interface Contacts { classes: { class_id: string; name: string; count: number }[]; people: Contact[] }
+type RoleTag = 'all' | 'teacher' | 'student';
+const isTeacher = (c: Contact) => c.role === 'teacher' || c.role === 'admin';
+
+/** Chọn người để nhắn: bấm thẻ lớp, thẻ vai trò, rồi gõ hoặc bấm vào tên. Dùng trong hộp "Tin nhắn mới" và ở khung trống bên phải. */
+export function ContactPicker({ onPicked, compact }: { onPicked?: () => void; compact?: boolean }) {
   const toast = useToast();
-  const me = useAsync((s) => api<{ classes?: { class_id: string; name: string }[] }>('/ai/auth/me', { signal: s }), []);
-  const classes = me.data?.classes?.length ? me.data.classes : (user?.class_ids || []).map((id) => ({ class_id: id, name: '' }));
-  const [classId, setClassId] = useState('');
-  const cid = classId || classes[0]?.class_id || '';
-  const members = useMembers(cid);
+  const data = useAsync((s) => api<Contacts>('/ai/messages/contacts', { signal: s }), [], 'dm/contacts');
+  const [cls, setCls] = useState('');
+  const [role, setRole] = useState<RoleTag>('all');
   const [q, setQ] = useState('');
-  const shown = (members.data || []).filter((m) => m.user_id !== user?.user_id && (`${m.name} ${m.user_id}`).toLowerCase().includes(q.trim().toLowerCase()));
+  const [opening, setOpening] = useState('');
+  const classes = data.data?.classes || [];
+  const people = data.data?.people || [];
+  const inClass = people.filter((p) => !cls || p.class_ids.includes(cls));
+  const term = q.trim().toLowerCase();
+  const shown = inClass.filter((p) => (role === 'all' || (role === 'teacher') === isTeacher(p)) && `${p.name} ${p.user_id}`.toLowerCase().includes(term));
+  const nTeacher = inClass.filter(isTeacher).length;
+
+  const open = async (p: Contact) => {
+    if (p.conversation_id) { onPicked?.(); navigate(`/messages/${p.conversation_id}`); return; }
+    setOpening(p.user_id);
+    await openDirect(p.user_id, toast);
+    setOpening('');
+    onPicked?.();
+  };
+
+  if (data.loading && !data.data) return <Spinner />;
+  if (data.error) return <ErrorBox message={data.error} onRetry={data.reload} />;
+  if (!classes.length) return <Empty title="Bạn chưa vào lớp nào">Vào lớp bằng mã lớp ở trang Tài khoản để nhắn tin với bạn cùng lớp và giáo viên.</Empty>;
   return (
-    <Modal open onClose={onClose} title="Nhắn tin cho bạn cùng lớp">
-      <div className="modal-body col" style={{ gap: 10 }}>
-        {classes.length > 1 && (
-          <select className="input" value={cid} onChange={(e) => setClassId(e.target.value)} aria-label="Lớp">
-            {classes.map((c) => <option key={c.class_id} value={c.class_id}>{c.name ? `${c.class_id} · ${c.name}` : c.class_id}</option>)}
-          </select>
-        )}
-        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Tìm theo tên hoặc mã…" autoFocus aria-label="Tìm thành viên" />
-        <div className="col" style={{ gap: 4, maxHeight: 360, overflowY: 'auto' }}>
-          {!cid ? <span className="muted small">Bạn chưa vào lớp nào.</span> : members.loading && !members.data ? <Spinner /> : !shown.length ? <span className="muted small">Không có ai khớp.</span> : shown.map((m) => (
-            <button key={m.user_id} className="dm-item" onClick={() => { onClose(); openDirect(m.user_id, toast); }}>
-              <Avatar name={m.name} id={m.user_id} size={34} />
-              <span className="grow"><strong>{m.name}</strong> <span className="muted small">@{m.user_id}</span></span>
-              {m.role !== 'student' && <Badge tone="blue">Giáo viên</Badge>}
-            </button>
+    <div className={`cp ${compact ? 'cp-compact' : ''}`}>
+      {classes.length > 0 && (
+        <div className="cp-tags" role="group" aria-label="Lọc theo lớp">
+          {classes.length > 1 && <button type="button" className={`pill ${!cls ? 'pill-on' : ''}`} aria-pressed={!cls} onClick={() => setCls('')}>Tất cả lớp</button>}
+          {classes.map((c) => (
+            <button key={c.class_id} type="button" className={`pill cp-class ${cls === c.class_id || classes.length === 1 ? 'pill-on' : ''}`} aria-pressed={cls === c.class_id || classes.length === 1}
+              onClick={() => setCls(classes.length > 1 && cls === c.class_id ? '' : c.class_id)} title={c.name}><Icon name="users" size={15} /> {c.class_id}</button>
           ))}
         </div>
+      )}
+      <div className="cp-tags" role="group" aria-label="Lọc theo vai trò">
+        {([['all', 'Mọi người', inClass.length], ['teacher', 'Giáo viên', nTeacher], ['student', 'Học sinh', inClass.length - nTeacher]] as const).map(([k, label, n]) => (
+          <button key={k} type="button" className={`pill ${role === k ? 'pill-on' : ''}`} aria-pressed={role === k} onClick={() => setRole(k)}>
+            {label} <span className="cp-count">{n}</span>
+          </button>
+        ))}
       </div>
+      <div className="cp-search">
+        <Icon name="search" size={18} />
+        <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Gõ tên hoặc mã để tìm…" aria-label="Tìm người trong lớp" autoFocus={compact} />
+      </div>
+      <div className="cp-list" role="list">
+        {!shown.length ? <p className="muted small" style={{ padding: 8 }}>Không có ai khớp.</p> : shown.map((p) => (
+          <button key={p.user_id} role="listitem" type="button" className="cp-person" onClick={() => open(p)} disabled={opening === p.user_id || p.blocked}>
+            <Avatar name={p.name} id={p.user_id} size={40} />
+            <span className="grow" style={{ minWidth: 0 }}>
+              <strong className="dm-name">{p.name}</strong>
+              <span className="cp-sub">@{p.user_id}<span className="cp-role-inline">{isTeacher(p) ? ' · Giáo viên' : ''}</span>{classes.length > 1 && ` · ${p.class_ids.join(', ')}`}</span>
+            </span>
+            {isTeacher(p) && <span className="cp-role"><Badge tone="blue">Giáo viên</Badge></span>}
+            <span className="cp-go">{p.blocked ? 'Đã chặn' : p.conversation_id ? 'Mở' : 'Nhắn'}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function MemberPicker({ onClose }: { onClose: () => void }) {
+  return (
+    <Modal open onClose={onClose} title="Nhắn tin cho người trong lớp">
+      <div className="modal-body"><ContactPicker compact onPicked={onClose} /></div>
     </Modal>
   );
 }

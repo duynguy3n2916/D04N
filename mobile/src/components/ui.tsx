@@ -117,10 +117,10 @@ export function Logo({ size = 30, color = C.ink }: { size?: number; color?: stri
   );
 }
 
-/** Bìa khoá học: nền đỏ đô chuyển sắc, biểu tượng sách, tên khoá (giống thẻ khoá học trên web). */
+/** Bìa khoá học: nền màu chủ đạo chuyển sắc, biểu tượng sách, tên khoá (giống thẻ khoá học trên web). */
 export function Cover({ title, height = 150, chip, style, radius = R.lg }: { title: string; height?: number; chip?: string; style?: StyleProp<ViewStyle>; radius?: number }) {
   return (
-    <LinearGradient colors={['#9A2737', C.brand, C.brandStrong]} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
+    <LinearGradient colors={[C.brandLight, C.brand, C.brandStrong]} start={{ x: 0.1, y: 0 }} end={{ x: 0.9, y: 1 }}
       style={[{ height, borderRadius: radius, padding: 16, justifyContent: 'flex-end', overflow: 'hidden' }, style]}>
       <View style={{ position: 'absolute', top: -40, right: -30, width: 160, height: 160, borderRadius: 80, backgroundColor: 'rgba(255,255,255,0.07)' }} />
       {!!chip && <View style={{ position: 'absolute', top: 12, left: 12, backgroundColor: C.white, borderRadius: R.pill, paddingVertical: 4, paddingHorizontal: 10 }}>

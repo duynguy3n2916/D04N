@@ -33,7 +33,7 @@ export function Markdown({ text, size = 16 }: { text: string; size?: number }) {
       i++;
       blocks.push(
         <View key={`c${i}`} style={{ backgroundColor: C.ink, borderRadius: 12, padding: 12 }}>
-          <Text style={{ fontFamily: 'monospace', color: '#F5E6E8', fontSize: size - 3, lineHeight: (size - 3) * 1.45 }}>{code.join('\n')}</Text>
+          <Text style={{ fontFamily: 'monospace', color: C.brandSoft, fontSize: size - 3, lineHeight: (size - 3) * 1.45 }}>{code.join('\n')}</Text>
         </View>,
       );
       continue;

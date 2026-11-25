@@ -151,3 +151,37 @@ html.reduce-fx .loading { animation: none !important; }
 .theme-dot-custom { background: conic-gradient(#e03131, #f08c00, #2f9e44, #1c7ed6, #7048e8, #e03131); }
 .theme-dot-custom input { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; border: 0; padding: 0; }
 .settings-body { display: flex; flex-direction: column; gap: 20px; }
+
+/* Chọn người nhắn tin: thẻ lớp, thẻ vai trò, ô tìm và danh sách tên */
+.cp { display: flex; flex-direction: column; gap: 10px; min-height: 0; width: 100%; }
+.cp-tags { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.cp-tags::-webkit-scrollbar { display: none; }
+.cp-tags .pill { flex: none; white-space: nowrap; display: inline-flex; align-items: center; gap: 6px; }
+.cp-count { font-size: 12px; font-weight: 700; opacity: .65; }
+.cp-search { position: relative; }
+.cp-search > svg { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.cp-search .input { width: 100%; padding-left: 42px; }
+.cp-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; }
+.cp-compact .cp-list { max-height: min(52vh, 420px); }
+.cp-person { display: flex; align-items: center; gap: 12px; width: 100%; padding: 9px 10px; border: 0; border-radius: 16px; background: transparent;
+  color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.cp-person:hover, .cp-person:focus-visible { background: var(--brand-soft); }
+.cp-person:disabled { opacity: .55; cursor: default; }
+.cp-person strong { display: block; }
+.cp-sub { display: block; font-size: 13px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cp-go { flex: none; font-size: 13px; font-weight: 700; color: var(--brand-strong); padding: 6px 12px; border-radius: 999px; background: var(--brand-soft); }
+.cp-person:hover .cp-go { background: var(--brand); color: #fff; }
+.dm-chat:has(.dm-start) { justify-content: flex-start; }
+.dm-start { display: flex; flex-direction: column; gap: 6px; padding: 20px 22px; min-height: 0; height: 100%; }
+.dm-start .cp { flex: 1; margin-top: 8px; }
+.dm-start-title { margin: 0; font-size: 22px; letter-spacing: -.5px; }
+.cp-role-inline { display: none; }
+@media (max-width: 560px) {
+  .cp-role { display: none; }
+  .cp-role-inline { display: inline; }
+  .cp-person { padding: 9px 6px; gap: 10px; }
+}
+/* Chưa có cuộc trò chuyện nào: bỏ cột danh sách trống, hiện thẳng khung chọn người (cả trên điện thoại) */
+.dm-layout.dm-none { grid-template-columns: minmax(0, 1fr); }
+.dm-layout.dm-none .dm-list { display: none; }
+.dm-layout.dm-none .dm-chat { display: flex; height: auto; min-height: 420px; }

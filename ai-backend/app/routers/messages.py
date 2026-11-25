@@ -36,6 +36,12 @@ def list_conversations(user: Principal = Depends(get_current_user), db: Session 
     return messages.list_conversations(db, user)
 
 
+@router.get("/contacts")
+def contacts(user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Thành viên cùng lớp để chọn người nhắn tin, kèm danh sách lớp làm thẻ lọc."""
+    return messages.contacts(db, user)
+
+
 @router.post("/conversations")
 def start(req: StartIn, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
     """Mở (hoặc lấy lại) hội thoại riêng với một thành viên cùng lớp."""
