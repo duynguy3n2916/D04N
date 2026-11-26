@@ -22,19 +22,17 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.errors import AppError
 from app.core.security import Principal
-from app.core.utils import parse_uuid, redact_pii, utcnow
+from app.core.utils import parse_uuid, utcnow
 from app.models.coach import CoachConversation, CoachMessage
 from app.models.learning import Course, ItemProgress, Lesson, QuizAnswerLog
 from app.models.video_question import QuestionBankItem
-from app.services.ai import llm
+from app.services.ai import guardrails, llm
 from app.services.ai.prompts import STUDY_COACH
 from app.services.courses import flashcards, learning
 from app.services.rag.retrieval import RetrievalScope, retrieve, source_label
 
 log = logging.getLogger("app.coach")
 
-QUIZ_GUARD_MESSAGE = ("Bạn đang làm dở một bài kiểm tra. Trợ lý học tập tạm dừng để bài làm công bằng. "
-                      "Hãy nộp bài xong rồi quay lại, mình sẽ giúp bạn ôn những câu còn yếu.")
 
 
 @dataclass
@@ -327,10 +325,9 @@ def ask_events(db: Session, user: Principal, message: str, history: list[dict] |
     message = (message or "").strip()
     if not message:
         raise AppError(400, "EMPTY_MESSAGE", "Hãy nhập câu hỏi.")
-    if settings.redact_pii:
-        message = redact_pii(message)
-    if learning.active_quiz_questions(db, user):
-        yield {"event": "result", "data": {"answer": QUIZ_GUARD_MESSAGE, "steps": [], "sources": [], "actions": [],
+    message = guardrails.clean_user_text(message)
+    if guardrails.quiz_in_progress(db, user):
+        yield {"event": "result", "data": {"answer": guardrails.COACH_PAUSED_MESSAGE, "steps": [], "sources": [], "actions": [],
                                            "guarded": True, "stopped": None, "llm_calls": 0}}
         return
 
@@ -430,8 +427,7 @@ def prepare_chat(db: Session, user: Principal, message: str, conversation_id=Non
     if conv is not None and not course_id:
         course_id = conv.course_id
     course = resolve_course(db, user, course_id)
-    if settings.redact_pii:
-        message = redact_pii(message or "")
+    message = guardrails.clean_user_text(message or "")
     if conv is not None:
         history = [{"role": m.role, "content": m.content} for m in conv.messages]
     return {"conv_id": conv.id if conv is not None else None, "course_id": course.id if course is not None else None,

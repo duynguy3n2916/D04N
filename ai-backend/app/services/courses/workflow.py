@@ -19,7 +19,8 @@ from app.core.utils import as_aware, fmt_ts, normalize_text, utcnow
 from app.models.video_question import AIInteraction, VideoQuestion
 from app.models.workflow import SessionTransition, VideoSession
 from app.services.ai import grading, llm
-from app.services.ai.prompts import QUESTION_AGENT, wrap_documents
+from app.services.ai.guardrails import wrap_documents
+from app.services.ai.prompts import QUESTION_AGENT
 from app.services.ai.schemas import AgentQuestionItem
 from app.services.rag.retrieval import format_segments, transcript_window
 

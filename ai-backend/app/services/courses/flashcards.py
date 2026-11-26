@@ -14,7 +14,8 @@ from app.models.video_question import QuestionBankItem
 from app.services.ai import llm
 from app.services.ai.grading import correct_answer_text
 from app.services.ai.lesson_ai import lesson_by_code, lesson_context, resolve_sources
-from app.services.ai.prompts import FLASHCARD_GEN, wrap_documents
+from app.services.ai.guardrails import wrap_documents
+from app.services.ai.prompts import FLASHCARD_GEN
 from app.services.ai.schemas import FlashcardsOutput
 from app.services.courses import learning
 

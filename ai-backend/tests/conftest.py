@@ -82,8 +82,8 @@ def fake_llm(monkeypatch):
     fake = FakeLLM()
     monkeypatch.setattr(llm, "_call_provider", fake)
 
-    def fake_stream(system, messages, max_tokens, temperature):
-        text, in_tok, out_tok, model = fake(system, messages, max_tokens, False, temperature)
+    def fake_stream(system, messages, max_tokens, temperature, profile=None):
+        text, in_tok, out_tok, model = fake(system, messages, max_tokens, False, temperature, profile)
         for i in range(0, len(text), 12):  # phát từng đoạn như stream thật
             yield text[i:i + 12]
         yield (in_tok, out_tok, model)
@@ -91,8 +91,8 @@ def fake_llm(monkeypatch):
     monkeypatch.setattr(llm, "_stream_provider", fake_stream)
     monkeypatch.setattr(llm, "_tools_provider", fake.tools)
 
-    def fake_tools_stream(system, messages, tools, max_tokens, temperature):
-        msg, in_tok, out_tok, model = fake.tools(system, messages, tools, max_tokens, temperature)
+    def fake_tools_stream(system, messages, tools, max_tokens, temperature, profile=None):
+        msg, in_tok, out_tok, model = fake.tools(system, messages, tools, max_tokens, temperature, profile)
         text = msg.get("content") or ""
         for i in range(0, len(text), 12):
             yield text[i:i + 12]

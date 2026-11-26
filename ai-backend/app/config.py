@@ -14,6 +14,15 @@ class Settings(BaseSettings):
     openai_llm_model: str = "gpt-6-luna"
     openai_embedding_model: str = "text-embedding-3-small"
     llm_timeout_seconds: float = 90.0
+    # Mức suy luận / độ dài trả lời của model (gpt-5, gpt-6...). Để trống = dùng mặc định của model.
+    # chat: Tutor, Trợ lý học tập, gợi ý, chấm câu ngắn (người dùng đang chờ) -> nhanh, ngắn gọn.
+    # background: sinh câu hỏi, flashcard, đánh giá, tóm tắt (chạy nền) -> suy nghĩ kỹ hơn.
+    # reasoning_effort: none | minimal | low | medium | high ; verbosity: low | medium | high
+    llm_reasoning_chat: str = "none"
+    llm_verbosity_chat: str = "low"
+    llm_reasoning_background: str = "medium"
+    llm_verbosity_background: str = "medium"
+    llm_reasoning_extra_tokens: int = 4000  # cộng thêm vào max_tokens khi có suy luận (token suy nghĩ cũng bị tính)
     # Đơn giá để ước tính chi phí (USD / 1 triệu token). Để 0 nếu không muốn ước tính.
     llm_price_input_per_mtok: float = 0.0
     llm_price_output_per_mtok: float = 0.0

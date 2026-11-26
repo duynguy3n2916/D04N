@@ -16,7 +16,8 @@ from app.core.utils import fmt_ts
 from app.models.video_question import AIInteraction, VideoQuestion
 from app.models.workflow import VideoSession
 from app.services.ai import llm
-from app.services.ai.prompts import TUTOR_EXPLAIN, wrap_documents
+from app.services.ai.guardrails import wrap_documents
+from app.services.ai.prompts import TUTOR_EXPLAIN
 from app.services.rag.retrieval import RetrievalScope, build_context, format_segments, retrieve, transcript_window
 from app.services.system import jobs
 

@@ -9,7 +9,8 @@ from app.models.documents import AIChunk, AIDocument
 from app.models.learning import Lesson
 from app.models.video_question import AIGeneration, QuestionBankItem, VideoQuestion
 from app.services.ai import llm
-from app.services.ai.prompts import TEACHER_QUIZ, wrap_documents
+from app.services.ai.guardrails import wrap_documents
+from app.services.ai.prompts import TEACHER_QUIZ
 from app.services.ai.schemas import QuestionItem, QuizOutput
 from app.services.rag.retrieval import RetrievalScope, _apply_scope, _row_to_dict, build_context, retrieve
 

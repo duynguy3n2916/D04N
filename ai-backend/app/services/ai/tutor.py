@@ -3,23 +3,24 @@ import logging
 import re
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta, timezone
-from zoneinfo import ZoneInfo
+from datetime import timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.core.context import get_request_id
 from app.core.errors import AppError
 from app.core.security import Principal
-from app.core.utils import fmt_ts, normalize_text, redact_pii, strip_option_label, utcnow
+from app.core.utils import fmt_ts, normalize_text, strip_option_label, utcnow
 from app.models.conversation import AIConversation, AIMessage
 from app.models.documents import AIChunk, AIDocument
 from app.services.ai import llm
 from app.services.ai.grading import correct_answer_text
-from app.services.ai.prompts import CONVERSATION_SUMMARY, TUTOR_ANSWER, TUTOR_HINT, wrap_documents
-from app.services.courses import learning, workflow
+from app.services.ai import guardrails
+from app.services.ai.guardrails import wrap_documents
+from app.services.ai.prompts import CONVERSATION_SUMMARY, TUTOR_ANSWER, TUTOR_HINT
+from app.services.courses import workflow
 from app.services.rag.hybrid import rrf
 from app.services.rag.retrieval import (
     RetrievalScope,
@@ -41,8 +42,6 @@ HINT_REDACTED = ("Câu hỏi kiểm tra đang diễn ra nên mình chưa thể n
                  "vừa được giảng ngay trước đó và loại dần các lựa chọn không phù hợp với định nghĩa.")
 MAX_GUARDED_QUESTIONS_IN_PROMPT = 10
 REFUSAL_MARK = "chưa tìm thấy thông tin"  # khớp câu từ chối trong prompt TUTOR_ANSWER
-QUIZ_LOCKED = ("Bạn đang làm bài trắc nghiệm nên Tutor AI tạm khóa để bài làm công bằng. "
-               "Nộp bài xong bạn hỏi lại nhé, mình sẽ giải thích các câu còn chưa chắc.")
 
 # "phút 2:30", "ở 02:30", "1:02:03", "phút thứ 3", "phút 3 giây 20", "giây 45"
 _TS_CLOCK = re.compile(r"(?<![\d:])(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?![\d:])")
@@ -126,31 +125,6 @@ def _leaks_answer(answer: str, q) -> bool:
     return q.type == "multiple_choice" and len(body) > 12 and body in text
 
 
-def _day_start_utc() -> tuple[datetime, datetime]:
-    """0 giờ hôm nay theo múi giờ ứng dụng, quy về UTC (để so với created_at lưu dạng UTC)."""
-    try:
-        tz = ZoneInfo(settings.app_timezone)
-    except Exception:
-        tz = timezone.utc
-    local = datetime.now(tz).replace(hour=0, minute=0, second=0, microsecond=0)
-    return local, local.astimezone(timezone.utc)
-
-
-def tutor_quota(db: Session, user: Principal, lesson_id: str | None) -> dict | None:
-    """Số lượt hỏi Tutor còn lại cho (học sinh, bài, hôm nay). None nếu không áp dụng giới hạn."""
-    limit = settings.tutor_daily_limit_per_lesson
-    if user.is_teacher or not lesson_id or limit <= 0:
-        return None
-    day_local, day_utc = _day_start_utc()
-    used = (db.query(func.count(AIMessage.id))
-            .join(AIConversation, AIMessage.conversation_id == AIConversation.id)
-            .filter(AIConversation.student_id == user.user_id, AIConversation.lesson_id == lesson_id,
-                    AIMessage.role == "user", AIMessage.created_at >= day_utc)
-            .scalar() or 0)
-    return {"used": int(used), "limit": limit, "remaining": max(0, limit - int(used)),
-            "resets_at": (day_local + timedelta(days=1)).isoformat()}
-
-
 @dataclass
 class TurnPlan:
     """Mọi thứ đã quyết định trước khi gọi LLM cho một lượt hỏi (dùng chung cho trả lời thường và streaming)."""
@@ -179,25 +153,16 @@ def prepare_turn(db: Session, user: Principal, *, question: str, conversation_id
     course_id = course_id or conv.course_id
     video_id = video_id or conv.video_id
 
-    # Giới hạn số lượt hỏi Tutor mỗi bài / ngày (đếm trước khi gọi LLM, không tạo tin nhắn nếu vượt)
-    quota = tutor_quota(db, user, lesson_id)
-    if quota and quota["remaining"] <= 0:
-        raise AppError(429, "TUTOR_QUOTA_EXCEEDED",
-                       f"Bạn đã dùng hết {quota['limit']} lượt hỏi Tutor cho bài này hôm nay. "
-                       "Hãy xem lại các nguồn Tutor đã trích hoặc quay lại vào ngày mai nhé. "
-                       "Video, slide và bài kiểm tra vẫn học bình thường.", quota)
-
-    if settings.redact_pii:
-        question = redact_pii(question)
-        selected_text = redact_pii(selected_text) if selected_text else selected_text
+    guardrails.ensure_tutor_quota(db, user, lesson_id)
+    question = guardrails.clean_user_text(question)
+    selected_text = guardrails.clean_user_text(selected_text)
 
     # Hint mode do server quyết định (câu hỏi video đang mở hoặc bài kiểm tra đang làm dở), không tin cờ client
     # Đang làm bài trắc nghiệm: khóa hẳn Tutor (không gọi LLM, không tính lượt).
     # Câu hỏi bật lên giữa video vẫn dùng chế độ gợi ý (không lộ đáp án).
     guarded: list = []
     if not user.is_teacher:
-        if learning.active_quiz_questions(db, user):
-            raise AppError(403, "TUTOR_LOCKED_QUIZ", QUIZ_LOCKED)
+        guardrails.ensure_tutor_unlocked(db, user)
         active_q = workflow.active_question_for_hint(db, user, video_id)
         guarded = [active_q] if active_q else []
     hint_mode = bool(guarded)
@@ -326,7 +291,7 @@ def finish_turn(db: Session, user: Principal, plan: TurnPlan, raw_answer: str | 
         "model": res.model if res else None,
         "prompt_version": meta.get("prompt_version"),
         "request_id": get_request_id(),
-        "quota": tutor_quota(db, user, plan.lesson_id),
+        "quota": guardrails.tutor_quota(db, user, plan.lesson_id),
     }
 
 

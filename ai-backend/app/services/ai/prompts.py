@@ -1,7 +1,6 @@
 """Prompt registry: mỗi prompt có id + version để log và so sánh trong evaluation.
 Khi sửa nội dung một prompt, tăng version.
 """
-import re
 from dataclasses import dataclass
 
 
@@ -146,11 +145,3 @@ Nhiệm vụ: giúp học sinh biết nên ôn gì, theo thứ tự nào, dựa 
 
 ALL = {p.id: p for p in [TUTOR_ANSWER, TUTOR_HINT, TUTOR_EXPLAIN, CONVERSATION_SUMMARY, TEACHER_QUIZ, VIDEO_QUESTION,
                          VIDEO_SUGGEST, QUESTION_AGENT, GRADER, EVAL_JUDGE, EVAL_NO_RAG, FLASHCARD_GEN, STUDY_COACH]}
-
-
-_TAG = re.compile(r"<\s*/?\s*tai_lieu\s*>", re.IGNORECASE)
-
-
-def wrap_documents(context: str) -> str:
-    # học liệu không được tự đóng/mở thẻ để "thoát" khỏi vùng dữ liệu (prompt injection)
-    return f"<tai_lieu>\n{_TAG.sub('[thẻ tài liệu đã bị loại]', context)}\n</tai_lieu>"

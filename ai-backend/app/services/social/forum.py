@@ -10,12 +10,13 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.core.security import Principal
-from app.core.utils import clean_id, redact_pii, utcnow
+from app.core.utils import clean_id, utcnow
 from app.models.accounts import User
 from app.models.learning import ForumReply, ForumReport, ForumThread, Lesson
 from app.models.social import ForumImage, ForumReaction, UserNotification
 from app.services.ai import llm
-from app.services.ai.prompts import TUTOR_ANSWER, wrap_documents
+from app.services.ai.guardrails import redact_pii, wrap_documents
+from app.services.ai.prompts import TUTOR_ANSWER
 from app.services.rag.retrieval import RetrievalScope, build_context, retrieve
 
 MAX_TITLE = 200

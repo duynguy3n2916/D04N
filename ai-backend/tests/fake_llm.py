@@ -26,12 +26,12 @@ class FakeLLM:
                 return kind
         return "unknown"
 
-    def __call__(self, system, messages, max_tokens, json_mode, temperature):
+    def __call__(self, system, messages, max_tokens, json_mode, temperature, profile=None):
         if self.delay:
             time.sleep(self.delay)
         kind = self.kind_of(system)
         user = messages[-1]["content"]
-        self.calls.append({"kind": kind, "user": user, "messages": messages})
+        self.calls.append({"kind": kind, "user": user, "messages": messages, "profile": profile})
         if self.overrides.get(kind):
             r = self.overrides[kind].pop(0)
             if isinstance(r, Exception):
@@ -39,10 +39,11 @@ class FakeLLM:
             return (r if isinstance(r, str) else json.dumps(r, ensure_ascii=False)), 100, 50, "fake-model"
         return self.default(kind, user), 100, 50, "fake-model"
 
-    def tools(self, system, messages, tools, max_tokens, temperature):
+    def tools(self, system, messages, tools, max_tokens, temperature, profile=None):
         """Thay llm._tools_provider. Override loại "coach": dict {"content", "tool_calls"} hoặc chuỗi (trả lời luôn)."""
         user = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
-        self.calls.append({"kind": "coach", "user": user, "messages": list(messages), "tools": [t["name"] for t in tools]})
+        self.calls.append({"kind": "coach", "user": user, "messages": list(messages), "tools": [t["name"] for t in tools],
+                           "profile": profile})
         if self.overrides.get("coach"):
             r = self.overrides["coach"].pop(0)
             if isinstance(r, Exception):

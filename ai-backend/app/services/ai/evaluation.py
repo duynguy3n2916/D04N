@@ -22,11 +22,11 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.context import get_request_id
 from app.core.errors import AppError
-from app.core.utils import is_refusal
 from app.models.evaluation import AIEvaluation, EvalResult, EvalSample
 from app.models.observability import AILLMCall
 from app.services.ai import llm
-from app.services.ai.prompts import EVAL_JUDGE, EVAL_NO_RAG, TUTOR_ANSWER, wrap_documents
+from app.services.ai.guardrails import is_refusal, wrap_documents
+from app.services.ai.prompts import EVAL_JUDGE, EVAL_NO_RAG, TUTOR_ANSWER
 from app.services.ai.schemas import JudgeOutput
 from app.services.rag.retrieval import RetrievalScope, build_context, expand_neighbors, retrieve
 from app.services.system import jobs

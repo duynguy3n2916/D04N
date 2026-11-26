@@ -8,7 +8,7 @@ from app.core.sse import sse_response
 from app.core.utils import clean_id, parse_uuid
 from app.database import get_db
 from app.models.conversation import AIConversation, AIMessage
-from app.services.ai import tutor
+from app.services.ai import guardrails, tutor
 from app.services.rag.retrieval import RetrievalScope, retrieve
 
 router = APIRouter(prefix="/ai", tags=["chat"])
@@ -68,7 +68,7 @@ def chat_stream(req: ChatRequest, user: Principal = Depends(get_current_user), d
 def tutor_quota(lesson_id: str | None = None, user: Principal = Depends(get_current_user),
                 db: Session = Depends(get_db)):
     """Số lượt hỏi Tutor còn lại cho bài này hôm nay (None = không giới hạn, vd giáo viên)."""
-    return {"quota": tutor.tutor_quota(db, user, clean_id(lesson_id))}
+    return {"quota": guardrails.tutor_quota(db, user, clean_id(lesson_id))}
 
 
 @router.post("/retrieve")

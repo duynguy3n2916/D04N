@@ -9,7 +9,8 @@ from app.core.utils import fmt_ts, resolve_option_index
 from app.models.transcript import TranscriptSegment
 from app.models.video_question import VideoQuestion
 from app.services.ai import llm
-from app.services.ai.prompts import VIDEO_QUESTION, VIDEO_SUGGEST, wrap_documents
+from app.services.ai.guardrails import wrap_documents
+from app.services.ai.prompts import VIDEO_QUESTION, VIDEO_SUGGEST
 from app.services.ai.schemas import QuestionItem, SuggestOutput
 from app.services.rag.retrieval import (
     RetrievalScope,
