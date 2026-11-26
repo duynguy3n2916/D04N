@@ -177,7 +177,7 @@ def tool_get_due_flashcards(db: Session, user: Principal, args: dict, state: Run
     for course in flashcards.overview(db, user):
         for sm in course["lessons"]:
             code = sm["lesson_code"]
-            if code not in codes:
+            if sm["locked"] or code not in codes:
                 continue
             out.append(sm)
             if sm["due"]:

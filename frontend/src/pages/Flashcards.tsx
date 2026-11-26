@@ -126,7 +126,7 @@ export function Flashcards({ lessonCode }: { lessonCode: string }) {
   );
 }
 
-interface LessonDeck extends Summary { lesson_id: string; chapter_title: string }
+interface LessonDeck extends Summary { lesson_id: string; chapter_title: string; locked: boolean }
 interface CourseDecks { course_id: string; code: string; title: string; total: number; due: number; lessons: LessonDeck[] }
 const FC_COURSE_KEY = 'mam.fc.course';
 
@@ -136,7 +136,7 @@ export function FlashcardHub() {
   const [courseId, setCourseId] = useState<string>(() => storage.get(FC_COURSE_KEY) || '');
   const courses = data.data || [];
   const current = courses.find((c) => c.course_id === courseId) || courses.find((c) => c.due > 0)
-    || courses.find((c) => c.total > 0) || courses[0];
+    || courses.find((c) => c.total > 0) || courses.find((c) => c.lessons.length > 0) || courses[0];
   useEffect(() => { if (current) storage.set(FC_COURSE_KEY, current.course_id); }, [current?.course_id]);
   const dueAll = courses.reduce((n, c) => n + c.due, 0);
   const firstDue = current?.lessons.find((l) => l.due > 0);
@@ -154,21 +154,21 @@ export function FlashcardHub() {
         <FilterPills label="Khóa học" value={current?.course_id || ''} onChange={setCourseId}
           options={courses.map((c) => ({ id: c.course_id, label: c.title, count: c.due || undefined }))} />
       )}
-      {current && !current.lessons.length && <Empty title="Khóa này chưa có thẻ đã mở">Hoàn thành ít nhất một mục trong bài để mở thẻ của bài đó.</Empty>}
+      {current && !current.lessons.length && <Empty title="Khóa này chưa có bộ thẻ" />}
       {current && current.lessons.length > 0 && (
         <div className="fc-deck-list">
           {current.lessons.map((l) => {
             const empty = !l.total;
             return (
-              <button key={l.lesson_code} type="button" className={`fc-deck ${l.due ? 'fc-deck-due' : ''}`} disabled={empty}
+              <button key={l.lesson_code} type="button" className={`fc-deck ${l.locked ? 'fc-deck-locked' : l.due ? 'fc-deck-due' : ''}`} disabled={l.locked || empty}
                 onClick={() => navigate(`/flashcards/${encodeURIComponent(l.lesson_code)}`)}>
-                <span className="fc-deck-ico"><Icon name="copy" size={20} /></span>
+                <span className="fc-deck-ico"><Icon name={l.locked ? 'lock' : 'copy'} size={20} /></span>
                 <span className="fc-deck-text">
                   <small>{l.chapter_title}</small>
                   <strong>{l.lesson_title}</strong>
-                  <span className="fc-deck-meta">{empty ? 'Chưa có thẻ' : `${l.total} thẻ · ${l.new} mới · ${l.learned} đã nhớ`}</span>
+                  <span className="fc-deck-meta">{l.locked ? 'Hoàn thành bài học để mở khóa' : empty ? 'Chưa có thẻ' : `${l.total} thẻ · ${l.new} mới · ${l.learned} đã nhớ`}</span>
                 </span>
-                {!empty && (l.due ? <span className="fc-deck-due-pill">{l.due} cần ôn</span> : <span className="fc-deck-ok"><Icon name="check" size={14} /> Đã ôn xong</span>)}
+                {!l.locked && !empty && (l.due ? <span className="fc-deck-due-pill">{l.due} cần ôn</span> : <span className="fc-deck-ok"><Icon name="check" size={14} /> Đã ôn xong</span>)}
               </button>
             );
           })}

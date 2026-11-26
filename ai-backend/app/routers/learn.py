@@ -90,7 +90,7 @@ def class_submissions(class_id: str, user: Principal = Depends(require_teacher),
 
 @router.get("/learn/flashcards")
 def flashcards_overview(user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Tổng quan thẻ ghi nhớ đã mở khóa theo khóa học và bài học."""
+    """Tổng quan các bộ thẻ theo khóa học, kèm trạng thái khóa của từng bộ."""
     from app.services.courses import flashcards
     return flashcards.overview(db, user)
 

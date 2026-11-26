@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Icon, type IconName } from '../components/Icon';
 import { Markdown } from '../components/Markdown';
 import { useConfirm, useToast } from '../components/ui';
@@ -66,6 +66,91 @@ const SUGGESTIONS: { icon: IconName; title: string; text: string }[] = [
   { icon: 'copy', title: 'Đưa câu sai vào thẻ ôn', text: 'Đưa các câu mình hay sai vào thẻ ôn' },
 ];
 const THINKING = ['Đang xem tiến độ của bạn', 'Đang tìm các câu bạn hay sai', 'Đang lập kế hoạch ôn'];
+const ALL_COURSES: CourseLite = { course_id: '', title: 'Tất cả khóa học' };
+
+function CoachCoursePicker({ courses, value, onChange, disabled, title }: {
+  courses: CourseLite[]; value: string; onChange: (id: string) => void; disabled: boolean; title: string;
+}) {
+  const options = [ALL_COURSES, ...courses];
+  const selectedIndex = Math.max(0, options.findIndex((course) => course.course_id === value));
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const open = !disabled && activeIndex !== null;
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
+  const activeId = open ? `${listId}-${activeIndex}` : undefined;
+
+  useEffect(() => {
+    if (!open) return;
+    const dismiss = (event: PointerEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) setActiveIndex(null);
+    };
+    document.addEventListener('pointerdown', dismiss);
+    return () => document.removeEventListener('pointerdown', dismiss);
+  }, [open]);
+
+  useEffect(() => {
+    if (activeId) document.getElementById(activeId)?.scrollIntoView({ block: 'nearest' });
+  }, [activeId]);
+
+  useEffect(() => {
+    if (disabled) setActiveIndex(null);
+  }, [disabled]);
+
+  function choose(index: number) {
+    const option = options[index];
+    if (option) onChange(option.course_id);
+    setActiveIndex(null);
+  }
+
+  function onKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
+    switch (event.key) {
+      case 'ArrowDown':
+      case 'ArrowUp': {
+        const step = event.key === 'ArrowDown' ? 1 : -1;
+        setActiveIndex(activeIndex === null ? selectedIndex : Math.max(0, Math.min(activeIndex + step, options.length - 1)));
+        break;
+      }
+      case 'Home':
+      case 'End':
+        setActiveIndex(event.key === 'Home' ? 0 : options.length - 1);
+        break;
+      case 'Enter':
+      case ' ':
+        if (activeIndex === null) return;
+        choose(activeIndex);
+        break;
+      case 'Escape':
+        if (!open) return;
+        setActiveIndex(null);
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+  }
+
+  return (
+    <div className="cc-course-picker" ref={pickerRef}>
+      <button type="button" className="cc-course" role="combobox" aria-label="Khóa học đang ôn" aria-expanded={open}
+        aria-controls={listId} aria-activedescendant={activeId} title={title} disabled={disabled}
+        onClick={(event) => { event.currentTarget.focus(); setActiveIndex(open ? null : selectedIndex); }}
+        onBlur={() => setActiveIndex(null)} onKeyDown={onKeyDown}>
+        <Icon name="book" size={16} />
+        <span>{options[selectedIndex].title}</span>
+        <Icon name="chevronDown" size={14} className="cc-course-caret" />
+      </button>
+      <div id={listId} className="cc-course-menu" role="listbox" aria-label="Khóa học đang ôn" hidden={!open}>
+        {options.map((course, index) => (
+          <div key={course.course_id} id={`${listId}-${index}`} className={`cc-course-option${index === activeIndex ? ' cc-course-active' : ''}`}
+            role="option" aria-selected={index === selectedIndex} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(index)}>
+            <span>{course.title}</span>
+            {index === selectedIndex && <Icon name="check" size={16} />}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function sourceText(s: Source) {
   if (s.source_type === 'video') return `${s.label} · ${s.display} · ${fmtTime(s.start_time)}`;
@@ -260,17 +345,6 @@ export function Coach({ conversationId }: { conversationId?: string }) {
 
   const empty = !conversationId && msgs.length === 0 && !busy;
 
-  const coursePicker = courses.length > 0 && (
-    <label className="cc-course" title={conversationId ? 'Khóa học của cuộc trò chuyện này' : 'Trợ lý chỉ ôn trong khóa học bạn chọn'}>
-      <Icon name="book" size={16} />
-      <span className="sr-only">Khóa học đang ôn</span>
-      <select value={courseId} onChange={(e) => setCourseId(e.target.value)} disabled={!!conversationId || busy}>
-        <option value="">Tất cả khóa học</option>
-        {courses.map((c) => <option key={c.course_id} value={c.course_id}>{c.title}</option>)}
-      </select>
-    </label>
-  );
-
   // Ô chat kiểu ChatGPT: ô nhập ở trên, hàng công cụ (chọn khóa học) + nút gửi ở dưới; luôn ghim ở cuối trang.
   const composer = (
     <form className="cc-composer" onSubmit={(e) => { e.preventDefault(); send(); }} aria-label="Gửi tin cho trợ lý">
@@ -278,7 +352,10 @@ export function Coach({ conversationId }: { conversationId?: string }) {
       <textarea id="coach-input" ref={inputRef} rows={1} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey}
         placeholder={empty ? 'Hỏi trợ lý học tập bất cứ điều gì…' : 'Nhắn tiếp cho trợ lý…'} autoFocus />
       <div className="cc-composer-row">
-        {coursePicker}
+        {courses.length > 0 && (
+          <CoachCoursePicker courses={courses} value={courseId} onChange={setCourseId} disabled={!!conversationId || busy}
+            title={conversationId ? 'Khóa học của cuộc trò chuyện này' : 'Trợ lý chỉ ôn trong khóa học bạn chọn'} />
+        )}
         <button type="submit" className="cc-send" aria-label="Gửi" disabled={busy || !text.trim()}>
           <Icon name="arrowUp" size={18} stroke={2.6} />
         </button>

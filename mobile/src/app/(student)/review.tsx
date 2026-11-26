@@ -9,7 +9,7 @@ import { useAsync } from '../../lib/hooks';
 import { refreshNotifications } from '../../lib/notifications';
 import { C } from '../../lib/theme';
 
-interface LessonDeck { lesson_code: string; lesson_title: string; chapter_title: string; total: number; new: number; due: number; learned: number }
+interface LessonDeck { lesson_code: string; lesson_title: string; chapter_title: string; total: number; due: number; locked: boolean }
 interface CourseDecks { course_id: string; title: string; total: number; due: number; lessons: LessonDeck[] }
 
 /** Ôn thẻ: chọn khóa học rồi chọn bài để ôn. Thẻ của từng bài cũng mở được từ trang bài học. */
@@ -21,7 +21,9 @@ export default function Review() {
   const [courseId, setCourseId] = useState('');
   useEffect(() => {
     if (courses.length && !courses.some((c) => c.course_id === courseId)) {
-      setCourseId((courses.find((c) => c.due > 0) || courses.find((c) => c.total > 0) || courses[0]).course_id);
+      const preferred = courses.find((c) => c.due > 0) || courses.find((c) => c.total > 0)
+        || courses.find((c) => c.lessons.length > 0) || courses[0];
+      setCourseId(preferred.course_id);
     }
   }, [courses, courseId]);
   const current = courses.find((c) => c.course_id === courseId);
@@ -38,21 +40,21 @@ export default function Review() {
           {courses.map((c) => <Pill key={c.course_id} label={c.title} active={c.course_id === courseId} count={c.due || undefined} onPress={() => setCourseId(c.course_id)} />)}
         </ScrollView>
       )}
-      {current && !current.lessons.length && <Empty title="Khóa này chưa có thẻ đã mở" icon="layers-outline">Hoàn thành ít nhất một mục trong bài để mở thẻ của bài đó.</Empty>}
+      {current && !current.lessons.length && <Empty title="Khóa này chưa có bộ thẻ" icon="layers-outline" />}
       {current?.lessons.map((l) => {
         const empty = !l.total;
         return (
-          <Card key={l.lesson_code} onPress={empty ? undefined : () => router.push(`/flashcards/${encodeURIComponent(l.lesson_code)}`)}>
-            <Row style={{ opacity: empty ? 0.6 : 1 }}>
+          <Card key={l.lesson_code} onPress={l.locked || empty ? undefined : () => router.push(`/flashcards/${encodeURIComponent(l.lesson_code)}`)}>
+            <Row style={{ opacity: empty && !l.locked ? 0.6 : 1 }}>
               <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: l.due ? C.brandSoft : C.wash, alignItems: 'center', justifyContent: 'center' }}>
-                <Ionicons name="layers" size={22} color={l.due ? C.brand : C.muted} />
+                <Ionicons name={l.locked ? 'lock-closed-outline' : 'layers'} size={22} color={l.due ? C.brand : C.muted} />
               </View>
               <View style={{ flex: 1 }}>
                 <Muted style={{ fontSize: 12 }}>{l.chapter_title}</Muted>
                 <Text style={{ fontSize: 16, fontWeight: '600', color: C.ink }}>{l.lesson_title || l.lesson_code}</Text>
-                <Muted style={{ fontSize: 13 }}>{empty ? 'Chưa có thẻ' : l.due ? `${l.due} thẻ cần ôn · ${l.total} thẻ` : `Đã ôn xong · ${l.total} thẻ`}</Muted>
+                <Muted style={{ fontSize: 13 }}>{l.locked ? 'Hoàn thành bài học để mở khóa' : empty ? 'Chưa có thẻ' : l.due ? `${l.due} thẻ cần ôn · ${l.total} thẻ` : `Đã ôn xong · ${l.total} thẻ`}</Muted>
               </View>
-              {!empty && <Ionicons name="chevron-forward" size={18} color={C.muted} />}
+              {!l.locked && !empty && <Ionicons name="chevron-forward" size={18} color={C.muted} />}
             </Row>
           </Card>
         );

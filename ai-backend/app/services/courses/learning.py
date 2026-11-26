@@ -320,7 +320,7 @@ def lesson_view(db: Session, user: Principal, lesson: Lesson) -> dict:
             "chapter_title": lesson.chapter.title, "course_id": str(course.id), "course_title": course.title,
             "items": lesson_node["items"], "items_total": lesson_node["items_total"],
             "items_done": lesson_node["items_done"],
-            "flashcards_unlocked": user.is_teacher or lesson_node["items_done"] > 0}
+            "flashcards_unlocked": user.is_teacher or 0 < lesson_node["items_done"] == lesson_node["items_total"]}
 
 
 def item_detail(db: Session, user: Principal, item: LessonItem) -> dict:

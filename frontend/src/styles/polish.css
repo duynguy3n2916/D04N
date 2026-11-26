@@ -195,7 +195,7 @@ b, strong { font-weight: 600; }
 
 /* ===== Trang Thẻ ghi nhớ ===== */
 .fc-hub { display: flex; flex-direction: column; gap: 18px; }
-.fc-deck-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.fc-deck-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
 .fc-library-list { display: grid; gap: 12px; }
 .fc-library-card { display: grid; justify-items: start; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; overflow-wrap: anywhere; }
 .fc-library-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
@@ -204,6 +204,7 @@ b, strong { font-weight: 600; }
   border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; font: inherit; transition: border-color .15s, background-color .15s; }
 .fc-deck:hover:not(:disabled) { border-color: var(--brand-line); background: var(--brand-soft); }
 .fc-deck:disabled { cursor: default; opacity: .65; }
+.fc-deck-locked:disabled { opacity: 1; background: var(--paper); }
 .fc-deck-ico { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: var(--t-wash); color: var(--muted); }
 .fc-deck-due .fc-deck-ico { background: var(--brand-soft); color: var(--brand-strong); }
 .fc-deck-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -214,10 +215,24 @@ b, strong { font-weight: 600; }
 .fc-deck-ok { flex: none; display: inline-flex; align-items: center; gap: 4px; color: var(--ok-text); font-size: 13px; }
 
 /* Chọn khóa học trong Trợ lý học tập */
-.cc-course { display: inline-flex; align-items: center; gap: 6px; padding: 4px 6px 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--muted); max-width: 320px; }
-.cc-course select { border: none; background: transparent; font: inherit; font-size: 14px; color: var(--ink); padding: 2px 4px; max-width: 260px; text-overflow: ellipsis; cursor: pointer; }
-.cc-course select:disabled { cursor: default; color: var(--muted); }
-.cc-course-row { display: flex; align-items: center; justify-content: center; gap: 10px; color: var(--muted); font-size: 14px; margin-bottom: 4px; flex-wrap: wrap; }
+.cc-course-picker { position: relative; min-width: 0; max-width: 320px; margin-left: -8px; }
+.cc-course { display: flex; align-items: center; gap: 7px; max-width: 100%; min-height: 36px; padding: 5px 10px;
+  border: 1px solid transparent; border-radius: 999px; background: var(--bg-soft); color: var(--ink);
+  font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; }
+.cc-course span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cc-course svg { flex: none; color: var(--muted); }
+.cc-course:disabled { cursor: default; color: var(--muted); }
+.cc-course:hover:not(:disabled), .cc-course[aria-expanded='true'] { background: var(--brand-soft); color: var(--brand-strong); }
+.cc-course[aria-expanded='true'] .cc-course-caret { transform: rotate(180deg); }
+.cc-course-menu { position: absolute; inset: auto auto calc(100% + 8px) 0; z-index: 20;
+  width: min(320px, calc(100vw - 48px)); min-width: 100%; max-height: min(260px, 42dvh); overflow-y: auto;
+  padding: 6px; border: 1px solid var(--line); border-radius: 14px; background: #fff; box-shadow: 0 12px 32px rgba(20, 20, 20, .14); }
+.cc-course-option { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 40px;
+  padding: 8px 10px; border-radius: 10px; color: var(--ink); font-size: 14px; line-height: 1.35; cursor: pointer; }
+.cc-course-option span { min-width: 0; overflow-wrap: anywhere; }
+.cc-course-option svg { flex: none; }
+.cc-course-option[aria-selected='true'] { color: var(--brand-strong); font-weight: 600; }
+.cc-course-option:hover, .cc-course-active { background: var(--brand-soft); color: var(--brand-strong); }
 .quiz-no-ai { display: inline-flex; align-items: center; gap: 6px; }
 
 /* ===== Khung vuông góc (2026-11-26): khung video và khung Tutor không bo cong; tin nhắn và ô chat vẫn bo tròn ===== */
@@ -300,8 +315,6 @@ b, strong { font-weight: 600; }
   border: 1px solid var(--line); box-shadow: 0 2px 12px rgba(20, 20, 20, .06); }
 .cc-composer textarea { padding: 6px 8px 2px 2px; font-size: 16px; line-height: 1.5; min-height: 30px; overflow-y: auto; scrollbar-width: thin; }
 .cc-composer-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.cc-composer-row .cc-course { margin-left: -8px; border-color: transparent; background: var(--bg-soft); padding: 3px 6px 3px 10px; font-size: 13px; }
-.cc-composer-row .cc-course select { font-size: 13px; max-width: 220px; }
 .cc-composer-row .cc-send { margin-left: auto; width: 36px; height: 36px; background: var(--ink); }
 .cc-composer-row .cc-send:hover:not(:disabled) { background: #000; }
 .cc-composer-row .cc-send:disabled { opacity: .25; }

@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from datetime import timedelta
 
-from sqlalchemy import and_, func, select, true, union_all
+from sqlalchemy import and_, func, or_, select, true, union_all
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -84,10 +84,13 @@ def _card_dict(card: Card, reps: int | None) -> dict:
             "new": reps is None, "remembered": bool(reps)}
 
 
-def _has_completed_item(user: Principal):
-    return (select(LessonItem.id).join(ItemProgress, ItemProgress.item_id == LessonItem.id)
-            .where(LessonItem.lesson_id == Lesson.id, ItemProgress.student_id == user.user_id,
-                   ItemProgress.status == "completed").exists())
+def _lesson_unlocked(user: Principal):
+    if user.is_teacher:
+        return true()
+    items = select(LessonItem.id).where(LessonItem.lesson_id == Lesson.id)
+    completed = (select(ItemProgress.id).where(ItemProgress.item_id == LessonItem.id,
+                 ItemProgress.student_id == user.user_id, ItemProgress.status == "completed").exists())
+    return and_(items.exists(), ~items.where(~completed).exists())
 
 
 def _visible_lessons(db: Session, user: Principal):
@@ -98,17 +101,16 @@ def _visible_lessons(db: Session, user: Principal):
 
 
 def unlocked_lessons(db: Session, user: Principal):
-    return _visible_lessons(db, user).filter(true() if user.is_teacher else _has_completed_item(user))
+    return _visible_lessons(db, user).filter(_lesson_unlocked(user))
 
 
 def _require_unlocked(db: Session, user: Principal, lesson_code: str) -> str:
-    unlocked = true() if user.is_teacher else _has_completed_item(user)
-    lesson = (_visible_lessons(db, user).with_entities(Lesson.title, unlocked.label("unlocked"))
+    lesson = (_visible_lessons(db, user).with_entities(Lesson.title, _lesson_unlocked(user).label("unlocked"))
               .filter(Lesson.code == lesson_code).first())
     if lesson is None:
         raise AppError(404, "NOT_FOUND", "Không tìm thấy bài học.")
     if not lesson.unlocked:
-        raise AppError(403, "FLASHCARDS_LOCKED", "Hoàn thành ít nhất một mục trong bài để mở khóa thẻ ghi nhớ.")
+        raise AppError(403, "FLASHCARDS_LOCKED", "Hoàn thành bài học để mở khóa thẻ ghi nhớ.")
     return lesson.title
 
 
@@ -162,15 +164,21 @@ def summary(db: Session, user: Principal, lesson_code: str) -> dict:
 
 def overview(db: Session, user: Principal) -> list[dict]:
     courses = learning.visible_courses(db, user)
-    lessons = unlocked_lessons(db, user).order_by(Chapter.position, Chapter.id, Lesson.position, Lesson.id).all()
-    counts = _counts_by_lesson(db, user, [ls.code for ls in lessons]) if lessons else {}
+    has_bank_cards = select(QuestionBankItem.id).where(QuestionBankItem.lesson_id == Lesson.code,
+                                                      QuestionBankItem.status == "approved").exists()
+    has_ai_cards = select(FlashcardCard.id).where(FlashcardCard.lesson_code == Lesson.code,
+                                                 FlashcardCard.status == "approved").exists()
+    lessons = (_visible_lessons(db, user).add_columns(_lesson_unlocked(user).label("unlocked"))
+               .filter(or_(has_bank_cards, has_ai_cards))
+               .order_by(Chapter.position, Chapter.id, Lesson.position, Lesson.id).all())
+    unlocked_codes = [ls.code for ls in lessons if ls.unlocked]
+    counts = _counts_by_lesson(db, user, unlocked_codes) if unlocked_codes else {}
     by_course: dict = {}
     for ls in lessons:
-        if ls.code in counts:
-            by_course.setdefault(ls.course_id, []).append({
-                "lesson_code": ls.code, "lesson_title": ls.title, "lesson_id": str(ls.lesson_id),
-                "chapter_title": ls.chapter_title, **counts[ls.code],
-            })
+        by_course.setdefault(ls.course_id, []).append({
+            "lesson_code": ls.code, "lesson_title": ls.title, "lesson_id": str(ls.lesson_id),
+            "chapter_title": ls.chapter_title, "locked": not ls.unlocked, **counts.get(ls.code, EMPTY_COUNTS),
+        })
     return [{"course_id": str(c.id), "code": c.code, "title": c.title,
              "total": sum(x["total"] for x in by_course.get(c.id, [])),
              "due": sum(x["due"] for x in by_course.get(c.id, [])),

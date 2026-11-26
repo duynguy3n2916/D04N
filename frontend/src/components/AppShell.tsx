@@ -59,10 +59,9 @@ export function AppShell({ path, children, aside }: { path: string; children: Re
   const [reduceFx, setReduce] = useState(() => document.documentElement.classList.contains('reduce-fx'));
   const toggleFx = () => { setReduce(!reduceFx); setReduceFx(!reduceFx); };
   const noti = useNotifications();
-  // Người dùng tự thu gọn / mở rộng menu (nhớ lựa chọn). Chưa chọn thì trang Trợ lý (đã có cột lịch sử riêng)
-  // mặc định thu thành dải icon để không thành hai thanh bên cạnh nhau.
+  // Giữ lựa chọn thu gọn hoặc mở rộng khi chuyển trang.
   const [navPref, setNavPref] = useState(() => storage.get(NAV_KEY));
-  const compact = navPref ? navPref === 'mini' : path.startsWith('/coach');
+  const compact = navPref === 'mini';
   const toggleNav = () => { const next = compact ? 'full' : 'mini'; storage.set(NAV_KEY, next); setNavPref(next); };
   const groups = navGroups(teacher ? user?.role : 'student');
   // số mục menu: CSS chia chiều cao màn hình cho đủ hiện hết, không phải cuộn (mỗi tiêu đề nhóm tính ~0.6 mục)
