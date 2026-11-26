@@ -806,7 +806,7 @@ admin quản lý toàn bộ và phân vai trò. Mật khẩu tạm sinh ngẫu n
 
 ```
 # DATABASE_URL trong .env trỏ tới Postgres cloud (Neon, có pgvector)
-python init_db.py --seed      # tạo/nâng cấp schema + dữ liệu demo
+python scripts/init_db.py --seed      # tạo/nâng cấp schema + dữ liệu demo
 uvicorn app.main:app --reload --port 8000
 # Giao diện: http://localhost:8000/app/   Swagger: /docs
 # Sửa giao diện: cd frontend && npm install && npm run dev  (http://localhost:5173/app/)
@@ -836,13 +836,13 @@ uvicorn app.main:app --reload --port 8000
 | 2 | Không xác thực / phân quyền; scope do client gửi | toàn bộ routers | Lộ dữ liệu chéo lớp, HS gọi được API GV | Mục 11 |
 | 3 | Hint mode dựa vào cờ client | `routers/chat.py` | HS tắt cờ là lấy được đáp án | Suy ra từ `video_sessions` |
 | 4 | Nộp đáp án không cập nhật state machine | `routers/videos.py` | Phiên kẹt ở `WAITING_FOR_STUDENT` tới khi gọi resume | Gọi `transition()` trong answer |
-| 5 | Không chặn trigger khi đang có câu hỏi active; không khóa dòng | `services/courses/workflow.py` | Có thể hai câu hỏi cùng lúc | Guard + `FOR UPDATE` |
+| 5 | Không chặn trigger khi đang có câu hỏi active; không khóa dòng | `services/video/workflow.py` | Có thể hai câu hỏi cùng lúc | Guard + `FOR UPDATE` |
 | 6 | Timeout do client báo | `routers/workflow.py` | Trái nguyên tắc 9.2 | `question_deadline_at` + sweeper |
 | 7 | Ingest/transcribe đồng bộ trong request | `documents.py`, `videos.py` | Request treo với file lớn; Whisper giới hạn 25MB | Job nền + ffmpeg (imageio-ffmpeg) cắt đoạn 10 phút |
 | 8 | Retrieval không có ngưỡng điểm, không trả timestamp | `services/rag/retrieval.py` | Không biết "thiếu context"; trích dẫn video thiếu mm:ss | Mục 6.2 |
 | 9 | Câu hỏi video lưu thẳng `approved`; duyệt theo cả lần sinh | `videos.py`, `teacher.py` | Không đo được acceptance rate từng câu | `question_bank`, status `draft` |
 | 10 | Không log prompt/model/token/latency từng lượt gọi | `services/ai/llm.py` | Thiếu dữ liệu latency/cost cho báo cáo | LLM Gateway |
-| 11 | Sửa transcript xóa segment & chunk cũ | `services/media/transcription.py` | Không rollback được | Versioning |
+| 11 | Sửa transcript xóa segment & chunk cũ | `services/video/transcription.py` | Không rollback được | Versioning |
 | 12 | Không có vector index; dùng `create_all` thay Alembic | `init_db.py` | Chậm khi dữ liệu lớn; khó migrate | HNSW + Alembic |
 | 13 | Logic nghiệp vụ & prompt nằm trong router | `videos.py`, `teacher.py` | Khó test, trùng lặp `_parse_uuid` | Dời xuống services + `services/ai/prompts` |
 | 14 | Chấm trắc nghiệm so khớp chuỗi lỏng (`cor_norm in std_norm`) | `videos.py` | Chấm sai khi đáp án là chữ cái hoặc chuỗi con | Chuẩn hóa về **chỉ số lựa chọn** (A/B/C/D) khi lưu câu hỏi |

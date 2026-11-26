@@ -1,10 +1,10 @@
 """Khởi tạo / nâng cấp database.
 
-    python init_db.py            # tạo bảng mới + nâng cấp schema cũ (an toàn, chạy lại nhiều lần được)
-    python init_db.py --seed     # + nạp dữ liệu demo (bài OOP, transcript video-01, câu hỏi mẫu, bộ đánh giá)
-    python init_db.py --reset    # XÓA toàn bộ dữ liệu AI rồi tạo lại (hỏi xác nhận)
-    python init_db.py --reembed  # đổi kích thước vector theo EMBEDDING_DIM và tạo lại embedding
-    python init_db.py --create-admin admin   # tạo (hoặc đặt lại mật khẩu) tài khoản quản trị, nhập mật khẩu ẩn
+    python scripts/init_db.py            # tạo bảng mới + nâng cấp schema cũ (an toàn, chạy lại nhiều lần được)
+    python scripts/init_db.py --seed     # + nạp dữ liệu demo (bài OOP, transcript video-01, câu hỏi mẫu, bộ đánh giá)
+    python scripts/init_db.py --reset    # XÓA toàn bộ dữ liệu AI rồi tạo lại (hỏi xác nhận)
+    python scripts/init_db.py --reembed  # đổi kích thước vector theo EMBEDDING_DIM và tạo lại embedding
+    python scripts/init_db.py --create-admin admin   # tạo (hoặc đặt lại mật khẩu) tài khoản quản trị, nhập mật khẩu ẩn
 """
 import argparse
 import logging
@@ -14,13 +14,16 @@ from pathlib import Path
 
 from sqlalchemy import text
 
+# chạy được bằng `python scripts/<tên>.py` từ thư mục ai-backend: thêm ai-backend vào sys.path để import app
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
 import app.models  # noqa: F401
 from app.config import settings
 from app.core.context import setup_logging
 from app.database import Base, SessionLocal, engine
 from app.migrate import change_embedding_dim, embedding_dim_in_db, migrate
 
-SAMPLE = Path(__file__).resolve().parent / "sample_data"
+SAMPLE = Path(__file__).resolve().parent.parent / "sample_data"
 LESSON_ID, COURSE_ID, VIDEO_ID = "lesson-oop-01", "course-cs-101", "video-01"
 
 
@@ -40,7 +43,7 @@ def seed() -> None:
     from app.services.ai.evaluation import load_default_samples
     from app.services.ai.video_learning import save_question
     from app.services.media.storage import sha256_text
-    from app.services.media.transcription import parse_srt, save_transcript_version
+    from app.services.video.transcription import parse_srt, save_transcript_version
     from app.services.rag.ingestion import create_document, find_duplicate
     from app.services.system import jobs
 

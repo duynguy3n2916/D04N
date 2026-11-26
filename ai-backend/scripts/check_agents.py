@@ -1,13 +1,17 @@
 """Chẩn đoán 2 AI trong video: Question Agent (hỏi) và Tutor AI (giải thích đáp án).
 
 Chạy trong thư mục ai-backend (cùng .env với server):
-    python check_agents.py            # kiểm tra cấu hình + dữ liệu + gọi thử LLM
-    python check_agents.py --no-llm   # chỉ kiểm tra dữ liệu, không gọi LLM
+    python scripts/check_agents.py            # kiểm tra cấu hình + dữ liệu + gọi thử LLM
+    python scripts/check_agents.py --no-llm   # chỉ kiểm tra dữ liệu, không gọi LLM
 
 Script không in khóa API.
 """
 import sys
+from pathlib import Path
 from datetime import timedelta
+
+# chạy được bằng `python scripts/<tên>.py` từ thư mục ai-backend: thêm ai-backend vào sys.path để import app
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.config import settings
 from app.core.utils import fmt_ts, utcnow

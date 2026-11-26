@@ -20,7 +20,7 @@ from app.services.ai.grading import correct_answer_text
 from app.services.ai import guardrails
 from app.services.ai.guardrails import wrap_documents
 from app.services.ai.prompts import CONVERSATION_SUMMARY, TUTOR_ANSWER, TUTOR_HINT
-from app.services.courses import workflow
+from app.services.video import workflow
 from app.services.rag.hybrid import rrf
 from app.services.rag.retrieval import (
     RetrievalScope,

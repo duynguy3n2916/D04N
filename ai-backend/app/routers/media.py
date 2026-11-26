@@ -53,7 +53,7 @@ def _attach_video(db: Session, video: MediaVideo, lesson: Lesson | None) -> None
 
 def _duration(path: str) -> float | None:
     try:
-        from app.services.media.transcription import _ffmpeg_exe, _media_duration
+        from app.services.video.transcription import _ffmpeg_exe, _media_duration
         exe = _ffmpeg_exe()
         return _media_duration(exe, path) if exe else None
     except Exception:

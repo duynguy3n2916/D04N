@@ -40,7 +40,7 @@ Terminal hiện mã QR. Android: mở Expo Go → *Scan QR code*. iPhone: mở a
 Trên iPhone, Expo Go chỉ mở dự án khi máy tính đã chạy `npx expo login` và Expo Go đăng nhập cùng tài khoản.
 
 **3. Trên điện thoại:** đăng nhập bằng tài khoản demo (`sv-01` hoặc `gv-demo`, mật khẩu `Demo@2026`
-nếu đã chạy `init_db.py --seed`). Không cần nhập địa chỉ máy chủ.
+nếu đã chạy `scripts/init_db.py --seed`). Không cần nhập địa chỉ máy chủ.
 
 Nếu backend chạy ở máy khác: đặt `EXPO_PUBLIC_API_URL=http://192.168.1.10:8000 npm start`, hoặc khi gặp lỗi kết nối
 bấm *Đổi máy chủ* ở màn đăng nhập. Bản build (APK) dùng `expo.extra.apiUrl` trong `app.json` hoặc `EXPO_PUBLIC_API_URL` lúc build.

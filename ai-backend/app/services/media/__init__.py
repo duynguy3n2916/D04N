@@ -1,1 +1,1 @@
-"""File và video: lưu upload, kho file (local/R2), phụ đề và phiên âm."""
+"""File: lưu upload an toàn, kho file (local / Cloudflare R2)."""

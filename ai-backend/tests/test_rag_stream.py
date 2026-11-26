@@ -3,7 +3,7 @@ import json
 from types import SimpleNamespace
 
 from app.config import settings
-from app.services.courses import workflow
+from app.services.video import workflow
 from app.services.rag import hybrid
 from app.services.rag.retrieval import RetrievalScope, retrieve
 from tests.conftest import token

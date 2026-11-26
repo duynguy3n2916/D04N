@@ -82,16 +82,18 @@ D04N/
 │   │   ├── models/            # bảng dữ liệu (SQLAlchemy)
 │   │   ├── routers/           # các nhóm API /ai/* (chỉ nhận request, kiểm quyền, gọi service)
 │   │   └── services/          # nghiệp vụ, chia theo mảng:
-│   │       ├── ai/            #   LLM gateway, prompt, Tutor, Study Coach, sinh câu hỏi, chấm, đánh giá
+│   │       ├── ai/            #   LLM gateway, prompt, guardrail, Tutor, Study Coach, sinh câu hỏi, chấm, đánh giá
 │   │       ├── rag/           #   đọc học liệu, chia đoạn, embedding, tìm kiếm hybrid
-│   │       ├── courses/       #   khóa học, tiến độ, flashcard, phiên xem video, xuất đề / báo cáo
-│   │       ├── media/         #   lưu upload, kho file (local / R2), phụ đề và phiên âm
+│   │       ├── courses/       #   khóa học, tiến độ, flashcard, xuất đề / báo cáo
+│   │       ├── video/         #   phiên xem video + Question Agent, phụ đề và phiên âm
+│   │       ├── media/         #   lưu upload, kho file (local / R2)
 │   │       ├── social/        #   diễn đàn, nhắn tin, thông báo
 │   │       └── system/        #   tài khoản, job nền, dọn dữ liệu, email
 │   ├── sample_data/           # dữ liệu demo: bài OOP, video + phụ đề, slide PDF, bộ câu hỏi đánh giá
 │   ├── tests/                 # pytest (Postgres thật, LLM giả lập)
-│   ├── init_db.py             # tạo / nâng cấp database, nạp dữ liệu demo, tạo tài khoản quản trị
-│   ├── check_agents.py        # chẩn đoán Question Agent và Tutor AI trong video
+│   ├── scripts/
+│   │   ├── init_db.py         # tạo / nâng cấp database, nạp dữ liệu demo, tạo tài khoản quản trị
+│   │   └── check_agents.py    # chẩn đoán Question Agent và Tutor AI trong video
 │   ├── Dockerfile             # đóng gói backend (tùy chọn)
 │   └── docker-compose.yml     # chạy backend trong Docker (tùy chọn)
 ├── frontend/                  # React + TypeScript (bản build sẵn ở frontend/dist)
@@ -127,7 +129,7 @@ copy .env.example .env          # macOS/Linux: cp .env.example .env
 
 # 2. Thư viện + khởi tạo schema + dữ liệu demo
 pip install -r requirements.txt
-python init_db.py --seed
+python scripts/init_db.py --seed
 
 # 3. Chạy (từ thư mục gốc repo)
 cd ..
@@ -152,7 +154,7 @@ Mở **http://localhost:8000** (giao diện) — tài liệu API: http://localho
 | `gv-demo` | Giáo viên lớp CS101 |
 | `sv-01`, `sv-02` | Học sinh lớp CS101 |
 
-Đổi mật khẩu các tài khoản này trước khi cho người khác dùng. Tạo tài khoản quản trị riêng: `python init_db.py --create-admin admin`.
+Đổi mật khẩu các tài khoản này trước khi cho người khác dùng. Tạo tài khoản quản trị riêng: `python scripts/init_db.py --create-admin admin`.
 
 > **Lỗi “KHÔNG KẾT NỐI ĐƯỢC POSTGRES”:** kiểm tra `DATABASE_URL` trong `.env` (đúng host, mật khẩu, `sslmode=require`) và kết nối mạng.
 > Nếu thiếu `DATABASE_URL`, app dừng ngay khi khởi động và báo lỗi rõ ràng.

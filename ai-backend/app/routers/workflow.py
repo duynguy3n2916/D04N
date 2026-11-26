@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.security import Principal, get_current_user
 from app.core.utils import clean_id, parse_uuid
 from app.database import get_db
-from app.services.courses import workflow
+from app.services.video import workflow
 
 router = APIRouter(prefix="/ai", tags=["workflow"])
 

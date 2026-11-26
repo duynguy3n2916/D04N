@@ -12,9 +12,9 @@ from app.models.learning import MediaVideo
 from app.models.transcript import TranscriptSegment, VideoTranscript
 from app.services.ai import video_learning
 from app.services.ai.schemas import Difficulty, QuestionType
-from app.services.courses import workflow
+from app.services.video import workflow
 from app.services.media.storage import safe_extension, save_upload
-from app.services.media.transcription import parse_transcript_content, save_transcript_version, transcript_to_dict
+from app.services.video.transcription import parse_transcript_content, save_transcript_version, transcript_to_dict
 from app.services.rag.retrieval import active_transcript
 from app.services.system import jobs
 

@@ -22,12 +22,15 @@ from app.routers import (
     auth,
     chat,
     coach,
+    courses,
     documents,
     evaluation,
+    flashcards,
     forum,
     learn,
     media,
     messages,
+    notifications,
     teacher,
     users,
     videos,
@@ -36,8 +39,8 @@ from app.routers import (
 from app.routers import jobs as jobs_router
 from app.services.ai import evaluation as _ev  # noqa: F401 (đăng ký job)
 from app.services.ai import tutor_explain as _te  # noqa: F401 (đăng ký job tutor_explain)
-from app.services.courses.workflow import sweep_expired
-from app.services.media import transcription as _tr  # noqa: F401 (đăng ký job)
+from app.services.video import transcription as _tr  # noqa: F401 (đăng ký job)
+from app.services.video.workflow import sweep_expired
 from app.services.rag import ingestion as _ing  # noqa: F401 (đăng ký job)
 from app.services.system import jobs  # noqa: F401 (đăng ký job)
 from app.services.system.retention import purge_expired
@@ -162,7 +165,8 @@ app.add_middleware(
 )
 install_error_handlers(app)
 
-for r in (auth, users, documents, chat, teacher, videos, workflow, evaluation, jobs_router, admin, learn, media, forum, messages, coach):
+for r in (auth, users, documents, chat, teacher, videos, workflow, evaluation, jobs_router, admin, learn, courses, flashcards,
+          notifications, media, forum, messages, coach):
     app.include_router(r.router)
 
 

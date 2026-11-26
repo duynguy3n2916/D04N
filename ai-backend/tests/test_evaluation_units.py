@@ -6,7 +6,7 @@ import pytest
 from app.core.utils import resolve_option_index
 from app.services.ai.evaluation import chunk_matches, word_error_rate
 from app.services.ai.schemas import AgentQuestionItem, QuestionItem, schema_hint
-from app.services.media.transcription import group_segments, parse_transcript_content
+from app.services.video.transcription import group_segments, parse_transcript_content
 from app.services.rag.chunking import chunk_text
 
 

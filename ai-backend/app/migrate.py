@@ -221,7 +221,7 @@ def migrate(verbose: bool = True) -> dict:
         if dim and dim != settings.embedding_dim:
             report["warning"] = (
                 f"Cột ai_chunks.embedding đang là vector({dim}) nhưng EMBEDDING_DIM={settings.embedding_dim}. "
-                "Chạy `python init_db.py --reembed` để đổi kích thước và tạo lại embedding."
+                "Chạy `python scripts/init_db.py --reembed` để đổi kích thước và tạo lại embedding."
             )
         else:
             ensure_vector_index(conn)

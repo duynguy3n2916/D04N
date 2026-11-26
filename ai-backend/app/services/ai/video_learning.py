@@ -224,7 +224,7 @@ def update_question(db: Session, user: Principal, question_id, changes: dict) ->
 
 
 def list_questions(db: Session, video_id: str, *, manage: bool) -> list[dict]:
-    from app.services.courses.workflow import public_question
+    from app.services.video.workflow import public_question
     q = db.query(VideoQuestion).filter(VideoQuestion.video_id == video_id)
     if manage:
         q = q.filter(VideoQuestion.origin != "agent", VideoQuestion.status != "archived")

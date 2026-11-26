@@ -15,9 +15,9 @@ copy .env.example .env          # macOS/Linux: cp .env.example .env
 # 2. Thư viện + khởi tạo / nâng cấp DB + dữ liệu demo (kèm tài khoản demo)
 #    Không cần Docker cho DB: schema và extension vector được app tự tạo khi khởi động.
 pip install -r requirements.txt
-python init_db.py --seed
+python scripts/init_db.py --seed
 #    hoặc chỉ tạo tài khoản quản trị (nhập mật khẩu ẩn):
-python init_db.py --create-admin admin
+python scripts/init_db.py --create-admin admin
 
 # 3. Chạy
 uvicorn app.main:app --reload --port 8000   # hoặc ../scripts/run.ps1 -Reload
@@ -53,7 +53,7 @@ npm run typecheck
 | Giáo viên | Soạn khóa học, tải video + phiên âm/sửa phụ đề, AI soạn câu hỏi theo mốc video, ngân hàng câu hỏi, học liệu, đánh giá Tutor; admin xem chi phí/độ trễ LLM |
 
 Nguồn mà Tutor trích dẫn bấm được: nguồn video tua tới đúng giây, nguồn slide mở đúng trang.
-- **Nâng cấp từ phiên bản cũ:** chỉ cần chạy lại `python init_db.py` (hoặc khởi động server — server tự đồng bộ schema).
+- **Nâng cấp từ phiên bản cũ:** chỉ cần chạy lại `python scripts/init_db.py` (hoặc khởi động server — server tự đồng bộ schema).
   Dữ liệu cũ được giữ; cột `lesson_id/course_id/class_id` chuyển sang dạng chuỗi để nhận mã LMS như `lesson-oop-01`.
 - Chạy cả backend bằng Docker (tùy chọn): `docker compose --profile full up -d --build`. Container đọc `DATABASE_URL` và R2 từ `.env`, không có DB riêng.
 
@@ -61,16 +61,16 @@ Nguồn mà Tutor trích dẫn bấm được: nguồn video tua tới đúng gi
 
 | Lệnh | Tác dụng |
 |---|---|
-| `python init_db.py` | Tạo bảng mới, thêm cột còn thiếu, tạo index (chạy lại an toàn) |
-| `python init_db.py --seed` | Nạp dữ liệu demo (khóa học, video, slide, bài đọc) + bộ 87 câu đánh giá |
-| `python init_db.py --reembed` | Sau khi đổi model embedding / `EMBEDDING_DIM`: đổi kích thước vector và tạo lại embedding |
-| `python init_db.py --reset` | Xóa toàn bộ dữ liệu AI (có hỏi xác nhận) |
+| `python scripts/init_db.py` | Tạo bảng mới, thêm cột còn thiếu, tạo index (chạy lại an toàn) |
+| `python scripts/init_db.py --seed` | Nạp dữ liệu demo (khóa học, video, slide, bài đọc) + bộ 87 câu đánh giá |
+| `python scripts/init_db.py --reembed` | Sau khi đổi model embedding / `EMBEDDING_DIM`: đổi kích thước vector và tạo lại embedding |
+| `python scripts/init_db.py --reset` | Xóa toàn bộ dữ liệu AI (có hỏi xác nhận) |
 | `pip install -r requirements-dev.txt && pytest` | Chạy 81 bài test trên database test riêng (`TEST_DATABASE_URL` trong .env; tên phải có chữ `test`, không được trùng `DATABASE_URL`) |
 
 ## Cơ sở dữ liệu và lưu trữ file
 
 - **Database:** PostgreSQL cloud (Neon) có extension `pgvector`, cấu hình bằng `DATABASE_URL`. Không còn DB chạy local.
-  Nên dùng direct connection (bỏ `-pooler` khỏi host) cho các lệnh quản trị như `init_db.py`, restore hoặc migrate.
+  Nên dùng direct connection (bỏ `-pooler` khỏi host) cho các lệnh quản trị như `scripts/init_db.py`, restore hoặc migrate.
 - **File (tài liệu, slide, video, ảnh bìa khóa học):** mặc định lưu trên **Cloudflare R2** (`MEDIA_STORAGE=r2`). DB chỉ giữ
   *khóa* file dạng `documents/<uuid>.pdf`, `media/<uuid>.mp4`, `covers/<uuid>.png`. Đặt `MEDIA_STORAGE=local` để lưu vào
   thư mục `STORAGE_PATH` (mặc định `./storage`), tiện cho dev không có mạng.
@@ -95,7 +95,7 @@ Nguồn mà Tutor trích dẫn bấm được: nguồn video tua tới đúng gi
 - Tài liệu / transcript / khóa học không gắn `class_id` thì mọi người dùng thấy; gắn lớp thì chỉ thành viên lớp (hoặc admin) thấy.
 
 **Nâng cấp từ bản trước:** xóa dòng `ALLOW_DEMO_LOGIN` trong `.env` (đăng nhập không mật khẩu đã bỏ), đặt `JWT_SECRET`
-ngẫu nhiên ≥ 32 ký tự, chạy `python init_db.py` rồi `python init_db.py --create-admin admin`. Tiến độ học cũ gắn theo mã người
+ngẫu nhiên ≥ 32 ký tự, chạy `python scripts/init_db.py` rồi `python scripts/init_db.py --create-admin admin`. Tiến độ học cũ gắn theo mã người
 dùng, nên tạo tài khoản trùng mã cũ (ví dụ `sv-01`) là giữ được tiến độ.
 
 ## RAG với LangChain
@@ -118,12 +118,13 @@ app/
   migrate.py           # đồng bộ schema idempotent; bỏ qua khi dấu vân tay schema không đổi (bảng app_schema_state)
   core/                # security (JWT, vai trò, tra tài khoản mỗi request), passwords (scrypt), errors, context, utils
   models/              # bảng dữ liệu (xem docs/architecture.md §9)
-  routers/             # auth, users, classes, documents, chat, coach, teacher, videos, workflow, evaluation, jobs,
-                       # admin, learn, media, forum, messages
+  routers/             # auth, users, documents, chat (Tutor), coach, teacher, videos, workflow, evaluation, jobs,
+                       # admin, learn (học sinh), courses (soạn khóa), flashcards, notifications, media, forum, messages
   services/
     ai/
       llm.py           # LLM Gateway: LangChain ChatOpenAI, validate JSON + tự sửa 1 lần, log ai_llm_calls
       prompts.py       # prompt có version
+      guardrails.py    # che PII, chống prompt injection, nhận câu từ chối, khóa khi làm bài, giới hạn lượt hỏi
       schemas.py       # schema Pydantic cho đầu ra LLM
       tutor.py         # Tutor: lịch sử + tóm tắt, transcript quanh video_time, hint mode do server quyết, chặn lộ đáp án
       tutor_explain.py # Tutor tự giải thích đáp án khi học sinh hết giờ / trả lời sai (AI thứ hai, chạy nền)
@@ -143,16 +144,18 @@ app/
     courses/
       learning.py      # lộ trình học: trạng thái mục, tiến độ, XP/chuỗi ngày/bảng xếp hạng, quiz cuối bài
       course_admin.py  # soạn khóa học: chương, bài, mục (video/slide/bài đọc/kiểm tra)
-      workflow.py      # state machine phiên xem video + Question Agent (khóa dòng, deadline phía server)
       flashcards.py    # ôn thẻ ngắt quãng (SM-2)
       quiz_export.py   # xuất đề DOCX / HTML, nhiều mã đề
       progress_report.py # báo cáo tiến độ học sinh (DOCX)
     media/
       storage.py       # nhận file upload: kiểm tra định dạng, dung lượng, SHA-256
       object_store.py  # kho file: Cloudflare R2 (MEDIA_STORAGE=r2) hoặc thư mục local; hỗ trợ Range để tua video
+    video/
+      workflow.py      # state machine phiên xem video + Question Agent (khóa dòng, deadline phía server)
       transcription.py # phụ đề / Whisper (ffmpeg cắt đoạn), phiên bản transcript, index KB
     social/            # forum.py (diễn đàn lớp), messages.py (nhắn tin), notifications.py
     system/            # accounts.py (đăng nhập, lớp, nhập CSV), jobs.py (job nền + ai_jobs), retention.py, mailer.py
+scripts/               # init_db.py (tạo / nâng cấp DB, dữ liệu demo, tài khoản quản trị), check_agents.py (chẩn đoán AI video)
 sample_data/           # bài học OOP, phụ đề video-01, bộ câu hỏi đánh giá
 tests/                 # pytest: Postgres thật trên database test riêng, LLM giả lập
 ```

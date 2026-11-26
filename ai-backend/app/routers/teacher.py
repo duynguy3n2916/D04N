@@ -10,7 +10,7 @@ from app.core.security import Principal, ensure_class_access, require_teacher
 from app.core.utils import clean_id, parse_uuid
 from app.database import get_db
 from app.models.learning import Lesson
-from app.models.video_question import QuestionBankItem, VideoQuestion
+from app.models.video_question import QuestionBankItem
 from app.services.ai import question_gen
 from app.services.ai.schemas import Difficulty, QuestionType
 from app.services.courses import quiz_export
