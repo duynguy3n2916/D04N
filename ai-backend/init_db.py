@@ -297,7 +297,10 @@ def main() -> None:
         finally:
             db.close()
     if args.seed:
-        seed()
+        if SAMPLE.is_dir():
+            seed()
+        else:
+            print("• Không có thư mục sample_data: bỏ qua dữ liệu demo (khóa OOP, video, bộ đánh giá), chỉ tạo tài khoản demo.")
         seed_accounts()
     if args.create_admin:
         create_admin(args.create_admin)

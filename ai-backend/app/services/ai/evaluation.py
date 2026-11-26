@@ -71,6 +71,8 @@ def load_samples(db: Session, suite: str, samples: list[dict], replace: bool = F
 
 
 def load_default_samples(db: Session, suite: str = "default", replace: bool = True) -> int:
+    if not SAMPLE_FILE.exists():
+        raise AppError(404, "NO_DEFAULT_SAMPLES", "Không có bộ câu hỏi mẫu mặc định. Hãy nạp bộ câu hỏi bằng file JSON của bạn.")
     data = json.loads(SAMPLE_FILE.read_text(encoding="utf-8"))
     return load_samples(db, suite, data["samples"], replace=replace)
 
