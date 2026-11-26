@@ -9,9 +9,9 @@ from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.core.security import Principal
-from app.core.utils import utcnow
-from app.models.learning import FlashcardReview, ForumReply, ForumThread, Lesson, UserSeen
+from app.models.learning import ForumReply, ForumThread, UserSeen
 from app.models.social import UserNotification
+from app.services.courses import flashcards
 
 DEFAULT_LOOKBACK_DAYS = 7  # chưa từng xem: chỉ tính nội dung 7 ngày gần nhất để không báo quá nhiều
 
@@ -52,18 +52,13 @@ def summary(db: Session, user: Principal) -> dict:
                            ForumThread.hidden.isnot(True)).scalar() or 0)
         forum[cid] = int(threads) + int(replies)
 
-    now = utcnow()
-    due_rows = (db.query(FlashcardReview.lesson_code, func.count(FlashcardReview.id))
-                .filter(FlashcardReview.student_id == user.user_id, FlashcardReview.due_at <= now)
-                .group_by(FlashcardReview.lesson_code).all())
-    titles = dict(db.query(Lesson.code, Lesson.title).filter(Lesson.code.in_([c for c, _ in due_rows])).all()) if due_rows else {}
-    flashcards = [{"lesson_code": code, "lesson_title": titles.get(code, code), "due": int(n)} for code, n in due_rows]
+    due_cards = flashcards.due_notifications(db, user)
     from app.services.social import messages
     inbox = (db.query(func.count(UserNotification.id))
              .filter(UserNotification.user_id == user.user_id, UserNotification.read_at.is_(None)).scalar() or 0)
     return {"forum_new": sum(forum.values()), "forum_by_class": forum, "inbox_unread": int(inbox),
             "dm_unread": messages.unread_total(db, user),
-            "flashcards_due": sum(f["due"] for f in flashcards), "flashcards": flashcards}
+            "flashcards_due": sum(f["due"] for f in due_cards), "flashcards": due_cards}
 
 
 def inbox(db: Session, user: Principal, limit: int = 50) -> list[dict]:

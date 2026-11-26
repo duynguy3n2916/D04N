@@ -39,9 +39,20 @@ def _lesson_with_bank(client, teacher, code, n=2):
     return [r["item_id"] for r in rows]
 
 
+def _complete_first_item(client, teacher, student, course_code):
+    course = next(c for c in client.get("/ai/courses", headers=teacher).json() if c["code"] == course_code)
+    tree = client.get(f"/ai/courses/{course['course_id']}", headers=teacher).json()
+    lesson_id = tree["chapters"][0]["lessons"][0]["lesson_id"]
+    tree = client.post(f"/ai/lessons/{lesson_id}/items", headers=teacher,
+                       json={"type": "reading", "title": "Đọc", "content_md": LESSON_TEXT}).json()
+    item_id = tree["chapters"][0]["lessons"][0]["items"][0]["item_id"]
+    assert client.post(f"/ai/learn/items/{item_id}/complete", headers=student).status_code == 200
+
+
 def test_flashcard_flow(client, teacher, fake_llm):
     cards = _lesson_with_bank(client, teacher, "fc1", n=2)
     sv = token(client, "sv-fc1", "student", ["lop-a"])
+    _complete_first_item(client, teacher, sv, "course-fc1")
     sm = client.get("/ai/learn/flashcards/lesson-fc1/summary", headers=sv).json()
     assert sm["total"] == 2 and sm["new"] == 2 and sm["due"] == 2
 
@@ -68,6 +79,7 @@ def test_flashcard_access_and_due_order(client, teacher, fake_llm):
     assert client.post(f"/ai/learn/flashcards/{cards[0]}/review", headers=other, json={"rating": "good"}).status_code in (403, 404)
 
     sv = token(client, "sv-fc2", "student", ["lop-a"])
+    _complete_first_item(client, teacher, sv, "course-fc2")
     client.post(f"/ai/learn/flashcards/{cards[0]}/review", headers=sv, json={"rating": "easy"})
     db = SessionLocal()
     try:
@@ -89,6 +101,7 @@ def _ai_lesson(client, teacher, code):
 def test_ai_flashcards_need_approval(client, teacher, fake_llm):
     _ai_lesson(client, teacher, "lesson-fcai")
     sv = token(client, "sv-fcai", "student", ["lop-a"])
+    _complete_first_item(client, teacher, sv, "course-lesson-fcai")
     assert client.post("/ai/lessons/lesson-fcai/flashcards/generate", headers=sv, json={"count": 2}).status_code == 403
 
     cards = client.post("/ai/lessons/lesson-fcai/flashcards/generate", headers=teacher, json={"count": 2}).json()
@@ -111,12 +124,38 @@ def test_ai_flashcards_need_approval(client, teacher, fake_llm):
 
 
 def test_flashcard_overview_by_course(client, teacher, fake_llm):
-    _lesson_with_bank(client, teacher, "fco", n=2)
+    cards = _lesson_with_bank(client, teacher, "fco", n=2)
     sv = token(client, "sv-fco", "student", ["lop-a"])
+    locked = _lesson_with_bank(client, teacher, "fco-locked", n=1)
+    _complete_first_item(client, teacher, sv, "course-fco")
     rows = client.get("/ai/learn/flashcards", headers=sv).json()
     course = next(c for c in rows if c["code"] == "course-fco")
     assert course["total"] == 2 and course["due"] == 2
     assert course["lessons"][0]["lesson_code"] == "lesson-fco" and course["lessons"][0]["new"] == 2
+    locked_course = next(c for c in rows if c["code"] == "course-fco-locked")
+    assert locked_course["lessons"] == [] and locked_course["total"] == 0
+    for view in ("summary", "due"):
+        assert client.get(f"/ai/learn/flashcards/lesson-fco-locked/{view}", headers=sv).status_code == 403
+    assert client.post(f"/ai/learn/flashcards/{locked[0]}/review", headers=sv, json={"rating": "good"}).status_code == 403
+    assert client.put(f"/ai/learn/flashcards/{locked[0]}/memory", headers=sv, json={"remembered": True}).status_code == 403
     # học sinh lớp khác không thấy khóa này
     other = token(client, "sv-fco-z", "student", ["lop-z"])
     assert all(c["code"] != "course-fco" for c in client.get("/ai/learn/flashcards", headers=other).json())
+
+    library = "/ai/learn/flashcards/library"
+    page = client.get(library, headers=sv, params={"limit": 1}).json()
+    assert len(page["cards"]) == 1 and page["next_offset"] == 1
+    last = client.get(library, headers=sv, params={"limit": 1, "offset": page["next_offset"]}).json()
+    assert {page["cards"][0]["card_id"], last["cards"][0]["card_id"]} == set(cards)
+    assert last["next_offset"] is None and not last["cards"][0]["remembered"]
+    assert client.get(library, headers=other).json()["cards"] == []
+    path = f"/ai/learn/flashcards/{cards[0]}/memory"
+    first = client.put(path, headers=sv, json={"remembered": True}).json()
+    assert first["remembered"] and first["reps"] == 1
+    assert client.put(path, headers=sv, json={"remembered": True}).json() == first
+    remembered = client.get(library, headers=sv, params={"status": "remembered"}).json()["cards"]
+    assert [c["card_id"] for c in remembered] == cards[:1]
+    forgotten = client.put(path, headers=sv, json={"remembered": False}).json()
+    assert not forgotten["remembered"] and forgotten["reps"] == 0
+    unremembered = client.get(library, headers=sv, params={"status": "unremembered"}).json()["cards"]
+    assert {c["card_id"] for c in unremembered} == set(cards)

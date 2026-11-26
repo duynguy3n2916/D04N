@@ -2,12 +2,14 @@
 from dataclasses import dataclass
 from datetime import timedelta
 
+from sqlalchemy import and_, func, select, true, union_all
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.core.security import Principal
-from app.core.utils import as_aware, utcnow
-from app.models.learning import FlashcardCard, FlashcardReview, Lesson
+from app.core.utils import utcnow
+from app.models.learning import Chapter, Course, FlashcardCard, FlashcardReview, ItemProgress, Lesson, LessonItem
 from app.models.video_question import QuestionBankItem
 from app.services.ai import llm
 from app.services.ai.grading import correct_answer_text
@@ -76,82 +78,145 @@ def _from_ai(c: FlashcardCard) -> Card:
     return Card(str(c.id), c.lesson_code, c.front, c.back, "", "flashcard", c.sources)
 
 
-def _card_dict(card: Card, review: FlashcardReview | None) -> dict:
+def _card_dict(card: Card, reps: int | None) -> dict:
     return {"card_id": card.id, "front": card.front, "back": card.back, "explanation": card.explanation,
-            "type": card.type, "sources": card.sources or [], "reps": review.reps if review else 0, "new": review is None}
+            "type": card.type, "sources": card.sources or [], "reps": reps or 0,
+            "new": reps is None, "remembered": bool(reps)}
 
 
-def _lesson_cards(db: Session, user: Principal, lesson_code: str) -> list[Card]:
-    lesson = db.query(Lesson).filter(Lesson.code == lesson_code).first()
+def _has_completed_item(user: Principal):
+    return (select(LessonItem.id).join(ItemProgress, ItemProgress.item_id == LessonItem.id)
+            .where(LessonItem.lesson_id == Lesson.id, ItemProgress.student_id == user.user_id,
+                   ItemProgress.status == "completed").exists())
+
+
+def _visible_lessons(db: Session, user: Principal):
+    return (db.query(Lesson.code.label("code"), Lesson.title.label("title"), Lesson.id.label("lesson_id"),
+                     Chapter.title.label("chapter_title"), Course.id.label("course_id"))
+            .join(Chapter, Lesson.chapter_id == Chapter.id).join(Course, Chapter.course_id == Course.id)
+            .filter(learning.visible_course_filter(user)))
+
+
+def unlocked_lessons(db: Session, user: Principal):
+    return _visible_lessons(db, user).filter(true() if user.is_teacher else _has_completed_item(user))
+
+
+def _require_unlocked(db: Session, user: Principal, lesson_code: str) -> str:
+    unlocked = true() if user.is_teacher else _has_completed_item(user)
+    lesson = (_visible_lessons(db, user).with_entities(Lesson.title, unlocked.label("unlocked"))
+              .filter(Lesson.code == lesson_code).first())
     if lesson is None:
         raise AppError(404, "NOT_FOUND", "Không tìm thấy bài học.")
-    learning.get_lesson(db, user, lesson.id)  # kiểm tra quyền xem bài
-    bank = (db.query(QuestionBankItem).filter(QuestionBankItem.lesson_id == lesson_code,
-                                              QuestionBankItem.status == "approved")
-            .order_by(QuestionBankItem.created_at).all())
-    ai = (db.query(FlashcardCard).filter(FlashcardCard.lesson_code == lesson_code, FlashcardCard.status == "approved")
-          .order_by(FlashcardCard.created_at).all())
-    return [_from_bank(b) for b in bank] + [_from_ai(c) for c in ai]
+    if not lesson.unlocked:
+        raise AppError(403, "FLASHCARDS_LOCKED", "Hoàn thành ít nhất một mục trong bài để mở khóa thẻ ghi nhớ.")
+    return lesson.title
 
 
-def _reviews(db: Session, user: Principal, lesson_code: str) -> dict:
-    return {str(r.card_id): r for r in db.query(FlashcardReview).filter(
-        FlashcardReview.student_id == user.user_id, FlashcardReview.lesson_code == lesson_code).all()}
+def _card_rows(db: Session, user: Principal, lesson_codes):
+    refs = union_all(
+        select(QuestionBankItem.id.label("card_id"), QuestionBankItem.lesson_id.label("lesson_code"),
+               QuestionBankItem.created_at.label("created_at"))
+        .where(QuestionBankItem.lesson_id.in_(lesson_codes), QuestionBankItem.status == "approved"),
+        select(FlashcardCard.id, FlashcardCard.lesson_code, FlashcardCard.created_at)
+        .where(FlashcardCard.lesson_code.in_(lesson_codes), FlashcardCard.status == "approved"),
+    ).subquery()
+    return (db.query(refs.c.card_id, refs.c.lesson_code, refs.c.created_at,
+                     FlashcardReview.reps, FlashcardReview.due_at)
+            .outerjoin(FlashcardReview, and_(FlashcardReview.student_id == user.user_id,
+                                            FlashcardReview.card_id == refs.c.card_id,
+                                            FlashcardReview.lesson_code == refs.c.lesson_code)))
 
 
-def _counts(card_ids: list[str], reviews: dict) -> dict:
-    """Số thẻ tổng / mới / đến hạn / đã thuộc (ôn đúng >= 2 lần)."""
-    now = utcnow()
-    rv = [reviews.get(i) for i in card_ids]
-    return {"total": len(card_ids), "new": sum(1 for r in rv if r is None),
-            "due": sum(1 for r in rv if r is None or as_aware(r.due_at) <= now),
-            "learned": sum(1 for r in rv if r is not None and r.reps >= 2)}
+def _card_details(db: Session, rows) -> list[dict]:
+    if not rows:
+        return []
+    ids = [row.card_id for row in rows]
+    cards = {str(b.id): _from_bank(b) for b in db.query(QuestionBankItem).filter(
+        QuestionBankItem.id.in_(ids), QuestionBankItem.status == "approved")}
+    cards.update({str(c.id): _from_ai(c) for c in db.query(FlashcardCard).filter(
+        FlashcardCard.id.in_(ids), FlashcardCard.status == "approved")})
+    return [{**_card_dict(cards[str(row.card_id)], row.reps), "lesson_code": row.lesson_code}
+            for row in rows if str(row.card_id) in cards]
+
+
+def _counts_by_lesson(db: Session, user: Principal, lesson_codes) -> dict:
+    rows = _card_rows(db, user, lesson_codes).subquery()
+    return {r.lesson_code: {"total": r.total, "new": r.new, "due": r.due, "learned": r.learned}
+            for r in db.query(
+                rows.c.lesson_code,
+                func.count().label("total"),
+                func.count().filter(rows.c.reps.is_(None)).label("new"),
+                func.count().filter((rows.c.due_at.is_(None)) | (rows.c.due_at <= utcnow())).label("due"),
+                func.count().filter(rows.c.reps > 0).label("learned"),
+            ).group_by(rows.c.lesson_code)}
+
+
+EMPTY_COUNTS = {"total": 0, "new": 0, "due": 0, "learned": 0}
 
 
 def summary(db: Session, user: Principal, lesson_code: str) -> dict:
-    cards = _lesson_cards(db, user, lesson_code)
-    lesson = db.query(Lesson).filter(Lesson.code == lesson_code).first()
-    return {"lesson_code": lesson_code, "lesson_title": lesson.title if lesson else None,
-            **_counts([c.id for c in cards], _reviews(db, user, lesson_code))}
+    title = _require_unlocked(db, user, lesson_code)
+    counts = _counts_by_lesson(db, user, [lesson_code])
+    return {"lesson_code": lesson_code, "lesson_title": title, **counts.get(lesson_code, EMPTY_COUNTS)}
 
 
 def overview(db: Session, user: Principal) -> list[dict]:
-    """Trang Thẻ ghi nhớ: mọi khóa học sinh được học, mỗi bài kèm số thẻ (tổng / đến hạn / mới / đã thuộc).
+    courses = learning.visible_courses(db, user)
+    lessons = unlocked_lessons(db, user).order_by(Chapter.position, Chapter.id, Lesson.position, Lesson.id).all()
+    counts = _counts_by_lesson(db, user, [ls.code for ls in lessons]) if lessons else {}
+    by_course: dict = {}
+    for ls in lessons:
+        if ls.code in counts:
+            by_course.setdefault(ls.course_id, []).append({
+                "lesson_code": ls.code, "lesson_title": ls.title, "lesson_id": str(ls.lesson_id),
+                "chapter_title": ls.chapter_title, **counts[ls.code],
+            })
+    return [{"course_id": str(c.id), "code": c.code, "title": c.title,
+             "total": sum(x["total"] for x in by_course.get(c.id, [])),
+             "due": sum(x["due"] for x in by_course.get(c.id, [])),
+             "lessons": by_course.get(c.id, [])} for c in courses]
 
-    Gom truy vấn theo lô (chương/bài, thẻ, lượt ôn) thay vì hỏi DB riêng cho từng bài: DB ở xa nên mỗi lượt
-    đi về đều tốn vài chục ms."""
-    courses = learning.visible_courses(db, user, with_tree=True)
-    if not courses:
-        return []
-    codes = [ls.code for c in courses for ch in c.chapters for ls in ch.lessons]
-    cards: dict[str, list[str]] = {code: [] for code in codes}
-    for cid, code in (db.query(QuestionBankItem.id, QuestionBankItem.lesson_id)
-                      .filter(QuestionBankItem.lesson_id.in_(codes), QuestionBankItem.status == "approved")):
-        cards[code].append(str(cid))
-    for cid, code in (db.query(FlashcardCard.id, FlashcardCard.lesson_code)
-                      .filter(FlashcardCard.lesson_code.in_(codes), FlashcardCard.status == "approved")):
-        cards[code].append(str(cid))
-    reviews = {str(r.card_id): r for r in db.query(FlashcardReview).filter(
-        FlashcardReview.student_id == user.user_id, FlashcardReview.lesson_code.in_(codes))}
-    out = []
-    for course in courses:
-        lessons = [{"lesson_code": ls.code, "lesson_title": ls.title, "lesson_id": str(ls.id), "chapter_title": ch.title,
-                    **_counts(cards.get(ls.code, []), reviews)}
-                   for ch in course.chapters for ls in ch.lessons]
-        out.append({"course_id": str(course.id), "code": course.code, "title": course.title,
-                    "total": sum(x["total"] for x in lessons), "due": sum(x["due"] for x in lessons),
-                    "lessons": lessons})
-    return out
+
+def library_cards(db: Session, user: Principal, status: str, offset: int, limit: int) -> dict:
+    lessons = unlocked_lessons(db, user).subquery()
+    rows = _card_rows(db, user, select(lessons.c.code)).subquery()
+    query = (db.query(rows, lessons.c.title.label("lesson_title")).select_from(rows)
+             .join(lessons, lessons.c.code == rows.c.lesson_code))
+    if status == "remembered":
+        query = query.filter(rows.c.reps > 0)
+    elif status == "unremembered":
+        query = query.filter((rows.c.reps.is_(None)) | (rows.c.reps == 0))
+    page = query.order_by(rows.c.lesson_code, rows.c.created_at, rows.c.card_id).offset(offset).limit(limit + 1).all()
+    titles = {row.lesson_code: row.lesson_title for row in page}
+    cards = _card_details(db, page[:limit])
+    return {"cards": [{**card, "lesson_title": titles[card["lesson_code"]]} for card in cards],
+            "next_offset": offset + limit if len(page) > limit else None}
 
 
 def due_cards(db: Session, user: Principal, lesson_code: str, limit: int = 20) -> dict:
-    cards = _lesson_cards(db, user, lesson_code)
-    reviews = _reviews(db, user, lesson_code)
-    now = utcnow()
-    due = [c for c in cards if c.id not in reviews or as_aware(reviews[c.id].due_at) <= now]
-    due.sort(key=lambda c: (as_aware(reviews[c.id].due_at) if c.id in reviews else now))
-    return {"lesson_code": lesson_code, "cards": [_card_dict(c, reviews.get(c.id)) for c in due[:limit]],
-            "remaining": len(due)}
+    _require_unlocked(db, user, lesson_code)
+    rows = _card_rows(db, user, [lesson_code]).subquery()
+    query = db.query(rows).filter((rows.c.due_at.is_(None)) | (rows.c.due_at <= utcnow()))
+    due = query.order_by(rows.c.due_at.asc().nulls_last(), rows.c.created_at, rows.c.card_id).limit(limit).all()
+    return {"lesson_code": lesson_code, "cards": _card_details(db, due), "remaining": query.count()}
+
+
+def due_notifications(db: Session, user: Principal) -> list[dict]:
+    lessons = unlocked_lessons(db, user).subquery()
+    rows = _card_rows(db, user, select(lessons.c.code)).subquery()
+    return [{"lesson_code": code, "lesson_title": title, "due": due}
+            for code, title, due in (db.query(rows.c.lesson_code, lessons.c.title, func.count())
+                                      .select_from(rows)
+                                      .join(lessons, lessons.c.code == rows.c.lesson_code)
+                                      .filter(rows.c.due_at <= utcnow())
+                                      .group_by(rows.c.lesson_code, lessons.c.title))]
+
+
+def queue_bank_card(db: Session, user: Principal, card: QuestionBankItem, now) -> None:
+    db.execute(pg_insert(FlashcardReview).values(
+        student_id=user.user_id, card_id=card.id, lesson_code=card.lesson_id, due_at=now,
+    ).on_conflict_do_update(constraint="ux_flashcard_student_card",
+                            set_={"due_at": func.least(FlashcardReview.due_at, now)}))
 
 
 def _find_card(db: Session, card_id) -> Card | None:
@@ -164,29 +229,30 @@ def _find_card(db: Session, card_id) -> Card | None:
     return None
 
 
-def review(db: Session, user: Principal, card_id, rating: str) -> dict:
+def review(db: Session, user: Principal, card_id, rating: str, remembered: bool | None = None) -> dict:
     if rating not in RATINGS:
         raise AppError(400, "INVALID_RATING", "rating phải là again, hard, good hoặc easy.")
     card = _find_card(db, card_id)
     if card is None:
         raise AppError(404, "NOT_FOUND", "Không tìm thấy thẻ.")
-    lesson = db.query(Lesson).filter(Lesson.code == card.lesson_code).first()
-    if lesson is None:
-        raise AppError(404, "NOT_FOUND", "Không tìm thấy bài học của thẻ.")
-    learning.get_lesson(db, user, lesson.id)
+    _require_unlocked(db, user, card.lesson_code)
+    db.execute(pg_insert(FlashcardReview).values(
+        student_id=user.user_id, card_id=card_id, lesson_code=card.lesson_code, due_at=utcnow(),
+    ).on_conflict_do_nothing(constraint="ux_flashcard_student_card"))
     rv = db.query(FlashcardReview).filter(FlashcardReview.student_id == user.user_id,
-                                          FlashcardReview.card_id == card_id).first()
-    if rv is None:
-        rv = FlashcardReview(student_id=user.user_id, card_id=card_id, lesson_code=card.lesson_code,
-                             due_at=utcnow(), ease=2.5, interval_days=0.0, reps=0, lapses=0)
-        db.add(rv)
+                                         FlashcardReview.card_id == card_id).with_for_update().one()
+    if remembered is None or (rv.last_reviewed_at is None or bool(rv.reps) != remembered):
+        _apply_rating(rv, rating)
+    db.commit()
+    return {"card_id": card.id, "rating": rating, "next_due_at": rv.due_at.isoformat(),
+            "interval_days": rv.interval_days, "reps": rv.reps, "remembered": bool(rv.reps)}
+
+
+def _apply_rating(rv: FlashcardReview, rating: str) -> None:
     sched, delta = next_schedule(Schedule(rv.ease, rv.interval_days, rv.reps, rv.lapses), rating)
     now = utcnow()
     rv.ease, rv.interval_days, rv.reps, rv.lapses = sched.ease, sched.interval_days, sched.reps, sched.lapses
     rv.due_at, rv.last_reviewed_at = now + delta, now
-    db.commit()
-    return {"card_id": card.id, "rating": rating, "next_due_at": rv.due_at.isoformat(),
-            "interval_days": rv.interval_days, "reps": rv.reps}
 
 
 # ---------------------------------------------------------------- giáo viên: AI soạn thẻ từ học liệu

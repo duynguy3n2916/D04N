@@ -1,5 +1,6 @@
 """API học tập cho học sinh (và giáo viên xem trước) + API soạn khóa học cho giáo viên."""
 import mimetypes
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile
 from pydantic import BaseModel, Field
@@ -89,9 +90,17 @@ def class_submissions(class_id: str, user: Principal = Depends(require_teacher),
 
 @router.get("/learn/flashcards")
 def flashcards_overview(user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Tổng quan thẻ ghi nhớ theo khóa học / bài học (vào ôn thẻ không cần mở bài)."""
+    """Tổng quan thẻ ghi nhớ đã mở khóa theo khóa học và bài học."""
     from app.services.courses import flashcards
     return flashcards.overview(db, user)
+
+
+@router.get("/learn/flashcards/library")
+def flashcards_library(status: Literal["all", "remembered", "unremembered"] = "all",
+                       offset: int = 0, limit: int = 20, user: Principal = Depends(get_current_user),
+                       db: Session = Depends(get_db)):
+    from app.services.courses import flashcards
+    return flashcards.library_cards(db, user, status, max(0, offset), max(1, min(50, limit)))
 
 
 @router.get("/learn/flashcards/{lesson_code}/summary")
@@ -117,6 +126,18 @@ def flashcards_review(card_id: str, req: FlashcardReviewIn, user: Principal = De
                       db: Session = Depends(get_db)):
     from app.services.courses import flashcards
     return flashcards.review(db, user, parse_uuid(card_id, "card_id"), req.rating)
+
+
+class FlashcardMemoryIn(BaseModel):
+    remembered: bool
+
+
+@router.put("/learn/flashcards/{card_id}/memory")
+def flashcards_memory(card_id: str, req: FlashcardMemoryIn, user: Principal = Depends(get_current_user),
+                      db: Session = Depends(get_db)):
+    from app.services.courses import flashcards
+    return flashcards.review(db, user, parse_uuid(card_id, "card_id"),
+                             "good" if req.remembered else "again", remembered=req.remembered)
 
 
 @router.get("/notifications/summary")

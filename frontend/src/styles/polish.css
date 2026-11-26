@@ -196,6 +196,10 @@ b, strong { font-weight: 600; }
 /* ===== Trang Thẻ ghi nhớ ===== */
 .fc-hub { display: flex; flex-direction: column; gap: 18px; }
 .fc-deck-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.fc-library-list { display: grid; gap: 12px; }
+.fc-library-card { display: grid; justify-items: start; gap: 10px; padding: 16px; border: 1px solid var(--line); border-radius: 16px; overflow-wrap: anywhere; }
+.fc-library-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; }
+.fc-library-card summary { cursor: pointer; }
 .fc-deck { display: flex; align-items: center; gap: 14px; text-align: left; padding: 16px; border-radius: var(--radius-sm);
   border: 1px solid var(--line); background: #fff; color: var(--ink); cursor: pointer; font: inherit; transition: border-color .15s, background-color .15s; }
 .fc-deck:hover:not(:disabled) { border-color: var(--brand-line); background: var(--brand-soft); }

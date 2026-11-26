@@ -6,6 +6,7 @@ import { Markdown } from '../components/Markdown';
 import { Button, Empty, ErrorBox, Progress, Spinner, useToast } from '../components/ui';
 import { api, errorText, storage } from '../lib/api';
 import { useAsync } from '../lib/hooks';
+import { refreshNotifications } from '../lib/notifications';
 import { navigate } from '../lib/router';
 
 interface Card { card_id: string; front: string; back: string; explanation: string; new: boolean }
@@ -37,6 +38,8 @@ export function Flashcards({ lessonCode }: { lessonCode: string }) {
     setBusy(true);
     try {
       await api(`/ai/learn/flashcards/${card.card_id}/review`, { json: { rating } });
+      summary.reload();
+      void refreshNotifications();
       // thẻ quên quay lại cuối hàng để hỏi lại trong phiên này
       setQueue((q) => (rating === 'again' ? [...q.slice(1), card] : q.slice(1)));
       if (rating !== 'again') setDone((n) => n + 1);
@@ -63,17 +66,17 @@ export function Flashcards({ lessonCode }: { lessonCode: string }) {
   return (
     <div className="fc-page">
       <PageHeader title="Ôn thẻ ghi nhớ" sub={`${summary.data?.lesson_title || 'Bài học'} · lật thẻ, tự chấm mức nhớ. Thẻ bạn quên sẽ quay lại sớm, thẻ nhớ tốt sẽ giãn ra.`}
-        actions={<Button variant="ghost" icon="chevronLeft" onClick={() => navigate('/flashcards')}>Tất cả thẻ</Button>} />
+        actions={<Button variant="ghost" icon="chevronLeft" onClick={() => navigate('/flashcards')}>Các bộ thẻ</Button>} />
       {loading && <Spinner />}
       {error && <ErrorBox message={error} onRetry={() => { summary.reload(); due.reload(); }} />}
       {summary.data && !summary.data.total && <Empty title="Bài này chưa có thẻ">Giáo viên cần duyệt câu hỏi cho bài để tạo thẻ.</Empty>}
-      {summary.data && !!summary.data.total && (
+      {!loading && !error && summary.data && !!summary.data.total && (
         <>
           <div className="fc-bar">
             <div className="fc-chips">
-              <span className="fc-chip fc-chip-brand"><b>{summary.data.due + done}</b> cần ôn hôm nay</span>
+              <span className="fc-chip fc-chip-brand"><b>{summary.data.due}</b> cần ôn hôm nay</span>
               <span className="fc-chip"><b>{summary.data.new}</b> thẻ mới</span>
-              <span className="fc-chip"><b>{summary.data.learned}</b> đã thuộc</span>
+              <span className="fc-chip"><b>{summary.data.learned}</b> đã nhớ</span>
             </div>
             {queue.length > 0 && (
               <div className="fc-progress">
@@ -112,7 +115,9 @@ export function Flashcards({ lessonCode }: { lessonCode: string }) {
             </div>
           ) : (
             <Empty title={done ? `Xong! Bạn đã ôn ${done} thẻ` : 'Hôm nay không còn thẻ nào cần ôn'}>
-              Quay lại sau nhé, thẻ sẽ tự xuất hiện khi đến hạn.
+              {summary.data.due > 0 ? (
+                <Button loading={due.loading} onClick={() => { setDone(0); due.reload(); }}>Ôn tiếp</Button>
+              ) : 'Quay lại sau nhé, thẻ sẽ tự xuất hiện khi đến hạn.'}
             </Empty>
           )}
         </>
@@ -127,17 +132,21 @@ const FC_COURSE_KEY = 'mam.fc.course';
 
 /** Trang Thẻ ghi nhớ (ngoài bài học): chọn khóa học rồi chọn bài để ôn. Lối vào "Ôn thẻ" trong bài vẫn giữ. */
 export function FlashcardHub() {
-  const data = useAsync((s) => api<CourseDecks[]>('/ai/learn/flashcards', { signal: s }), [], 'fc-overview');
+  const data = useAsync((s) => api<CourseDecks[]>('/ai/learn/flashcards', { signal: s }), []);
   const [courseId, setCourseId] = useState<string>(() => storage.get(FC_COURSE_KEY) || '');
   const courses = data.data || [];
-  const current = courses.find((c) => c.course_id === courseId) || courses.find((c) => c.due > 0) || courses[0];
+  const current = courses.find((c) => c.course_id === courseId) || courses.find((c) => c.due > 0)
+    || courses.find((c) => c.total > 0) || courses[0];
   useEffect(() => { if (current) storage.set(FC_COURSE_KEY, current.course_id); }, [current?.course_id]);
   const dueAll = courses.reduce((n, c) => n + c.due, 0);
   const firstDue = current?.lessons.find((l) => l.due > 0);
   return (
     <div className="fc-hub">
       <PageHeader title="Thẻ ghi nhớ" sub={dueAll ? `Hôm nay bạn có ${dueAll} thẻ cần ôn. Chọn khóa học và bài để bắt đầu.` : 'Chọn khóa học và bài học để ôn thẻ.'}
-        actions={firstDue && <Button icon="refresh" onClick={() => navigate(`/flashcards/${encodeURIComponent(firstDue.lesson_code)}`)}>Ôn ngay {firstDue.due} thẻ</Button>} />
+        actions={<>
+          <Button variant="ghost" icon="copy" onClick={() => navigate('/flashcards/library/all')}>Tất cả thẻ đã học</Button>
+          {firstDue && <Button icon="refresh" onClick={() => navigate(`/flashcards/${encodeURIComponent(firstDue.lesson_code)}`)}>Ôn ngay {firstDue.due} thẻ</Button>}
+        </>} />
       {data.loading && !data.data && <Spinner />}
       {data.error && <ErrorBox message={data.error} onRetry={data.reload} />}
       {data.data && !courses.length && <Empty title="Bạn chưa có khóa học nào">Vào lớp và khóa học trước để có thẻ ôn.</Empty>}
@@ -145,7 +154,7 @@ export function FlashcardHub() {
         <FilterPills label="Khóa học" value={current?.course_id || ''} onChange={setCourseId}
           options={courses.map((c) => ({ id: c.course_id, label: c.title, count: c.due || undefined }))} />
       )}
-      {current && !current.lessons.length && <Empty title="Khóa này chưa có bài học" />}
+      {current && !current.lessons.length && <Empty title="Khóa này chưa có thẻ đã mở">Hoàn thành ít nhất một mục trong bài để mở thẻ của bài đó.</Empty>}
       {current && current.lessons.length > 0 && (
         <div className="fc-deck-list">
           {current.lessons.map((l) => {
@@ -157,12 +166,88 @@ export function FlashcardHub() {
                 <span className="fc-deck-text">
                   <small>{l.chapter_title}</small>
                   <strong>{l.lesson_title}</strong>
-                  <span className="fc-deck-meta">{empty ? 'Chưa có thẻ' : `${l.total} thẻ · ${l.new} mới · ${l.learned} đã thuộc`}</span>
+                  <span className="fc-deck-meta">{empty ? 'Chưa có thẻ' : `${l.total} thẻ · ${l.new} mới · ${l.learned} đã nhớ`}</span>
                 </span>
                 {!empty && (l.due ? <span className="fc-deck-due-pill">{l.due} cần ôn</span> : <span className="fc-deck-ok"><Icon name="check" size={14} /> Đã ôn xong</span>)}
               </button>
             );
           })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+const MEMORY_FILTERS = [
+  { id: 'all', label: 'Tất cả' },
+  { id: 'remembered', label: 'Đã nhớ' },
+  { id: 'unremembered', label: 'Chưa nhớ' },
+] as const;
+type MemoryFilter = typeof MEMORY_FILTERS[number]['id'];
+interface LibraryCard extends Card { lesson_title: string; remembered: boolean }
+interface LibraryPage { cards: LibraryCard[]; next_offset: number | null }
+
+export function FlashcardLibrary() {
+  const [filter, setFilter] = useState<MemoryFilter>('all');
+  const [offset, setOffset] = useState(0);
+  return (
+    <div className="fc-hub">
+      <PageHeader title="Tất cả thẻ đã học"
+        actions={<Button variant="ghost" icon="chevronLeft" onClick={() => navigate('/flashcards')}>Các bộ thẻ</Button>} />
+      <FilterPills label="Mức độ ghi nhớ" options={[...MEMORY_FILTERS]} value={filter}
+        onChange={(value) => { setFilter(value); setOffset(0); }} />
+      <LibraryCards key={`${filter}/${offset}`} filter={filter} offset={offset} setOffset={setOffset} />
+    </div>
+  );
+}
+
+function LibraryCards({ filter, offset, setOffset }: { filter: MemoryFilter; offset: number; setOffset: (value: number) => void }) {
+  const page = useAsync((signal) => api<LibraryPage>(`/ai/learn/flashcards/library?status=${filter}&offset=${offset}`, { signal }), []);
+  const toast = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  const nextOffset = page.data?.next_offset;
+  const mark = async (card: LibraryCard) => {
+    setBusy(card.card_id);
+    try {
+      const result = await api<{ remembered: boolean }>(`/ai/learn/flashcards/${card.card_id}/memory`, {
+        method: 'PUT', json: { remembered: !card.remembered },
+      });
+      if (filter === 'all') {
+        page.setData((prev) => prev && ({ ...prev, cards: prev.cards.map((c) => c.card_id === card.card_id ? { ...c, remembered: result.remembered } : c) }));
+      } else if (offset > 0) {
+        setOffset(0);
+      } else {
+        page.reload();
+      }
+      void refreshNotifications();
+    } catch (e) { toast(errorText(e), 'error'); } finally { setBusy(null); }
+  };
+  return (
+    <div className="fc-library-list">
+      {page.loading && <Spinner />}
+      {page.error && <ErrorBox message={page.error} onRetry={page.reload} />}
+      {page.data && !page.data.cards.length && <Empty title={filter === 'all' ? 'Bạn chưa mở khóa thẻ nào' : 'Không có thẻ trong bộ lọc này'} />}
+      {page.data?.cards.map((card) => (
+        <article className="fc-library-card" key={card.card_id}>
+          <div className="fc-library-heading">
+            <span className="muted small">{card.lesson_title}</span>
+            <span className={`fc-chip ${card.remembered ? 'fc-chip-brand' : ''}`}>{card.remembered ? 'Đã nhớ' : 'Chưa nhớ'}</span>
+          </div>
+          <strong>{card.front}</strong>
+          <details>
+            <summary>Xem đáp án</summary>
+            <Markdown source={card.back} />
+            {card.explanation && <Markdown source={card.explanation} />}
+          </details>
+          <Button variant="ghost" size="sm" disabled={busy !== null || page.loading} onClick={() => mark(card)}>
+            {card.remembered ? 'Đánh dấu chưa nhớ' : 'Đánh dấu đã nhớ'}
+          </Button>
+        </article>
+      ))}
+      {(offset > 0 || nextOffset != null) && (
+        <div className="fc-library-heading">
+          <Button variant="ghost" disabled={!offset || busy !== null} onClick={() => setOffset(Math.max(0, offset - 20))}>Trang trước</Button>
+          {nextOffset != null && <Button disabled={busy !== null} onClick={() => setOffset(nextOffset)}>Trang sau</Button>}
         </div>
       )}
     </div>

@@ -103,7 +103,8 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
             </>
           )}
         </div>
-        <Button variant="ghost" size="sm" icon="refresh" disabled={!lesson.data} onClick={() => navigate(`/flashcards/${encodeURIComponent(lesson.data?.code || '')}`)}>Ôn thẻ</Button>
+        {lesson.data?.flashcards_unlocked && lesson.data.lesson_id === lessonId &&
+          <Button variant="ghost" size="sm" icon="refresh" onClick={() => navigate(`/flashcards/${encodeURIComponent(lesson.data?.code || '')}`)}>Ôn thẻ</Button>}
         <Button variant={tutorOpen && !quizLock ? 'soft' : 'blue'} size="sm" icon={quizLock ? 'lock' : 'sparkle'} aria-pressed={tutorOpen && !quizLock}
           disabled={quizLock} title={quizLock ? 'Tutor AI tạm khóa trong bài trắc nghiệm' : undefined}
           onClick={() => setTutorOpen((v) => !v)}>{quizLock ? 'Tutor khóa khi làm bài' : 'Hỏi Tutor AI'}</Button>

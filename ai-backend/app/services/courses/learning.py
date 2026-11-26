@@ -160,14 +160,17 @@ def can_see_course(db: Session, user: Principal, course: Course) -> bool:
                                            CourseClass.class_id.in_(user.class_ids or [""])).first() is not None
 
 
+def visible_course_filter(user: Principal):
+    if user.is_admin:
+        return True
+    classes = user.class_ids or [""]
+    linked = select(CourseClass.course_id).where(CourseClass.class_id.in_(classes))
+    return or_(Course.class_id.is_(None), Course.class_id.in_(classes), Course.id.in_(linked))
+
+
 def visible_courses(db: Session, user: Principal, with_tree: bool = False) -> list[Course]:
-    """with_tree=True: nạp sẵn chương -> bài -> mục và lớp gắn thêm theo lô (vài truy vấn cho mọi khóa),
-    dùng cho các trang liệt kê để tránh hỏi DB riêng cho từng khóa/chương/bài (N+1)."""
-    q = db.query(Course)
-    if not user.is_admin:
-        classes = user.class_ids or [""]
-        linked = select(CourseClass.course_id).where(CourseClass.class_id.in_(classes))
-        q = q.filter(or_(Course.class_id.is_(None), Course.class_id.in_(classes), Course.id.in_(linked)))
+    """with_tree=True: nạp sẵn chương -> bài -> mục và lớp gắn thêm theo lô."""
+    q = db.query(Course).filter(visible_course_filter(user))
     if with_tree:
         q = q.options(selectinload(Course.chapters).selectinload(Chapter.lessons).selectinload(Lesson.items))
     courses = q.order_by(Course.created_at).all()
@@ -316,7 +319,8 @@ def lesson_view(db: Session, user: Principal, lesson: Lesson) -> dict:
     return {"lesson_id": str(lesson.id), "code": lesson.code, "title": lesson.title, "description": lesson.description,
             "chapter_title": lesson.chapter.title, "course_id": str(course.id), "course_title": course.title,
             "items": lesson_node["items"], "items_total": lesson_node["items_total"],
-            "items_done": lesson_node["items_done"]}
+            "items_done": lesson_node["items_done"],
+            "flashcards_unlocked": user.is_teacher or lesson_node["items_done"] > 0}
 
 
 def item_detail(db: Session, user: Principal, item: LessonItem) -> dict:

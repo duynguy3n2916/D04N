@@ -151,6 +151,7 @@ export interface CourseSummary { course_id: string; code: string; title: string;
 export interface LessonView {
   lesson_id: string; code: string; title: string; description?: string; chapter_title: string; course_id: string;
   course_title: string; items: ItemSummary[]; items_total: number; items_done: number;
+  flashcards_unlocked: boolean;
 }
 export interface ItemDetail extends ItemSummary {
   lesson_code: string;

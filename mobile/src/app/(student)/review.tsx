@@ -3,7 +3,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { Text } from '../../components/Text';
-import { Card, Empty, ErrorBox, Muted, Pill, Row, Screen, Spinner } from '../../components/ui';
+import { Button, Card, Empty, ErrorBox, Muted, Pill, Row, Screen, Spinner } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { refreshNotifications } from '../../lib/notifications';
@@ -20,13 +20,16 @@ export default function Review() {
   const courses = data.data || [];
   const [courseId, setCourseId] = useState('');
   useEffect(() => {
-    if (courses.length && !courses.some((c) => c.course_id === courseId)) setCourseId((courses.find((c) => c.due > 0) || courses[0]).course_id);
+    if (courses.length && !courses.some((c) => c.course_id === courseId)) {
+      setCourseId((courses.find((c) => c.due > 0) || courses.find((c) => c.total > 0) || courses[0]).course_id);
+    }
   }, [courses, courseId]);
   const current = courses.find((c) => c.course_id === courseId);
   const dueAll = courses.reduce((n, c) => n + c.due, 0);
   return (
     <Screen onRefresh={data.reload} refreshing={data.loading && !!data.data}>
       <Muted>{dueAll ? `Hôm nay có ${dueAll} thẻ cần ôn. ` : ''}Chọn khóa học và bài để ôn. Thẻ bạn quên sẽ quay lại sớm, thẻ nhớ tốt sẽ giãn ra.</Muted>
+      <Button variant="ghost" icon="layers-outline" title="Tất cả thẻ đã học" onPress={() => router.push('/flashcards/library/all')} />
       {data.loading && !data.data && <Spinner />}
       {data.error && <ErrorBox message={data.error} onRetry={data.reload} />}
       {data.data && !courses.length && <Empty title="Bạn chưa có khóa học nào" icon="book-outline">Vào lớp và khóa học trước để có thẻ ôn.</Empty>}
@@ -35,7 +38,7 @@ export default function Review() {
           {courses.map((c) => <Pill key={c.course_id} label={c.title} active={c.course_id === courseId} count={c.due || undefined} onPress={() => setCourseId(c.course_id)} />)}
         </ScrollView>
       )}
-      {current && !current.lessons.length && <Empty title="Khóa này chưa có bài học" icon="layers-outline" />}
+      {current && !current.lessons.length && <Empty title="Khóa này chưa có thẻ đã mở" icon="layers-outline">Hoàn thành ít nhất một mục trong bài để mở thẻ của bài đó.</Empty>}
       {current?.lessons.map((l) => {
         const empty = !l.total;
         return (

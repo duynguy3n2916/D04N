@@ -37,7 +37,7 @@ export default function Lesson() {
           </Row>
           <Row>
             {next && <Button title={l.items_done ? 'Học tiếp' : 'Bắt đầu'} icon="play" onPress={() => router.push(`/item/${next.item_id}`)} style={{ flex: 1 }} />}
-            <Button variant="ghost" icon="refresh" title="Ôn thẻ" onPress={() => router.push(`/flashcards/${encodeURIComponent(l.code)}`)} style={next ? undefined : { flex: 1 }} />
+            {l.flashcards_unlocked && <Button variant="ghost" icon="refresh" title="Ôn thẻ" onPress={() => router.push(`/flashcards/${encodeURIComponent(l.code)}`)} style={next ? undefined : { flex: 1 }} />}
           </Row>
           <Kicker style={{ color: C.muted, marginTop: 6 }}>Nội dung bài học</Kicker>
           <ListCard>

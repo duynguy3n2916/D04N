@@ -22,9 +22,9 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.core.errors import AppError
 from app.core.security import Principal
-from app.core.utils import as_aware, parse_uuid, redact_pii, utcnow
+from app.core.utils import parse_uuid, redact_pii, utcnow
 from app.models.coach import CoachConversation, CoachMessage
-from app.models.learning import Course, FlashcardReview, ItemProgress, Lesson, QuizAnswerLog
+from app.models.learning import Course, ItemProgress, Lesson, QuizAnswerLog
 from app.models.video_question import QuestionBankItem
 from app.services.ai import llm
 from app.services.ai.prompts import STUDY_COACH
@@ -172,14 +172,13 @@ def tool_get_weak_points(db: Session, user: Principal, args: dict, state: RunSta
 
 def tool_get_due_flashcards(db: Session, user: Principal, args: dict, state: RunState) -> dict:
     lesson = _lesson_or_error(db, user, args.get("lesson_code"), state)
-    codes = [lesson.code] if lesson else list(_visible_lessons(db, user, state))
+    codes = {lesson.code} if lesson else _visible_lessons(db, user, state)
     out = []
-    for code in codes:
-        try:
-            sm = flashcards.summary(db, user, code)
-        except AppError:
-            continue
-        if sm["total"]:
+    for course in flashcards.overview(db, user):
+        for sm in course["lessons"]:
+            code = sm["lesson_code"]
+            if code not in codes:
+                continue
             out.append(sm)
             if sm["due"]:
                 state.add_action("flashcards", f"Ôn {sm['due']} thẻ · {code}", lesson_code=code)
@@ -233,18 +232,14 @@ def tool_queue_flashcards(db: Session, user: Principal, args: dict, state: RunSt
     visible = _visible_lessons(db, user, state)
     uuids = [u for u in (parse_uuid(i, "question_id", required=False) for i in ids) if u]
     bank = db.query(QuestionBankItem).filter(QuestionBankItem.id.in_(uuids), QuestionBankItem.status == "approved").all()
+    unlocked = {row.code for row in flashcards.unlocked_lessons(db, user)
+                .filter(Lesson.code.in_({b.lesson_id for b in bank}))} if bank else set()
     now = utcnow()
     queued, lessons = 0, set()
-    for b in bank:
-        if b.lesson_id not in visible:
+    for b in sorted(bank, key=lambda card: card.id):
+        if b.lesson_id not in visible or b.lesson_id not in unlocked:
             continue
-        rv = db.query(FlashcardReview).filter(FlashcardReview.student_id == user.user_id,
-                                              FlashcardReview.card_id == b.id).first()
-        if rv is None:
-            db.add(FlashcardReview(student_id=user.user_id, card_id=b.id, lesson_code=b.lesson_id, due_at=now,
-                                   ease=2.5, interval_days=0.0, reps=0, lapses=0))
-        elif as_aware(rv.due_at) > now:
-            rv.due_at = now
+        flashcards.queue_bank_card(db, user, b, now)
         queued += 1
         lessons.add(b.lesson_id)
     db.commit()

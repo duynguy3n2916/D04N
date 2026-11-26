@@ -4,7 +4,7 @@ import { isTeacher, useAuth } from './lib/auth';
 import { match, navigate, useLocation } from './lib/router';
 import { Learn } from './pages/Learn';
 import { LessonPage } from './pages/Lesson';
-import { FlashcardHub, Flashcards } from './pages/Flashcards';
+import { FlashcardHub, FlashcardLibrary, Flashcards } from './pages/Flashcards';
 import { Coach } from './pages/Coach';
 import { Forum } from './pages/Forum';
 import { Inbox } from './pages/Inbox';
@@ -38,7 +38,7 @@ export function App() {
 
   let m: Record<string, string> | null;
   if ((m = match('/lesson/:lessonId/:itemId?', path))) return <LessonPage lessonId={m.lessonId} itemId={m.itemId} />;
-  if ((m = match('/flashcards/:lessonCode', path))) return <AppShell path={path}><Flashcards lessonCode={m.lessonCode} /></AppShell>;
+  if ((m = match('/flashcards/:lessonCode', path))) return <AppShell path={path}><Flashcards key={m.lessonCode} lessonCode={m.lessonCode} /></AppShell>;
   if ((m = match('/forum/:threadId', path))) return <AppShell path={path}><Forum threadId={m.threadId} /></AppShell>;
   if ((m = match('/messages/:conversationId?', path))) return <AppShell path={path}><Messages conversationId={m.conversationId} /></AppShell>;
 
@@ -48,6 +48,7 @@ export function App() {
   if ((m = match('/learn/:courseId?', path))) page = <Learn path={path} courseId={m.courseId} />;
   else if ((m = match('/coach/:conversationId?', path))) page = <Coach conversationId={m.conversationId} />;
   else if (match('/flashcards', path)) page = <FlashcardHub />;
+  else if (match('/flashcards/library/all', path)) page = <FlashcardLibrary />;
   else if (match('/profile', path)) page = <Profile />;
   else if (match('/settings', path)) page = <Settings />;
   else if (match('/forum', path)) page = <Forum />;

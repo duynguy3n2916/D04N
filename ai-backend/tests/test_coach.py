@@ -6,7 +6,7 @@ from app.core.utils import utcnow
 from app.database import SessionLocal
 from app.models.learning import FlashcardReview, QuizAnswerLog
 from tests.conftest import token
-from tests.test_flashcards import _lesson_with_bank
+from tests.test_flashcards import _complete_first_item, _lesson_with_bank
 
 
 def _wrong(student_id: str, question_ids: list[str], times: int = 2):
@@ -71,6 +71,7 @@ def test_coach_tools_respect_class_scope(client, teacher, fake_llm):
 def test_coach_queue_flashcards_and_search(client, teacher, fake_llm):
     qids = _lesson_with_bank(client, teacher, "co3", n=2)
     sv = token(client, "sv-co3", "student", ["lop-a"])
+    _complete_first_item(client, teacher, sv, "course-co3")
     # thẻ đã ôn, hẹn ngày mai -> agent kéo về hôm nay
     client.post(f"/ai/learn/flashcards/{qids[0]}/review", headers=sv, json={"rating": "good"})
     assert client.get("/ai/learn/flashcards/lesson-co3/summary", headers=sv).json()["due"] == 1

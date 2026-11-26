@@ -22,19 +22,19 @@ const RATINGS = [
 
 export default function Flashcards() {
   const { code } = useLocalSearchParams<{ code: string }>();
-  const data = useAsync(async (signal) => {
-    const [summary, due] = await Promise.all([
-      api<Summary>(`/ai/learn/flashcards/${encodeURIComponent(code)}/summary`, { signal }),
-      api<Due>(`/ai/learn/flashcards/${encodeURIComponent(code)}/due`, { signal }),
-    ]);
-    return { summary, due };
-  }, [code]);
+  return <FlashcardSession key={code} code={code} />;
+}
+
+function FlashcardSession({ code }: { code: string }) {
+  const path = `/ai/learn/flashcards/${encodeURIComponent(code)}`;
+  const summary = useAsync((signal) => api<Summary>(`${path}/summary`, { signal }), [path]);
+  const due = useAsync((signal) => api<Due>(`${path}/due`, { signal }), [path]);
   const [queue, setQueue] = useState<FCard[]>([]);
   const [flipped, setFlipped] = useState(false);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { if (data.data) { setQueue(data.data.due.cards); setDone(0); } }, [data.data]);
+  useEffect(() => { if (due.data) { setQueue(due.data.cards); setDone(0); } }, [due.data]);
   const card = queue[0];
   const total = done + queue.length;
 
@@ -43,6 +43,7 @@ export default function Flashcards() {
     setBusy(true); setError(null);
     try {
       await api(`/ai/learn/flashcards/${card.card_id}/review`, { json: { rating } });
+      summary.reload();
       setQueue((q) => (rating === 'again' ? [...q.slice(1), card] : q.slice(1)));
       if (rating !== 'again') setDone((n) => n + 1);
       setFlipped(false);
@@ -50,19 +51,21 @@ export default function Flashcards() {
   };
   useEffect(() => () => { refreshNotifications(); }, []);
 
-  const s = data.data?.summary;
+  const s = summary.data;
+  const loading = (summary.loading && !s) || (due.loading && !due.data);
+  const loadError = summary.error || due.error;
   return (
     <Screen>
-      {data.loading && !data.data && <Spinner />}
-      {data.error && <ErrorBox message={data.error} onRetry={data.reload} />}
+      {loading && <Spinner />}
+      {loadError && <ErrorBox message={loadError} onRetry={() => { summary.reload(); due.reload(); }} />}
       {s && !s.total && <Empty title="Bài này chưa có thẻ">Giáo viên cần duyệt câu hỏi cho bài để tạo thẻ.</Empty>}
-      {s && !!s.total && (
+      {!loading && !loadError && s && !!s.total && (
         <>
           <Text style={{ fontSize: 20, fontWeight: '800', color: C.ink }}>{s.lesson_title || s.lesson_code}</Text>
           <Row style={{ flexWrap: 'wrap' }}>
-            <Tag tone="brand" label={`${s.due + done} cần ôn`} />
+            <Tag tone="brand" label={`${s.due} cần ôn`} />
             <Tag label={`${s.new} thẻ mới`} />
-            <Tag tone="ok" label={`${s.learned} đã thuộc`} />
+            <Tag tone="ok" label={`${s.learned} đã nhớ`} />
           </Row>
           {queue.length > 0 && <Row><Progress value={done / Math.max(1, total)} style={{ flex: 1 }} /><Muted>{done}/{total}</Muted></Row>}
           {card ? (
@@ -96,8 +99,11 @@ export default function Flashcards() {
               ) : <Button title="Lật thẻ" icon="sync" onPress={() => setFlipped(true)} />}
             </>
           ) : (
-            <Empty title="Xong phiên ôn hôm nay!" icon="trophy-outline">{done ? `Bạn vừa ôn ${done} thẻ.` : 'Không còn thẻ đến hạn.'} Quay lại vào ngày mai nhé.</Empty>
+            <Empty title={done ? `Bạn vừa ôn ${done} thẻ` : 'Phiên ôn thẻ'} icon="trophy-outline">
+              {s.due > 0 ? 'Bạn còn thẻ đến hạn.' : 'Không còn thẻ đến hạn.'}
+            </Empty>
           )}
+          {!card && s.due > 0 && <Button title="Ôn tiếp" busy={due.loading} onPress={due.reload} />}
           {!card && <Button variant="ghost" title="Quay lại" onPress={() => router.back()} />}
         </>
       )}
