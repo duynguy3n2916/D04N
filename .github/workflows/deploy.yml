@@ -3,7 +3,7 @@ name: Deploy to AWS EC2
 on:
   push:
     branches:
-      - main
+      - develop
 
 jobs:
   deploy:
@@ -17,6 +17,8 @@ jobs:
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
             cd ~/D04N/ai-backend
-            git pull origin main
+            git fetch origin
+            git checkout develop
+            git pull origin develop
             docker compose --profile full up -d --build
             docker image prune -f
