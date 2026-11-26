@@ -58,12 +58,20 @@ def _openai_client():
         return _clients["openai"]
 
 
+# Tham số model không nhận, học được từ lỗi lần trước (theo tên model) -> các lần sau không gửi nữa,
+# tránh mỗi lượt gọi đều mất một request lỗi rồi mới gọi lại.
+_no_temperature: set[str] = set()
+_need_reasoning_none: set[str] = set()
+
+
 def chat_model(*, max_tokens: int = 1500, temperature: float | None = 0.2, json_mode: bool = False,
                streaming: bool = False):
     """LangChain chat model theo cấu hình. temperature=None: dùng mặc định của model (model suy luận o*, gpt-5)."""
     if not settings.openai_api_key:
         raise LLMError("Chưa cấu hình OPENAI_API_KEY.")
     from langchain_openai import ChatOpenAI
+    if settings.openai_llm_model in _no_temperature:
+        temperature = None
     kwargs = dict(model=settings.openai_llm_model, api_key=settings.openai_api_key,
                   timeout=settings.llm_timeout_seconds, max_retries=2,
                   # ChatOpenAI gửi max_tokens dưới tên max_completion_tokens (dùng được cho cả model suy luận)
@@ -89,8 +97,10 @@ def _with_temperature_fallback(run, **model_kw):
     try:
         return run(chat_model(**model_kw))
     except Exception as e:
-        if "temperature" not in str(e) or model_kw.get("temperature") is None:
+        if "temperature" not in str(e) or model_kw.get("temperature") is None \
+                or settings.openai_llm_model in _no_temperature:
             raise
+        _no_temperature.add(settings.openai_llm_model)
         return run(chat_model(**{**model_kw, "temperature": None}))
 
 
@@ -236,29 +246,93 @@ def stream_text(task: str, prompt: Prompt, user_content: str, *, history: list[d
                     call_ids=[call_id] if call_id else [], prompt_id=prompt.id, prompt_version=prompt.version)
 
 
-def _tools_provider(system: str, messages: list[dict], tools: list[dict], max_tokens: int,
-                    temperature: float) -> tuple[dict, int | None, int | None, str]:
-    """Gọi OpenAI có function calling. Trả về (message, input_tokens, output_tokens, model), trong đó
-    message = {"content": str | None, "tool_calls": [{"id", "name", "arguments"(str JSON)}]}. Test có thể thay hàm này."""
+def _tools_kwargs(system: str, messages: list[dict], tools: list[dict], max_tokens: int, temperature: float) -> dict:
     if not settings.openai_api_key:
         raise LLMError("Chưa cấu hình OPENAI_API_KEY.")
     kwargs = {"model": settings.openai_llm_model,
               "messages": [{"role": "system", "content": system}] + messages,
-              "tools": [{"type": "function", "function": t} for t in tools],
               "max_completion_tokens": max_tokens, "temperature": temperature}
-    try:
-        resp = _openai_client().chat.completions.create(**kwargs)
-    except Exception as e:
-        if "temperature" not in str(e):
-            raise
+    if tools:
+        kwargs["tools"] = [{"type": "function", "function": t} for t in tools]
+    model_name = settings.openai_llm_model
+    if model_name in _need_reasoning_none:
+        kwargs["reasoning_effort"] = "none"
+    if model_name in _no_temperature:
         kwargs.pop("temperature")
-        resp = _openai_client().chat.completions.create(**kwargs)
+    return kwargs
+
+
+def _create_with_fixes(kwargs: dict, start):
+    """Gọi start(kwargs); model đời mới (vd. gpt-6-luna) mặc định có suy luận và từ chối function tools trên
+    /chat/completions trừ khi reasoning_effort="none"; một số model lại không nhận temperature. Gặp lỗi nào thì
+    chỉnh, nhớ lại cho các lần sau (theo tên model) và gọi lại."""
+    model_name = settings.openai_llm_model
+    for _ in range(3):
+        try:
+            return start(kwargs)
+        except Exception as e:
+            err = str(e)
+            if "reasoning_effort" in err and kwargs.get("reasoning_effort") != "none":
+                kwargs["reasoning_effort"] = "none"
+                _need_reasoning_none.add(model_name)
+            elif "temperature" in err and "temperature" in kwargs:
+                kwargs.pop("temperature")
+                _no_temperature.add(model_name)
+            else:
+                raise
+    return start(kwargs)
+
+
+def _tools_provider(system: str, messages: list[dict], tools: list[dict], max_tokens: int,
+                    temperature: float) -> tuple[dict, int | None, int | None, str]:
+    """Gọi OpenAI có function calling. Trả về (message, input_tokens, output_tokens, model), trong đó
+    message = {"content": str | None, "tool_calls": [{"id", "name", "arguments"(str JSON)}]}. Test có thể thay hàm này."""
+    kwargs = _tools_kwargs(system, messages, tools, max_tokens, temperature)
+    resp = _create_with_fixes(kwargs, lambda kw: _openai_client().chat.completions.create(**kw))
     msg = resp.choices[0].message
     calls = [{"id": c.id, "name": c.function.name, "arguments": c.function.arguments or "{}"}
              for c in (getattr(msg, "tool_calls", None) or [])]
     usage = getattr(resp, "usage", None)
     return ({"content": msg.content, "tool_calls": calls}, getattr(usage, "prompt_tokens", None),
             getattr(usage, "completion_tokens", None), getattr(resp, "model", settings.openai_llm_model))
+
+
+def _tools_stream_provider(system: str, messages: list[dict], tools: list[dict], max_tokens: int,
+                           temperature: float) -> Iterator["str | tuple[dict, int | None, int | None, str]"]:
+    """Như _tools_provider nhưng stream: phát từng đoạn chữ của câu trả lời, phần tử cuối là
+    (message, input_tokens, output_tokens, model). Test có thể thay hàm này."""
+    kwargs = _tools_kwargs(system, messages, tools, max_tokens, temperature)
+    kwargs.update(stream=True, stream_options={"include_usage": True})
+
+    def start(kw):
+        it = iter(_openai_client().chat.completions.create(**kw))
+        return next(it, None), it  # lỗi tham số chỉ lộ ra khi lấy phần tử đầu
+
+    first, it = _create_with_fixes(kwargs, start)
+    content: list[str] = []
+    calls: dict[int, dict] = {}
+    in_tok = out_tok = None
+    model = settings.openai_llm_model
+    for chunk in _chain_first(first, it):
+        model = getattr(chunk, "model", None) or model
+        usage = getattr(chunk, "usage", None)
+        if usage:
+            in_tok, out_tok = getattr(usage, "prompt_tokens", None), getattr(usage, "completion_tokens", None)
+        for choice in (getattr(chunk, "choices", None) or []):
+            delta = choice.delta
+            if getattr(delta, "content", None):
+                content.append(delta.content)
+                yield delta.content
+            for tc in (getattr(delta, "tool_calls", None) or []):
+                c = calls.setdefault(tc.index, {"id": "", "name": "", "arguments": ""})
+                if tc.id:
+                    c["id"] = tc.id
+                fn = getattr(tc, "function", None)
+                if fn is not None:
+                    c["name"] += fn.name or ""
+                    c["arguments"] += fn.arguments or ""
+    tool_calls = [{**c, "arguments": c["arguments"] or "{}"} for _, c in sorted(calls.items())]
+    yield ({"content": "".join(content) or None, "tool_calls": tool_calls}, in_tok, out_tok, model)
 
 
 def complete_with_tools(task: str, prompt: Prompt, messages: list[dict], tools: list[dict], *,
@@ -286,6 +360,39 @@ def complete_with_tools(task: str, prompt: Prompt, messages: list[dict], tools: 
     return msg, LLMResult(text=msg.get("content") or "", model=model, input_tokens=in_tok, output_tokens=out_tok,
                           latency_ms=latency, call_ids=[call_id] if call_id else [], prompt_id=prompt.id,
                           prompt_version=prompt.version)
+
+
+def stream_with_tools(task: str, prompt: Prompt, messages: list[dict], tools: list[dict], *,
+                      max_tokens: int = 1500, temperature: float = 0.2, user_id: str | None = None,
+                      attempt: int = 1) -> Iterator["str | tuple[dict, LLMResult]"]:
+    """Như complete_with_tools nhưng phát từng đoạn chữ ngay khi model sinh ra; phần tử cuối là (message, LLMResult)."""
+    base = dict(task=task, prompt_id=prompt.id, prompt_version=prompt.version, provider=settings.llm_provider,
+                correlation_id=get_request_id(), chunk_ids=None, user_id=user_id, attempt=attempt)
+    t0 = time.perf_counter()
+    final = None
+    try:
+        for piece in _tools_stream_provider(prompt.system, messages, tools, max_tokens, temperature):
+            if isinstance(piece, tuple):
+                final = piece
+            else:
+                yield piece
+        if final is None:
+            raise LLMError("Model không trả về kết quả.")
+    except LLMError as e:
+        _log_call(**base, model=settings.current_llm_model(), status="error", error=str(e.detail),
+                  latency_ms=(time.perf_counter() - t0) * 1000)
+        raise
+    except Exception as e:
+        _log_call(**base, model=settings.current_llm_model(), status="error", error=f"{type(e).__name__}: {e}"[:2000],
+                  latency_ms=(time.perf_counter() - t0) * 1000)
+        raise LLMError(f"Gọi LLM thất bại ({settings.llm_provider}): {type(e).__name__}: {str(e)[:300]}")
+    msg, in_tok, out_tok, model = final
+    latency = (time.perf_counter() - t0) * 1000
+    call_id = _log_call(**base, model=model, status="ok", input_tokens=in_tok, output_tokens=out_tok,
+                        latency_ms=latency, cost_usd=_estimate_cost(in_tok, out_tok))
+    yield msg, LLMResult(text=msg.get("content") or "", model=model, input_tokens=in_tok, output_tokens=out_tok,
+                         latency_ms=latency, call_ids=[call_id] if call_id else [], prompt_id=prompt.id,
+                         prompt_version=prompt.version)
 
 
 def complete_json(task: str, prompt: Prompt, user_content: str, schema: type[T], *, max_tokens: int = 4000,

@@ -41,6 +41,27 @@ HINT_REDACTED = ("Câu hỏi kiểm tra đang diễn ra nên mình chưa thể n
                  "vừa được giảng ngay trước đó và loại dần các lựa chọn không phù hợp với định nghĩa.")
 MAX_GUARDED_QUESTIONS_IN_PROMPT = 10
 REFUSAL_MARK = "chưa tìm thấy thông tin"  # khớp câu từ chối trong prompt TUTOR_ANSWER
+QUIZ_LOCKED = ("Bạn đang làm bài trắc nghiệm nên Tutor AI tạm khóa để bài làm công bằng. "
+               "Nộp bài xong bạn hỏi lại nhé, mình sẽ giải thích các câu còn chưa chắc.")
+
+# "phút 2:30", "ở 02:30", "1:02:03", "phút thứ 3", "phút 3 giây 20", "giây 45"
+_TS_CLOCK = re.compile(r"(?<![\d:])(?:(\d{1,2}):)?(\d{1,2}):(\d{2})(?![\d:])")
+_TS_WORDS = re.compile(r"phút\s*(?:thứ\s*)?(\d{1,3})(?:\s*(?:giây|:)\s*(\d{1,2}))?|(\d{1,4})\s*giây|giây\s*(?:thứ\s*)?(\d{1,4})", re.IGNORECASE)
+
+
+def mentioned_time(question: str) -> float | None:
+    """Thời điểm video học sinh nêu trong câu hỏi (giây), nếu có."""
+    m = _TS_CLOCK.search(question or "")
+    if m:
+        h, mi, se = int(m.group(1) or 0), int(m.group(2)), int(m.group(3))
+        if se < 60:
+            return float(h * 3600 + mi * 60 + se)
+    m = _TS_WORDS.search(question or "")
+    if m:
+        if m.group(1):
+            return float(int(m.group(1)) * 60 + int(m.group(2) or 0))
+        return float(int(m.group(3) or m.group(4)))
+    return None
 
 
 def get_or_create_conversation(db: Session, user: Principal, conversation_id, *, course_id=None, class_id=None,
@@ -171,11 +192,16 @@ def prepare_turn(db: Session, user: Principal, *, question: str, conversation_id
         selected_text = redact_pii(selected_text) if selected_text else selected_text
 
     # Hint mode do server quyết định (câu hỏi video đang mở hoặc bài kiểm tra đang làm dở), không tin cờ client
+    # Đang làm bài trắc nghiệm: khóa hẳn Tutor (không gọi LLM, không tính lượt).
+    # Câu hỏi bật lên giữa video vẫn dùng chế độ gợi ý (không lộ đáp án).
     guarded: list = []
     if not user.is_teacher:
+        if learning.active_quiz_questions(db, user):
+            raise AppError(403, "TUTOR_LOCKED_QUIZ", QUIZ_LOCKED)
         active_q = workflow.active_question_for_hint(db, user, video_id)
-        guarded = ([active_q] if active_q else []) + learning.active_quiz_questions(db, user)
+        guarded = [active_q] if active_q else []
     hint_mode = bool(guarded)
+    asked_time = mentioned_time(question) if video_id else None
 
     history = _history(db, conv)
     scope = RetrievalScope.for_user(user, course_id=course_id, class_id=class_id, lesson_id=lesson_id)
@@ -190,21 +216,28 @@ def prepare_turn(db: Session, user: Principal, *, question: str, conversation_id
         chunks = [by_id[k] for k in sorted(fused, key=fused.get, reverse=True)][:top_k or settings.rag_top_k]
     if video_id:
         # chunk transcript của video hiện tại đã được đưa riêng qua cửa sổ thời gian
-        if video_time is not None:
+        focus_t = asked_time if asked_time is not None else video_time
+        if focus_t is not None:
             chunks = [c for c in chunks if not (c["source_type"] == "video" and c["source_id"] == video_id
                                                 and c["start_time"] is not None
-                                                and abs((c["start_time"] or 0) - video_time) < 120)]
+                                                and abs((c["start_time"] or 0) - focus_t) < 120)]
     if settings.rag_expand_neighbors:
         chunks = expand_neighbors(db, chunks)
 
     transcript_block = None
-    if video_id and video_time is not None:
-        segs, _ = transcript_window(db, video_id, video_time - 90, video_time + 15)
+    if video_id and (video_time is not None or asked_time is not None):
+        # Hỏi về một mốc cụ thể ("phút 2:30 nói gì") -> lấy quanh mốc đó; không thì lấy đoạn VỪA nghe
+        # (90 giây trước tới 15 giây sau vị trí đang phát) để hiểu "đoạn này", "video đang nói gì".
+        center = asked_time if asked_time is not None else video_time
+        start, end = (center - 45, center + 60) if asked_time is not None else (center - 90, center + 15)
+        segs, _ = transcript_window(db, video_id, start, end)
         if segs:
             transcript_block = {
                 "content": format_segments(segs), "source_type": "video", "source_id": video_id,
-                "start_time": segs[0].start_time, "end_time": segs[-1].end_time,
-                "label": f"Lời giảng video {video_id} quanh {fmt_ts(video_time)} "
+                # nút nguồn tua tới ngay trước đoạn đang hỏi (không phải đầu cửa sổ 90 giây)
+                "start_time": next((x.start_time for x in reversed(segs) if x.start_time <= center - 15), segs[0].start_time),
+                "end_time": segs[-1].end_time,
+                "label": f"Lời giảng video {video_id} quanh {fmt_ts(center)} "
                          f"({fmt_ts(segs[0].start_time)}–{fmt_ts(segs[-1].end_time)})",
                 "document_title": f"Video {video_id}",
             }
@@ -235,6 +268,14 @@ def prepare_turn(db: Session, user: Principal, *, question: str, conversation_id
     context, plan.sources = build_context(chunks, transcript_block)
     plan.prompt = TUTOR_HINT if hint_mode else TUTOR_ANSWER
     user_content = f"{wrap_documents(context)}\n\n"
+    if video_id and video_time is not None:
+        user_content += (f"Học sinh đang xem video, vị trí phát hiện tại: {fmt_ts(video_time)}. "
+                         "Câu hỏi không nêu rõ chủ đề (\"đoạn này\", \"video đang nói gì\", \"vừa nói gì\"...) "
+                         "là hỏi về lời giảng ngay trước vị trí này.\n")
+    if asked_time is not None:
+        user_content += f"Học sinh hỏi về mốc {fmt_ts(asked_time)} trong video.\n"
+    if video_id and (video_time is not None or asked_time is not None):
+        user_content += "\n"
     if selected_text:
         user_content += f"Học sinh đang hỏi về đoạn sau trong bài:\n«{selected_text[:2000]}»\n\n"
     user_content += f"Câu hỏi của học sinh: {question}"

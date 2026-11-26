@@ -161,3 +161,124 @@ def test_coach_conversation_history_saved_continued_and_private(client, teacher,
     assert r.json()["title"] == "Ôn chương 1"
     assert client.delete(f"/ai/coach/conversations/{conv['id']}", headers=sv).status_code == 204
     assert client.get("/ai/coach/conversations", headers=sv).json() == []
+
+
+def test_coach_scoped_to_selected_course(client, teacher, fake_llm):
+    q_a = _lesson_with_bank(client, teacher, "cs1", n=1)
+    q_b = _lesson_with_bank(client, teacher, "cs2", n=1)
+    sv = token(client, "sv-cs", "student", ["lop-a"])
+    _wrong("sv-cs", q_a + q_b)
+    course_a = next(c["course_id"] for c in client.get("/ai/learn/courses", headers=sv).json() if c["code"] == "course-cs1")
+
+    fake_llm.push("coach", {"tool_calls": [_call("get_progress"), _call("get_weak_points", {}, "c2"),
+                                           _call("search_materials", {"query": "đóng gói"}, "c3"),
+                                           _call("get_practice_quiz", {"lesson_code": "lesson-cs2"}, "c4")]}, "Ok.")
+    d = client.post("/ai/coach/chat", headers=sv, json={"message": "Ôn gì?", "course_id": course_a}).json()
+    progress, weak, found, other = (json.loads(m["content"]) for m in _tool_messages(fake_llm))
+    assert "error" not in progress
+    assert [w["question_id"] for w in weak["weak_questions"]] == q_a
+    assert found["results"] and all(r["lesson_code"] == "lesson-cs1" for r in found["results"])
+    assert "error" in other  # bài của khóa khác không dùng được
+    # model biết học sinh đang ôn khóa nào
+    first_user = next(m for m in fake_llm.calls[-1]["messages"] if m["role"] == "user")
+    assert "đang ôn khóa học" in first_user["content"] and "lesson-cs1" in first_user["content"]
+    assert d["conversation"]["course_id"] == course_a
+
+    # chat tiếp cuộc cũ giữ nguyên khóa đã chọn
+    fake_llm.push("coach", {"tool_calls": [_call("get_weak_points")]}, "Ok.")
+    n = len(_tool_messages(fake_llm))
+    client.post("/ai/coach/chat", headers=sv, json={"message": "Còn gì nữa?", "conversation_id": d["conversation"]["id"]})
+    weak2 = json.loads(_tool_messages(fake_llm)[n]["content"])
+    assert [w["question_id"] for w in weak2["weak_questions"]] == q_a
+
+    # khóa không thuộc học sinh -> 404
+    outsider = token(client, "sv-cs-z", "student", ["lop-z"])
+    r = client.post("/ai/coach/chat", headers=outsider, json={"message": "x", "course_id": course_a})
+    assert r.status_code == 404
+
+
+def test_tools_provider_retries_with_reasoning_effort_none(monkeypatch):
+    """gpt-6-luna từ chối function tools trên /chat/completions nếu không đặt reasoning_effort='none'."""
+    from types import SimpleNamespace as N
+    from app.config import settings
+    from app.services.ai import llm
+    calls = []
+
+    class Completions:
+        def create(self, **kw):
+            calls.append(dict(kw))
+            if kw.get("reasoning_effort") != "none":
+                raise Exception("Function tools with reasoning_effort are not supported for gpt-6-luna "
+                                "in /v1/chat/completions. param: 'reasoning_effort'")
+            return N(choices=[N(message=N(content="ok", tool_calls=[]))],
+                     usage=N(prompt_tokens=3, completion_tokens=2), model="gpt-6-luna")
+
+    monkeypatch.setattr(settings, "openai_api_key", "x")
+    monkeypatch.setattr(llm, "_need_reasoning_none", set())
+    monkeypatch.setattr(llm, "_no_temperature", set())
+    monkeypatch.setattr(llm, "_openai_client", lambda: N(chat=N(completions=Completions())))
+    msg, *_ = llm._tools_provider("s", [{"role": "user", "content": "hi"}],
+                                  [{"name": "f", "parameters": {"type": "object", "properties": {}}}], 100, 0.2)
+    assert msg["content"] == "ok" and len(calls) == 2 and calls[-1]["reasoning_effort"] == "none"
+    # lần sau đã nhớ: không gửi request lỗi nữa
+    llm._tools_provider("s", [{"role": "user", "content": "hi"}],
+                        [{"name": "f", "parameters": {"type": "object", "properties": {}}}], 100, 0.2)
+    assert len(calls) == 3 and calls[-1]["reasoning_effort"] == "none"
+
+
+def test_tools_stream_provider_assembles_tool_calls(monkeypatch):
+    """Stream từ OpenAI: ghép các mảnh tool_call theo index và phát chữ từng đoạn."""
+    from types import SimpleNamespace as N
+    from app.config import settings
+    from app.services.ai import llm
+
+    def chunk(content=None, tcs=None, usage=None):
+        return N(model="gpt-6-luna", usage=usage, choices=[N(delta=N(content=content, tool_calls=tcs))] if not usage else [])
+
+    stream = [chunk(tcs=[N(index=0, id="c1", function=N(name="get_", arguments='{"a"'))]),
+              chunk(tcs=[N(index=0, id=None, function=N(name="progress", arguments=": 1}"))]),
+              chunk("Xin "), chunk("chào"), chunk(usage=N(prompt_tokens=5, completion_tokens=7))]
+
+    class Completions:
+        def create(self, **kw):
+            assert kw["stream"] is True
+            return iter(stream)
+
+    monkeypatch.setattr(settings, "openai_api_key", "x")
+    monkeypatch.setattr(llm, "_openai_client", lambda: N(chat=N(completions=Completions())))
+    out = list(llm._tools_stream_provider("s", [{"role": "user", "content": "hi"}], [], 100, 0.2))
+    assert out[:2] == ["Xin ", "chào"]
+    msg, in_tok, out_tok, _ = out[-1]
+    assert msg["content"] == "Xin chào" and (in_tok, out_tok) == (5, 7)
+    assert msg["tool_calls"] == [{"id": "c1", "name": "get_progress", "arguments": '{"a": 1}'}]
+
+
+def _sse_events(text: str) -> list[tuple[str, dict]]:
+    out = []
+    for block in text.strip().split("\n\n"):
+        ev = next(line[7:] for line in block.splitlines() if line.startswith("event: "))
+        data = next(line[6:] for line in block.splitlines() if line.startswith("data: "))
+        out.append((ev, json.loads(data)))
+    return out
+
+
+def test_coach_stream_shows_steps_then_text_and_saves(client, teacher, fake_llm):
+    _lesson_with_bank(client, teacher, "cost", n=1)
+    sv = token(client, "sv-cost", "student", ["lop-a"])
+    r = client.post("/ai/coach/chat/stream", headers=sv, json={"message": "Mình nên ôn gì?"})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/event-stream")
+    evs = _sse_events(r.text)
+    kinds = [e for e, _ in evs]
+    assert kinds[:4] == ["step_start", "step", "step_start", "step"]
+    assert kinds[-1] == "done" and "delta" in kinds
+    text = "".join(d["text"] for e, d in evs if e == "delta")
+    done = evs[-1][1]
+    assert text == done["answer"] and done["answer"].startswith("Kế hoạch ôn")
+    assert [s["tool"] for s in done["steps"]] == ["get_progress", "get_weak_points"]
+    conv = client.get(f"/ai/coach/conversations/{done['conversation']['id']}", headers=sv).json()
+    assert [m["role"] for m in conv["messages"]] == ["user", "assistant"]
+    # cuộc trò chuyện của người khác: lỗi JSON trước khi stream
+    other = token(client, "sv-cost-2", "student", ["lop-a"])
+    r = client.post("/ai/coach/chat/stream", headers=other,
+                    json={"message": "x", "conversation_id": done["conversation"]["id"]})
+    assert r.status_code == 404

@@ -1,6 +1,6 @@
 """Ôn thẻ ngắt quãng (SM-2 đơn giản). Thẻ = câu hỏi đã duyệt của bài, hoặc thẻ AI soạn từ học liệu đã được duyệt."""
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 from sqlalchemy.orm import Session
 
@@ -99,16 +99,49 @@ def _reviews(db: Session, user: Principal, lesson_code: str) -> dict:
         FlashcardReview.student_id == user.user_id, FlashcardReview.lesson_code == lesson_code).all()}
 
 
+def _counts(card_ids: list[str], reviews: dict) -> dict:
+    """Số thẻ tổng / mới / đến hạn / đã thuộc (ôn đúng >= 2 lần)."""
+    now = utcnow()
+    rv = [reviews.get(i) for i in card_ids]
+    return {"total": len(card_ids), "new": sum(1 for r in rv if r is None),
+            "due": sum(1 for r in rv if r is None or as_aware(r.due_at) <= now),
+            "learned": sum(1 for r in rv if r is not None and r.reps >= 2)}
+
+
 def summary(db: Session, user: Principal, lesson_code: str) -> dict:
     cards = _lesson_cards(db, user, lesson_code)
-    reviews = _reviews(db, user, lesson_code)
-    now = utcnow()
-    due = sum(1 for c in cards if c.id not in reviews or as_aware(reviews[c.id].due_at) <= now)
-    new = sum(1 for c in cards if c.id not in reviews)
     lesson = db.query(Lesson).filter(Lesson.code == lesson_code).first()
     return {"lesson_code": lesson_code, "lesson_title": lesson.title if lesson else None,
-            "total": len(cards), "new": new, "due": due,
-            "learned": sum(1 for c in cards if c.id in reviews and reviews[c.id].reps >= 2)}
+            **_counts([c.id for c in cards], _reviews(db, user, lesson_code))}
+
+
+def overview(db: Session, user: Principal) -> list[dict]:
+    """Trang Thẻ ghi nhớ: mọi khóa học sinh được học, mỗi bài kèm số thẻ (tổng / đến hạn / mới / đã thuộc).
+
+    Gom truy vấn theo lô (chương/bài, thẻ, lượt ôn) thay vì hỏi DB riêng cho từng bài: DB ở xa nên mỗi lượt
+    đi về đều tốn vài chục ms."""
+    courses = learning.visible_courses(db, user, with_tree=True)
+    if not courses:
+        return []
+    codes = [ls.code for c in courses for ch in c.chapters for ls in ch.lessons]
+    cards: dict[str, list[str]] = {code: [] for code in codes}
+    for cid, code in (db.query(QuestionBankItem.id, QuestionBankItem.lesson_id)
+                      .filter(QuestionBankItem.lesson_id.in_(codes), QuestionBankItem.status == "approved")):
+        cards[code].append(str(cid))
+    for cid, code in (db.query(FlashcardCard.id, FlashcardCard.lesson_code)
+                      .filter(FlashcardCard.lesson_code.in_(codes), FlashcardCard.status == "approved")):
+        cards[code].append(str(cid))
+    reviews = {str(r.card_id): r for r in db.query(FlashcardReview).filter(
+        FlashcardReview.student_id == user.user_id, FlashcardReview.lesson_code.in_(codes))}
+    out = []
+    for course in courses:
+        lessons = [{"lesson_code": ls.code, "lesson_title": ls.title, "lesson_id": str(ls.id), "chapter_title": ch.title,
+                    **_counts(cards.get(ls.code, []), reviews)}
+                   for ch in course.chapters for ls in ch.lessons]
+        out.append({"course_id": str(course.id), "code": course.code, "title": course.title,
+                    "total": sum(x["total"] for x in lessons), "due": sum(x["due"] for x in lessons),
+                    "lessons": lessons})
+    return out
 
 
 def due_cards(db: Session, user: Principal, lesson_code: str, limit: int = 20) -> dict:

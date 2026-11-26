@@ -32,7 +32,7 @@ def _course_with_quiz(client, teacher):
     return reading, quiz
 
 
-def test_tutor_hint_mode_during_lesson_quiz(client, teacher, fake_llm):
+def test_tutor_locked_during_lesson_quiz(client, teacher, fake_llm):
     reading, quiz = _course_with_quiz(client, teacher)
     sv = token(client, "sv-guard-quiz", "student", ["lop-a"])
     ask = {"question": "Đóng gói là gì?", "lesson_id": "lesson-guard"}
@@ -41,11 +41,12 @@ def test_tutor_hint_mode_during_lesson_quiz(client, teacher, fake_llm):
     client.post(f"/ai/learn/items/{reading}/complete", headers=sv)
     start = client.post(f"/ai/learn/items/{quiz}/quiz/start", headers=sv).json()
 
-    # đang làm bài: Tutor chuyển sang gợi ý, lộ đáp án thì bị thay bằng gợi ý chung
-    fake_llm.push("hint", "Đáp án đúng là B. Gom dữ liệu và phương thức, che giấu chi tiết")
-    r = client.post("/ai/chat", headers=sv, json=ask).json()
-    assert r["hint_mode"] is True and "Đáp án đúng là B" not in r["answer"]
-    assert "không được nêu đáp án" in fake_llm.calls[-1]["user"]
+    # đang làm trắc nghiệm: Tutor bị khóa hẳn, không gọi LLM, không tính lượt (cả bản streaming)
+    n = len(fake_llm.calls)
+    r = client.post("/ai/chat", headers=sv, json=ask)
+    assert r.status_code == 403 and r.json()["error"]["code"] == "TUTOR_LOCKED_QUIZ"
+    assert client.post("/ai/chat/stream", headers=sv, json=ask).status_code == 403
+    assert len(fake_llm.calls) == n
 
     # giáo viên không bị khóa
     assert client.post("/ai/chat", headers=teacher, json=ask).json()["hint_mode"] is False
@@ -53,8 +54,8 @@ def test_tutor_hint_mode_during_lesson_quiz(client, teacher, fake_llm):
     for q in start["questions"]:
         client.post(f"/ai/learn/items/{quiz}/quiz/answer", headers=sv,
                     json={"question_id": q["question_id"], "selected_index": 1})
-    # đã trả lời hết (đáp án đã được hiện) -> hết chế độ gợi ý, kể cả trước khi bấm nộp
-    assert client.post("/ai/chat", headers=sv, json=ask).json()["hint_mode"] is False
+    # đã trả lời hết (đáp án đã được hiện) -> mở lại Tutor, kể cả trước khi bấm nộp
+    assert client.post("/ai/chat", headers=sv, json=ask).status_code == 200
     client.post(f"/ai/learn/items/{quiz}/quiz/finish", headers=sv)
     assert client.post("/ai/chat", headers=sv, json=ask).json()["hint_mode"] is False
 
@@ -144,3 +145,13 @@ def test_evaluation_baseline_modes_and_compare(client, admin, teacher, fake_llm)
     assert cmp["comparable"] is True and [x["mode"] for x in cmp["runs"]] == ["no_rag", "rag", "no_filter"]
     assert len(cmp["delta_vs_first"]) == 2
     assert client.get(f"/ai/evaluation/compare?ids={ids['rag']}", headers=teacher).status_code == 400
+
+
+def test_mentioned_time_parsing():
+    from app.services.ai.tutor import mentioned_time
+    assert mentioned_time("phút 2:30 nói gì vậy") == 150
+    assert mentioned_time("ở 1:02:03 thầy giảng gì") == 3723
+    assert mentioned_time("phút thứ 3 nói về gì") == 180
+    assert mentioned_time("phút 3 giây 20") == 200
+    assert mentioned_time("giây 45 là gì") == 45
+    assert mentioned_time("đóng gói là gì") is None

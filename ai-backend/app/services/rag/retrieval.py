@@ -39,6 +39,7 @@ class RetrievalScope:
     course_id: str | None = None
     class_id: str | None = None
     lesson_id: str | None = None
+    lesson_ids: list[str] | None = None  # giới hạn trong các bài (vd. mọi bài của một khóa học)
     document_ids: list[str] | None = None
     source_types: list[str] | None = None
     video_id: str | None = None
@@ -75,6 +76,8 @@ def _apply_scope(stmt, scope: RetrievalScope):
         stmt = stmt.where(AIDocument.class_id == scope.class_id)
     if scope.lesson_id:
         stmt = stmt.where(AIDocument.lesson_id == scope.lesson_id)
+    if scope.lesson_ids is not None:
+        stmt = stmt.where(AIDocument.lesson_id.in_(scope.lesson_ids or [""]))
     if scope.document_ids is not None:
         stmt = stmt.where(AIDocument.id.in_(scope.document_ids))
     if scope.source_types:

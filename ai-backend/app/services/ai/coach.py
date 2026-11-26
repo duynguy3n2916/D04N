@@ -12,7 +12,7 @@ Nguyên tắc an toàn (do code kiểm soát, không phó mặc cho prompt):
 import json
 import logging
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import timedelta
 
@@ -24,7 +24,7 @@ from app.core.errors import AppError
 from app.core.security import Principal
 from app.core.utils import as_aware, parse_uuid, redact_pii, utcnow
 from app.models.coach import CoachConversation, CoachMessage
-from app.models.learning import FlashcardReview, ItemProgress, Lesson, LessonItem, QuizAnswerLog
+from app.models.learning import Course, FlashcardReview, ItemProgress, Lesson, QuizAnswerLog
 from app.models.video_question import QuestionBankItem
 from app.services.ai import llm
 from app.services.ai.prompts import STUDY_COACH
@@ -52,7 +52,8 @@ class Tool:
 class RunState:
     """Những gì một lượt agent thu được: nguồn học liệu (nhãn S1, S2...) và các nút hành động cho giao diện."""
 
-    def __init__(self):
+    def __init__(self, course=None):
+        self.course = course  # khóa học học sinh chọn để ôn; None = mọi khóa
         self.sources: list[dict] = []
         self.actions: list[dict] = []
         self._action_keys: set = set()
@@ -79,22 +80,40 @@ class RunState:
 # Tools
 # ----------------------------------------------------------------------------
 
-def _visible_lessons(db: Session, user: Principal) -> dict[str, Lesson]:
-    return {ls.code: ls for c in learning.visible_courses(db, user) for ch in c.chapters for ls in ch.lessons}
+def _courses(db: Session, user: Principal, state: "RunState | None" = None) -> list:
+    if state is not None and state.course is not None:
+        return [state.course]
+    return learning.visible_courses(db, user, with_tree=True)
 
 
-def _lesson_or_error(db: Session, user: Principal, code: str | None) -> Lesson | None:
+def _visible_lessons(db: Session, user: Principal, state: "RunState | None" = None) -> dict[str, Lesson]:
+    return {ls.code: ls for c in _courses(db, user, state) for ch in c.chapters for ls in ch.lessons}
+
+
+def _lesson_or_error(db: Session, user: Principal, code: str | None, state: "RunState | None" = None) -> Lesson | None:
     if not code:
         return None
-    lesson = _visible_lessons(db, user).get(str(code))
+    lesson = _visible_lessons(db, user, state).get(str(code))
     if lesson is None:
-        raise AppError(404, "NOT_FOUND", f"Không có bài học mã {code} trong các khóa học của bạn.")
+        where = f"khóa {state.course.title}" if state is not None and state.course is not None else "các khóa học của bạn"
+        raise AppError(404, "NOT_FOUND", f"Không có bài học mã {code} trong {where}.")
     return lesson
+
+
+def resolve_course(db: Session, user: Principal, course_id):
+    """Khóa học học sinh chọn để ôn (phải là khóa học sinh được học)."""
+    if not course_id:
+        return None
+    cid = parse_uuid(course_id, "course_id", required=False)
+    course = next((c for c in learning.visible_courses(db, user) if c.id == cid), None) if cid else None
+    if course is None:
+        raise AppError(404, "NOT_FOUND", "Không tìm thấy khóa học này trong các khóa bạn đang học.")
+    return course
 
 
 def tool_get_progress(db: Session, user: Principal, args: dict, state: RunState) -> dict:
     out = []
-    for course in learning.visible_courses(db, user):
+    for course in _courses(db, user, state):
         items, progress, status_of, current_id = learning._status_map(db, user, course)
         if not items:
             continue
@@ -122,7 +141,7 @@ def tool_get_progress(db: Session, user: Principal, args: dict, state: RunState)
 
 
 def tool_get_weak_points(db: Session, user: Principal, args: dict, state: RunState) -> dict:
-    lesson = _lesson_or_error(db, user, args.get("lesson_code"))
+    lesson = _lesson_or_error(db, user, args.get("lesson_code"), state)
     limit = max(1, min(int(args.get("limit") or 8), 20))
     since = utcnow() - timedelta(days=60)
     rows = (db.query(QuizAnswerLog.question_id, QuizAnswerLog.correct, QuizAnswerLog.created_at)
@@ -136,7 +155,7 @@ def tool_get_weak_points(db: Session, user: Principal, args: dict, state: RunSta
     weak_ids = [k for k, s in stat.items() if s["wrong"] and not (s["last_correct"] and s["right"] >= 2)]
     if not weak_ids:
         return {"weak_questions": [], "note": "Chưa có câu nào làm sai trong 60 ngày qua."}
-    visible = _visible_lessons(db, user)
+    visible = _visible_lessons(db, user, state)
     bank = db.query(QuestionBankItem).filter(QuestionBankItem.id.in_(weak_ids)).all()
     out = []
     for b in bank:
@@ -152,8 +171,8 @@ def tool_get_weak_points(db: Session, user: Principal, args: dict, state: RunSta
 
 
 def tool_get_due_flashcards(db: Session, user: Principal, args: dict, state: RunState) -> dict:
-    lesson = _lesson_or_error(db, user, args.get("lesson_code"))
-    codes = [lesson.code] if lesson else list(_visible_lessons(db, user))
+    lesson = _lesson_or_error(db, user, args.get("lesson_code"), state)
+    codes = [lesson.code] if lesson else list(_visible_lessons(db, user, state))
     out = []
     for code in codes:
         try:
@@ -171,10 +190,11 @@ def tool_search_materials(db: Session, user: Principal, args: dict, state: RunSt
     query = str(args.get("query") or "").strip()
     if not query:
         raise AppError(400, "INVALID_ARGS", "Thiếu query.")
-    lesson = _lesson_or_error(db, user, args.get("lesson_code"))
-    scope = RetrievalScope.for_user(user, lesson_id=lesson.code if lesson else None)
+    lesson = _lesson_or_error(db, user, args.get("lesson_code"), state)
+    visible = _visible_lessons(db, user, state)
+    scope = RetrievalScope.for_user(user, lesson_id=lesson.code if lesson else None,
+                                    lesson_ids=list(visible) if state.course is not None else None)
     chunks = retrieve(db, query, scope, top_k=4)
-    visible = _visible_lessons(db, user)
     results = []
     for c in chunks:
         if c.get("lesson_id") and c["lesson_id"] not in visible and not user.is_admin:
@@ -186,7 +206,7 @@ def tool_search_materials(db: Session, user: Principal, args: dict, state: RunSt
 
 
 def tool_get_practice_quiz(db: Session, user: Principal, args: dict, state: RunState) -> dict:
-    lesson = _lesson_or_error(db, user, args.get("lesson_code"))
+    lesson = _lesson_or_error(db, user, args.get("lesson_code"), state)
     if lesson is None:
         raise AppError(400, "INVALID_ARGS", "Cần lesson_code.")
     status_of = learning._status_map(db, user, lesson.chapter.course)[2]
@@ -210,7 +230,7 @@ def tool_queue_flashcards(db: Session, user: Principal, args: dict, state: RunSt
     ids = [str(x) for x in (args.get("question_ids") or [])][:30]
     if not ids:
         raise AppError(400, "INVALID_ARGS", "Thiếu question_ids.")
-    visible = _visible_lessons(db, user)
+    visible = _visible_lessons(db, user, state)
     uuids = [u for u in (parse_uuid(i, "question_id", required=False) for i in ids) if u]
     bank = db.query(QuestionBankItem).filter(QuestionBankItem.id.in_(uuids), QuestionBankItem.status == "approved").all()
     now = utcnow()
@@ -299,18 +319,29 @@ def _history(history: list[dict] | None) -> list[dict]:
     return out
 
 
-def ask(db: Session, user: Principal, message: str, history: list[dict] | None = None) -> dict:
+def _course_note(course) -> str:
+    lessons = "; ".join(f"{ls.code}: {ls.title}" for ch in course.chapters for ls in ch.lessons)
+    return (f"(Học sinh đang ôn khóa học «{course.title}». Chỉ dùng dữ liệu và học liệu của khóa này. "
+            f"Các bài trong khóa: {lessons or 'chưa có bài'}.)\n\n")
+
+
+def ask_events(db: Session, user: Principal, message: str, history: list[dict] | None = None, course=None,
+               stream: bool = False) -> Iterator[dict]:
+    """Vòng lặp agent dạng sự kiện: `step_start` (sắp gọi tool), `step` (tool xong), `delta` (đoạn chữ của câu trả lời,
+    chỉ khi stream=True), `reset` (bỏ phần chữ vừa phát vì model chuyển sang gọi tool), cuối cùng `result`."""
     message = (message or "").strip()
     if not message:
         raise AppError(400, "EMPTY_MESSAGE", "Hãy nhập câu hỏi.")
     if settings.redact_pii:
         message = redact_pii(message)
     if learning.active_quiz_questions(db, user):
-        return {"answer": QUIZ_GUARD_MESSAGE, "steps": [], "sources": [], "actions": [], "guarded": True,
-                "stopped": None, "llm_calls": 0}
+        yield {"event": "result", "data": {"answer": QUIZ_GUARD_MESSAGE, "steps": [], "sources": [], "actions": [],
+                                           "guarded": True, "stopped": None, "llm_calls": 0}}
+        return
 
-    state = RunState()
-    messages = _history(history) + [{"role": "user", "content": message}]
+    state = RunState(course)
+    content = (_course_note(course) + message) if course is not None else message
+    messages = _history(history) + [{"role": "user", "content": content}]
     specs = [t.spec() for t in TOOLS.values()]
     steps: list[dict] = []
     answer, stopped, calls = "", None, 0
@@ -318,8 +349,20 @@ def ask(db: Session, user: Principal, message: str, history: list[dict] | None =
         final_round = step == settings.coach_max_steps
         if final_round:  # hết lượt gọi tool: buộc model trả lời bằng những gì đã có
             messages.append({"role": "user", "content": "Đã đủ thông tin. Hãy trả lời học sinh ngay, không gọi thêm tool."})
-        msg, _ = llm.complete_with_tools("coach", STUDY_COACH, messages, [] if final_round else specs,
-                                         user_id=user.user_id, attempt=step + 1)
+        tools = [] if final_round else specs
+        if stream:
+            msg, streamed = None, False
+            for piece in llm.stream_with_tools("coach", STUDY_COACH, messages, tools,
+                                               user_id=user.user_id, attempt=step + 1):
+                if isinstance(piece, tuple):
+                    msg = piece[0]
+                else:
+                    streamed = True
+                    yield {"event": "delta", "data": {"text": piece}}
+        else:
+            msg, _ = llm.complete_with_tools("coach", STUDY_COACH, messages, tools,
+                                             user_id=user.user_id, attempt=step + 1)
+            streamed = False
         calls += 1
         tool_calls = msg.get("tool_calls") or []
         if not tool_calls or final_round:
@@ -327,19 +370,33 @@ def ask(db: Session, user: Principal, message: str, history: list[dict] | None =
             if final_round and tool_calls:
                 stopped = "max_steps"
             break
+        if streamed:  # model nói vài câu rồi mới gọi tool: phần chữ đó không phải câu trả lời cuối
+            yield {"event": "reset", "data": {}}
         messages.append({"role": "assistant", "content": msg.get("content") or None,
                          "tool_calls": [{"id": c["id"], "type": "function",
                                          "function": {"name": c["name"], "arguments": c["arguments"]}} for c in tool_calls]})
         for c in tool_calls:
+            yield {"event": "step_start", "data": {"tool": c["name"], "arguments": c["arguments"]}}
             result, ok = run_tool(db, user, c["name"], c["arguments"], state)
-            steps.append({"tool": c["name"], "arguments": c["arguments"], "ok": ok,
-                          "writes": bool(TOOLS.get(c["name"]) and TOOLS[c["name"]].writes)})
+            info = {"tool": c["name"], "arguments": c["arguments"], "ok": ok,
+                    "writes": bool(TOOLS.get(c["name"]) and TOOLS[c["name"]].writes)}
+            steps.append(info)
+            yield {"event": "step", "data": info}
             messages.append({"role": "tool", "tool_call_id": c["id"], "content": _clip(result)})
     if not answer:
         answer = "Mình chưa lập được kế hoạch lúc này. Bạn thử hỏi cụ thể hơn, ví dụ: \"Mình nên ôn gì cho bài kiểm tra chương 1?\""
     used = set(_labels_in(answer))
-    return {"answer": answer, "steps": steps, "sources": [s for s in state.sources if s["label"] in used] or state.sources,
-            "actions": state.actions, "guarded": False, "stopped": stopped, "llm_calls": calls}
+    yield {"event": "result", "data": {
+        "answer": answer, "steps": steps, "sources": [s for s in state.sources if s["label"] in used] or state.sources,
+        "actions": state.actions, "guarded": False, "stopped": stopped, "llm_calls": calls}}
+
+
+def ask(db: Session, user: Principal, message: str, history: list[dict] | None = None, course=None) -> dict:
+    res: dict = {}
+    for ev in ask_events(db, user, message, history, course):
+        if ev["event"] == "result":
+            res = ev["data"]
+    return res
 
 
 def _labels_in(text: str) -> list[str]:
@@ -367,28 +424,61 @@ def _own_conversation(db: Session, user: Principal, conversation_id) -> CoachCon
 
 
 def _conv_summary(conv: CoachConversation) -> dict:
-    return {"id": str(conv.id), "title": conv.title, "created_at": conv.created_at, "updated_at": conv.updated_at}
+    return {"id": str(conv.id), "title": conv.title, "course_id": conv.course_id,
+            "created_at": conv.created_at, "updated_at": conv.updated_at}
 
 
-def chat(db: Session, user: Principal, message: str, conversation_id=None, history: list[dict] | None = None) -> dict:
-    """Một lượt hỏi có lưu lịch sử. Có conversation_id: lấy ngữ cảnh từ DB và nối tiếp; không có: tạo cuộc mới."""
+def prepare_chat(db: Session, user: Principal, message: str, conversation_id=None, history: list[dict] | None = None,
+                 course_id=None) -> dict:
+    """Kiểm tra quyền và gom ngữ cảnh cho một lượt hỏi (lỗi ở đây trả JSON bình thường, trước khi stream)."""
     conv = _own_conversation(db, user, conversation_id) if conversation_id else None
+    if conv is not None and not course_id:
+        course_id = conv.course_id
+    course = resolve_course(db, user, course_id)
     if settings.redact_pii:
         message = redact_pii(message or "")
     if conv is not None:
         history = [{"role": m.role, "content": m.content} for m in conv.messages]
-    res = ask(db, user, message, history)
+    return {"conv_id": conv.id if conv is not None else None, "course_id": course.id if course is not None else None,
+            "message": message, "history": history}
+
+
+def _save_turn(db: Session, user: Principal, plan: dict, course, res: dict) -> dict:
+    conv = db.get(CoachConversation, plan["conv_id"]) if plan["conv_id"] else None
     if conv is None:
-        conv = CoachConversation(student_id=user.user_id, title=_title_from(message))
+        conv = CoachConversation(student_id=user.user_id, title=_title_from(plan["message"]))
         db.add(conv)
         db.flush()
-    db.add(CoachMessage(conversation_id=conv.id, role="user", content=message.strip()))
+    conv.course_id = str(course.id) if course is not None else None
+    db.add(CoachMessage(conversation_id=conv.id, role="user", content=plan["message"].strip()))
     db.add(CoachMessage(conversation_id=conv.id, role="assistant", content=res["answer"],
                         result={k: res.get(k) for k in _RESULT_KEYS}))
     conv.updated_at = func.now()
     db.commit()
     db.refresh(conv)
     return {**res, "conversation": _conv_summary(conv)}
+
+
+def chat_events(db: Session, user: Principal, plan: dict, stream: bool = True) -> Iterator[dict]:
+    """Chạy một lượt đã chuẩn bị bằng prepare_chat; phát sự kiện của ask_events, cuối cùng `done` (đã lưu lịch sử)."""
+    course = db.get(Course, plan["course_id"]) if plan["course_id"] else None
+    for ev in ask_events(db, user, plan["message"], plan["history"], course, stream=stream):
+        if ev["event"] == "result":
+            yield {"event": "done", "data": _save_turn(db, user, plan, course, ev["data"])}
+        else:
+            yield ev
+
+
+def chat(db: Session, user: Principal, message: str, conversation_id=None, history: list[dict] | None = None,
+         course_id=None) -> dict:
+    """Một lượt hỏi có lưu lịch sử. Có conversation_id: lấy ngữ cảnh từ DB và nối tiếp; không có: tạo cuộc mới.
+    course_id: khóa học đang ôn; mọi tool và tìm học liệu chỉ trong khóa đó (cuộc cũ giữ khóa đã chọn)."""
+    plan = prepare_chat(db, user, message, conversation_id, history, course_id)
+    out: dict = {}
+    for ev in chat_events(db, user, plan, stream=False):
+        if ev["event"] == "done":
+            out = ev["data"]
+    return out
 
 
 def list_conversations(db: Session, user: Principal, limit: int = 100) -> list[dict]:

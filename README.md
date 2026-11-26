@@ -199,7 +199,7 @@ schema `public` của database test rồi tạo lại (không tạo hay xóa dat
 |---|---|
 | `DATABASE_URL` | chuỗi kết nối Postgres cloud (Neon) — bắt buộc |
 | `TEST_DATABASE_URL` | database riêng để chạy `pytest` (tên có chữ `test`) |
-| `OPENAI_API_KEY`, `OPENAI_LLM_MODEL` | khóa và model cho LLM (mặc định `gpt-4o-mini`); LLM chỉ dùng OpenAI |
+| `OPENAI_API_KEY`, `OPENAI_LLM_MODEL` | khóa và model cho LLM (mặc định `gpt-6-luna`); LLM chỉ dùng OpenAI |
 | `EMBEDDING_PROVIDER` | `local` (mặc định, không cần key) hoặc `openai` |
 | `WHISPER_PROVIDER`, `GROQ_API_KEY` | phiên âm video (`groq` mặc định) |
 | `MEDIA_STORAGE` | `r2` (Cloudflare R2) hoặc `local` (thư mục `STORAGE_PATH`) |

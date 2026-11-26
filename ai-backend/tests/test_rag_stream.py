@@ -3,7 +3,7 @@ import json
 from types import SimpleNamespace
 
 from app.config import settings
-from app.services.courses import learning
+from app.services.courses import workflow
 from app.services.rag import hybrid
 from app.services.rag.retrieval import RetrievalScope, retrieve
 from tests.conftest import token
@@ -87,7 +87,7 @@ def test_chat_stream_hint_mode_buffers_and_redacts(client, teacher, fake_llm, mo
     q = SimpleNamespace(type="multiple_choice", question="Singleton đảm bảo điều gì?",
                         options=["A. Nhiều thể hiện", "B. Chỉ có duy nhất một thể hiện của lớp", "C. x", "D. y"],
                         correct_index=1, answer="B", explanation="")
-    monkeypatch.setattr(learning, "active_quiz_questions", lambda db, user: [q])
+    monkeypatch.setattr(workflow, "active_question_for_hint", lambda db, user, video_id: q)
     sv = token(client, "sv-stream-hint", "student", ["lop-a"])
     fake_llm.push("hint", "Đáp án là B. Chỉ có duy nhất một thể hiện của lớp")
     events = _parse_sse(client.post("/ai/chat/stream", headers=sv,

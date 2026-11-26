@@ -15,6 +15,7 @@ class CoachConversation(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     student_id = Column(String(128), nullable=False, index=True)
     title = Column(String(200), nullable=False)
+    course_id = Column(String(64), nullable=True)  # khóa học đang ôn (None = mọi khóa)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
 

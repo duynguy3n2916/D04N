@@ -140,6 +140,12 @@ def test_full_interaction_cycle(client, teacher, fake_llm):
     r = client.post("/ai/chat", headers=student, json={"question": "Đóng gói là gì?", "video_id": VID, "video_time": 25})
     assert r.json()["hint_mode"] is False
 
+    # hỏi mơ hồ giữa video: prompt có vị trí đang phát + lời giảng ngay trước đó
+    r = client.post("/ai/chat", headers=student, json={"question": "Video đang nói đến đâu rồi?", "video_id": VID,
+                                                      "video_time": 25})
+    assert r.status_code == 200 and r.json()["transcript_context"]
+    assert "vị trí phát hiện tại: 00:25" in fake_llm.calls[-1]["user"]
+
     r = client.post("/ai/workflow/resume", headers=student, json={"video_id": VID, "current_time": 26})
     assert r.json()["state"] == "COOLDOWN" and r.json()["remaining_cooldown_seconds"] > 200
 

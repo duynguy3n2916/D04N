@@ -11,7 +11,7 @@ class Settings(BaseSettings):
 
     # --- LLM: OpenAI (hệ thống không còn gọi Claude) ---
     openai_api_key: str = ""
-    openai_llm_model: str = "gpt-4o-mini"
+    openai_llm_model: str = "gpt-6-luna"
     openai_embedding_model: str = "text-embedding-3-small"
     llm_timeout_seconds: float = 90.0
     # Đơn giá để ước tính chi phí (USD / 1 triệu token). Để 0 nếu không muốn ước tính.

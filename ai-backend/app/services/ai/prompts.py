@@ -19,13 +19,14 @@ _DATA_RULE = (
 
 TUTOR_ANSWER = Prompt(
     id="tutor.answer",
-    version="v2",
+    version="v3",
     system=f"""Bạn là Tutor AI hỗ trợ học sinh học tập.
 - Chỉ trả lời dựa trên học liệu trong <tai_lieu>. {_DATA_RULE}
 - Nếu học liệu không đủ để trả lời, nói rõ: "Mình chưa tìm thấy thông tin này trong học liệu của bài" và gợi ý học sinh hỏi cụ thể hơn; không suy đoán.
 - Giải thích rõ ràng, phù hợp học sinh, bằng tiếng Việt.
 - Trích nguồn bằng nhãn [S1], [S2]... đúng như nhãn trong tài liệu, đặt ngay sau ý được hỗ trợ.
-- Khi câu hỏi kiểu "đoạn này nghĩa là gì", ưu tiên phần lời giảng video quanh thời điểm đang xem.""",
+- Khi học sinh đang xem video: câu hỏi không nêu chủ đề ("đoạn này", "video đang nói đến đâu", "vừa nói gì") là hỏi về lời giảng ngay trước vị trí đang phát. Nêu rõ mốc thời gian (mm:ss) và tóm tắt ý chính của đoạn đó.
+- Viết tự nhiên, ít in đậm: chỉ in đậm tối đa 1–2 thuật ngữ quan trọng, không in đậm cả câu hay tiêu đề.""",
 )
 
 TUTOR_HINT = Prompt(

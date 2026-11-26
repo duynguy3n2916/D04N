@@ -36,7 +36,7 @@ MODES = ("rag", "no_filter", "no_rag")
 MODE_LABELS = {"rag": "RAG đầy đủ (như Tutor)", "no_filter": "RAG không lọc theo khóa/bài",
                "no_rag": "Baseline: LLM không dùng học liệu"}
 NO_CONTEXT = "(Chế độ baseline: hệ thống trả lời KHÔNG dùng học liệu. Chỉ chấm correctness.)"
-SAMPLE_FILE = Path(__file__).resolve().parents[2] / "sample_data" / "eval_samples.json"
+SAMPLE_FILE = Path(__file__).resolve().parents[3] / "sample_data" / "eval_samples.json"
 
 
 # ----------------------------------------------------------------------------

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.security import Principal, get_current_user
+from app.core.sse import sse_response
 from app.database import get_db
 from app.services.ai import coach
 
@@ -20,6 +21,7 @@ class CoachTurn(BaseModel):
 class CoachRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     conversation_id: str | None = None
+    course_id: str | None = Field(default=None, max_length=64)
     history: list[CoachTurn] = Field(default_factory=list, max_length=20)
 
 
@@ -31,7 +33,18 @@ class RenameRequest(BaseModel):
 def coach_chat(req: CoachRequest, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
     """Một lượt hỏi Trợ lý học tập: agent tự gọi tool trên dữ liệu của chính học sinh rồi trả lời.
     Lượt hỏi được lưu vào lịch sử; gửi conversation_id để chat tiếp một cuộc trò chuyện cũ."""
-    return coach.chat(db, user, req.message, req.conversation_id, [t.model_dump() for t in req.history])
+    return coach.chat(db, user, req.message, req.conversation_id, [t.model_dump() for t in req.history],
+                      course_id=req.course_id)
+
+
+@router.post("/coach/chat/stream")
+def coach_chat_stream(req: CoachRequest, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Như /coach/chat nhưng trả Server-Sent Events để giao diện hiện tiến trình và chữ ngay khi có:
+    `step_start` / `step` (agent gọi tool), `delta` (đoạn chữ), `reset` (bỏ phần chữ nháp), cuối cùng `done`
+    (cùng dữ liệu như /coach/chat) hoặc `error`. Lỗi quyền / không tìm thấy vẫn trả JSON lỗi bình thường."""
+    plan = coach.prepare_chat(db, user, req.message, req.conversation_id, [t.model_dump() for t in req.history],
+                              course_id=req.course_id)
+    return sse_response(lambda session: coach.chat_events(session, user, plan, stream=True), name="coach")
 
 
 @router.get("/coach/conversations")

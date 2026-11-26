@@ -1,22 +1,17 @@
-import json
-import logging
-
 from fastapi import APIRouter, Depends
-from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.core.context import get_request_id, set_request_id
 from app.core.errors import AppError
 from app.core.security import Principal, ensure_class_access, get_current_user, require_teacher
+from app.core.sse import sse_response
 from app.core.utils import clean_id, parse_uuid
-from app.database import SessionLocal, get_db
+from app.database import get_db
 from app.models.conversation import AIConversation, AIMessage
 from app.services.ai import tutor
 from app.services.rag.retrieval import RetrievalScope, retrieve
 
 router = APIRouter(prefix="/ai", tags=["chat"])
-log = logging.getLogger("app.chat")
 
 
 class ChatRequest(BaseModel):
@@ -34,10 +29,6 @@ class ChatRequest(BaseModel):
     # Các trường cũ: bị bỏ qua (student_id lấy từ token, hint mode do server quyết định)
     student_id: str | None = None
     video_question_active: bool | None = None
-
-
-def _sse(event: str, data: dict) -> str:
-    return f"event: {event}\ndata: {json.dumps(data, ensure_ascii=False, default=str)}\n\n"
 
 
 def _turn_args(req: ChatRequest, user: Principal) -> dict:
@@ -65,23 +56,12 @@ def chat_stream(req: ChatRequest, user: Principal = Depends(get_current_user), d
     Lỗi trước khi gọi LLM (hết lượt, không có quyền...) vẫn trả JSON lỗi bình thường.
     """
     plan = tutor.prepare_turn(db, user, **_turn_args(req, user))
-    request_id = get_request_id()
 
-    def events():
-        set_request_id(request_id)  # generator chạy ngoài context của request
-        session = SessionLocal()  # session của request đã đóng khi response bắt đầu stream
-        try:
-            plan.conv = session.merge(plan.conv)
-            for ev in tutor.ask_stream(session, user, plan):
-                yield _sse(ev["event"], ev["data"])
-        except Exception:
-            log.exception("chat_stream_failed")
-            yield _sse("error", {"code": "INTERNAL_ERROR", "message": "Lỗi khi tạo câu trả lời."})
-        finally:
-            session.close()
+    def run(session: Session):
+        plan.conv = session.merge(plan.conv)
+        return tutor.ask_stream(session, user, plan)
 
-    return StreamingResponse(events(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+    return sse_response(run, name="chat")
 
 
 @router.get("/chat/quota")

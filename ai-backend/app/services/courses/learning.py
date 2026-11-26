@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.config import settings
 from app.core.errors import AppError
@@ -142,7 +142,9 @@ def leaderboard(db: Session, user: Principal, limit: int = 10) -> dict:
 
 def course_class_ids(db: Session, course: Course) -> list[str]:
     """Mọi lớp được dùng khóa học này (lớp chính đứng đầu)."""
-    linked = [cid for (cid,) in db.query(CourseClass.class_id).filter(CourseClass.course_id == course.id).all()]
+    pre = getattr(course, "_prefetched_class_ids", None)  # đã nạp sẵn theo lô ở visible_courses(with_tree=True)
+    linked = list(pre) if pre is not None else \
+        [cid for (cid,) in db.query(CourseClass.class_id).filter(CourseClass.course_id == course.id).all()]
     if course.class_id and course.class_id not in linked:
         linked.insert(0, course.class_id)
     return linked
@@ -158,13 +160,25 @@ def can_see_course(db: Session, user: Principal, course: Course) -> bool:
                                            CourseClass.class_id.in_(user.class_ids or [""])).first() is not None
 
 
-def visible_courses(db: Session, user: Principal) -> list[Course]:
+def visible_courses(db: Session, user: Principal, with_tree: bool = False) -> list[Course]:
+    """with_tree=True: nạp sẵn chương -> bài -> mục và lớp gắn thêm theo lô (vài truy vấn cho mọi khóa),
+    dùng cho các trang liệt kê để tránh hỏi DB riêng cho từng khóa/chương/bài (N+1)."""
     q = db.query(Course)
     if not user.is_admin:
         classes = user.class_ids or [""]
         linked = select(CourseClass.course_id).where(CourseClass.class_id.in_(classes))
         q = q.filter(or_(Course.class_id.is_(None), Course.class_id.in_(classes), Course.id.in_(linked)))
-    return q.order_by(Course.created_at).all()
+    if with_tree:
+        q = q.options(selectinload(Course.chapters).selectinload(Chapter.lessons).selectinload(Lesson.items))
+    courses = q.order_by(Course.created_at).all()
+    if with_tree and courses:
+        links: dict = {c.id: [] for c in courses}
+        for course_id, class_id in (db.query(CourseClass.course_id, CourseClass.class_id)
+                                    .filter(CourseClass.course_id.in_(list(links)))):
+            links[course_id].append(class_id)
+        for c in courses:
+            c._prefetched_class_ids = links[c.id]
+    return courses
 
 
 def get_course(db: Session, user: Principal, course_id) -> Course:

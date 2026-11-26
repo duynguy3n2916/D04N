@@ -7,7 +7,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from app.core.context import get_request_id, new_request_id, set_request_id
+from app.core.context import get_request_id, new_request_id, set_request_id, start_db_stats
 
 log = logging.getLogger("app.http")
 
@@ -48,8 +48,14 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
         rid = request.headers.get("X-Request-ID") or new_request_id()
         set_request_id(rid)
         t0 = time.perf_counter()
+        db = start_db_stats()
         response = await call_next(request)
+        total_ms = round((time.perf_counter() - t0) * 1000, 1)
         response.headers["X-Request-ID"] = rid
+        # Xem trong tab Network của trình duyệt: tổng thời gian, số truy vấn DB và thời gian chờ DB.
+        # (Với response dạng stream, số liệu chỉ tính tới lúc bắt đầu gửi.)
+        response.headers["X-DB-Queries"] = str(db["queries"])
+        response.headers["Server-Timing"] = f"db;dur={db['ms']:.1f};desc=\"{db['queries']} queries\", app;dur={total_ms}"
         if request.url.path.startswith("/ai"):
             log.info(
                 "request",
@@ -57,7 +63,9 @@ class RequestContextMiddleware(BaseHTTPMiddleware):
                     "method": request.method,
                     "path": request.url.path,
                     "status": response.status_code,
-                    "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
+                    "latency_ms": total_ms,
+                    "db_queries": db["queries"],
+                    "db_ms": round(db["ms"], 1),
                 }},
             )
         return response

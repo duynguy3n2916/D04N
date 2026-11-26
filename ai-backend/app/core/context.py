@@ -7,6 +7,20 @@ from contextvars import ContextVar
 _request_id: ContextVar[str] = ContextVar("request_id", default="")
 
 
+# Bộ đếm số truy vấn DB của request hiện tại (dict dùng chung giữa middleware và threadpool chạy route).
+_db_stats: ContextVar[dict | None] = ContextVar("db_stats", default=None)
+
+
+def start_db_stats() -> dict:
+    stats = {"queries": 0, "ms": 0.0}
+    _db_stats.set(stats)
+    return stats
+
+
+def get_db_stats() -> dict | None:
+    return _db_stats.get()
+
+
 def new_request_id() -> str:
     return "req_" + uuid.uuid4().hex[:16]
 

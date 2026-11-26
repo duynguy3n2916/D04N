@@ -90,6 +90,15 @@ def fake_llm(monkeypatch):
 
     monkeypatch.setattr(llm, "_stream_provider", fake_stream)
     monkeypatch.setattr(llm, "_tools_provider", fake.tools)
+
+    def fake_tools_stream(system, messages, tools, max_tokens, temperature):
+        msg, in_tok, out_tok, model = fake.tools(system, messages, tools, max_tokens, temperature)
+        text = msg.get("content") or ""
+        for i in range(0, len(text), 12):
+            yield text[i:i + 12]
+        yield (msg, in_tok, out_tok, model)
+
+    monkeypatch.setattr(llm, "_tools_stream_provider", fake_tools_stream)
     return fake
 
 

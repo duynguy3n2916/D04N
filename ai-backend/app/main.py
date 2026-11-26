@@ -101,6 +101,26 @@ async def _sweeper(stop: asyncio.Event) -> None:
             pass
 
 
+def _warm_db_pool(n: int = 4) -> None:
+    """Mở sẵn vài kết nối DB lúc khởi động: mỗi kết nối mới tới Neon tốn vài lượt đi về (TLS + xác thực),
+    để request đầu tiên của người dùng không phải chờ. Neon không ngủ khi server đang chạy vì _sweeper
+    truy vấn DB mỗi TIMEOUT_SWEEP_INTERVAL_SECONDS (mặc định 30 giây), ngắn hơn mốc ngủ 5 phút của Neon."""
+    from sqlalchemy import text
+
+    from app.database import engine
+    conns = []
+    try:
+        for _ in range(n):
+            c = engine.connect()
+            c.execute(text("SELECT 1"))
+            conns.append(c)
+    except Exception:
+        log.warning("db_pool_warmup_failed", exc_info=True)
+    finally:
+        for c in conns:
+            c.close()  # trả về pool, kết nối vẫn mở
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     setup_logging()
@@ -120,6 +140,7 @@ async def lifespan(_: FastAPI):
         log.warning("ALLOW_TEST_LOGIN=true: ai cũng đăng nhập được không cần mật khẩu. Chỉ dùng cho kiểm thử.")
     from app.services.rag.embedding import warmup
     threading.Thread(target=warmup, daemon=True, name="embedding-warmup").start()
+    threading.Thread(target=_warm_db_pool, daemon=True, name="db-pool-warmup").start()
     stop = asyncio.Event()
     task = asyncio.create_task(_sweeper(stop))
     yield

@@ -15,7 +15,7 @@ from app.services.courses import learning
 
 def collect(db: Session, user: Principal) -> dict:
     student = db.get(User, user.user_id)
-    courses = [learning.course_tree(db, user, c) for c in learning.visible_courses(db, user)]
+    courses = [learning.course_tree(db, user, c) for c in learning.visible_courses(db, user, with_tree=True)]
     quizzes = []
     rows = (db.query(ItemProgress, LessonItem).join(LessonItem, ItemProgress.item_id == LessonItem.id)
             .filter(ItemProgress.student_id == user.user_id, LessonItem.type == "quiz")

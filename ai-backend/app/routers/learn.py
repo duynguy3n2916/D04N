@@ -3,14 +3,13 @@ import mimetypes
 
 from fastapi import APIRouter, Depends, File, Request, UploadFile
 from pydantic import BaseModel, Field
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.errors import AppError
 from app.core.security import Principal, get_current_user, get_user_for_media, require_teacher
 from app.core.utils import clean_id, parse_uuid
 from app.database import get_db
-from app.models.learning import Chapter, Course, Lesson, LessonItem
+from app.models.learning import Chapter, Course, Lesson
 from app.services.courses import course_admin, learning
 from app.services.media.object_store import get_store
 
@@ -45,7 +44,7 @@ def get_leaderboard(user: Principal = Depends(get_current_user), db: Session = D
 @router.get("/learn/courses")
 def my_courses(user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
     out = []
-    for c in learning.visible_courses(db, user):
+    for c in learning.visible_courses(db, user, with_tree=True):
         t = learning.course_tree(db, user, c)
         out.append({k: t[k] for k in ("course_id", "code", "title", "description", "class_id", "cover_url",
                                       "items_total", "items_done", "current_item_id")})
@@ -86,6 +85,13 @@ def complete(item_id: str, user: Principal = Depends(get_current_user), db: Sess
 def class_submissions(class_id: str, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
     """Giáo viên xem bài kiểm tra từng học viên trong lớp đã làm, chưa làm, đạt hay chưa."""
     return learning.class_submissions(db, user, clean_id(class_id))
+
+
+@router.get("/learn/flashcards")
+def flashcards_overview(user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Tổng quan thẻ ghi nhớ theo khóa học / bài học (vào ôn thẻ không cần mở bài)."""
+    from app.services.courses import flashcards
+    return flashcards.overview(db, user)
 
 
 @router.get("/learn/flashcards/{lesson_code}/summary")
@@ -305,11 +311,10 @@ class CourseIn(BaseModel):
 
 @router.get("/courses")
 def list_courses_admin(user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
-    rows = learning.visible_courses(db, user)
+    rows = learning.visible_courses(db, user, with_tree=True)
     out = []
     for c in rows:
-        n_items = (db.query(func.count(LessonItem.id)).join(Lesson).join(Chapter)
-                   .filter(Chapter.course_id == c.id).scalar())
+        n_items = sum(len(ls.items) for ch in c.chapters for ls in ch.lessons)
         out.append({"course_id": str(c.id), "code": c.code, "title": c.title, "class_id": c.class_id,
                     "class_ids": learning.course_class_ids(db, c),
                     "cover_url": learning.cover_url(c), "chapters": len(c.chapters), "items": int(n_items or 0)})

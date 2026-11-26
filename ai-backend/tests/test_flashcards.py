@@ -108,3 +108,15 @@ def test_ai_flashcards_need_approval(client, teacher, fake_llm):
     assert rv.status_code == 200 and rv.json()["reps"] == 1
     # thẻ bị từ chối không ôn được
     assert client.post(f"/ai/learn/flashcards/{cards[1]['card_id']}/review", headers=sv, json={"rating": "good"}).status_code == 404
+
+
+def test_flashcard_overview_by_course(client, teacher, fake_llm):
+    _lesson_with_bank(client, teacher, "fco", n=2)
+    sv = token(client, "sv-fco", "student", ["lop-a"])
+    rows = client.get("/ai/learn/flashcards", headers=sv).json()
+    course = next(c for c in rows if c["code"] == "course-fco")
+    assert course["total"] == 2 and course["due"] == 2
+    assert course["lessons"][0]["lesson_code"] == "lesson-fco" and course["lessons"][0]["new"] == 2
+    # học sinh lớp khác không thấy khóa này
+    other = token(client, "sv-fco-z", "student", ["lop-z"])
+    assert all(c["code"] != "course-fco" for c in client.get("/ai/learn/flashcards", headers=other).json())
