@@ -152,10 +152,10 @@ function UsersTab({ classes, classFilter }: { classes: ClassInfo[]; classFilter:
       {secret && (
         <Modal open onClose={() => setSecret(null)} title={secret.title}>
           <div className="modal-body">
-            <p style={{ fontWeight: 700 }}>Gửi thông tin này cho người dùng. Mật khẩu chỉ hiện <b>một lần</b>; họ sẽ phải đổi mật khẩu ở lần đăng nhập đầu.</p>
+            <p style={{ fontWeight: 600 }}>Gửi thông tin này cho người dùng. Mật khẩu chỉ hiện <b>một lần</b>; họ sẽ phải đổi mật khẩu ở lần đăng nhập đầu.</p>
             <div className="col" style={{ gap: 6 }}>
-              <span className="muted small" style={{ fontWeight: 800 }}>Tên đăng nhập</span><div className="secret">{secret.user}</div>
-              <span className="muted small" style={{ fontWeight: 800 }}>Mật khẩu tạm</span><div className="secret">{secret.password}</div>
+              <span className="muted small" style={{ fontWeight: 600 }}>Tên đăng nhập</span><div className="secret">{secret.user}</div>
+              <span className="muted small" style={{ fontWeight: 600 }}>Mật khẩu tạm</span><div className="secret">{secret.password}</div>
             </div>
             <div className="row" style={{ justifyContent: 'flex-end' }}>
               <Button variant="ghost" icon="copy" onClick={() => copy(`Tên đăng nhập: ${secret.user}\nMật khẩu tạm: ${secret.password}`, toast)}>Sao chép</Button>
@@ -233,7 +233,7 @@ function UserDialog({ row, classes, defaultClass, onClose, onSaved }: {
           )}
         </div>
         <fieldset style={{ border: 'none', padding: 0, margin: 0 }} className="col">
-          <legend className="field-label" style={{ fontWeight: 800, fontSize: 14, marginBottom: 6 }}>{f.role === 'teacher' ? 'Lớp dạy' : 'Lớp'}</legend>
+          <legend className="field-label" style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>{f.role === 'teacher' ? 'Lớp dạy' : 'Lớp'}</legend>
           <ClassPicker classes={classes} value={f.class_ids} onChange={(v) => setF({ ...f, class_ids: v })} />
         </fieldset>
         {!row && (
@@ -280,7 +280,7 @@ function ImportDialog({ classes, defaultClass, onClose }: { classes: ClassInfo[]
       <div className="modal-body">
         {!res ? (
           <>
-            <p className="small" style={{ fontWeight: 700 }}>
+            <p className="small" style={{ fontWeight: 600 }}>
               Dòng đầu là tên cột: <code>username</code> (bắt buộc — có thể đặt là <code>mssv</code> / <code>ten_dang_nhap</code>), <code>display_name</code> (<code>ho_ten</code>),
               <code> class_ids</code> (<code>lop</code>, nhiều lớp cách nhau bằng dấu ;), <code>email</code>{user?.role === 'admin' ? <>, <code>role</code></> : null}, <code>password</code>.
               Thiếu mật khẩu thì hệ thống tạo mật khẩu tạm. Xuất từ Excel bằng “CSV UTF-8”.
@@ -328,7 +328,7 @@ function ImportDialog({ classes, defaultClass, onClose }: { classes: ClassInfo[]
             {!!res.errors.length && (
               <div className="col" style={{ gap: 4 }}>
                 <strong>Dòng bị bỏ qua</strong>
-                {res.errors.map((e) => <span key={e.row} className="small" style={{ color: 'var(--red-text)', fontWeight: 700 }}>Dòng {e.row}{e.username ? ` (${e.username})` : ''}: {e.error}</span>)}
+                {res.errors.map((e) => <span key={e.row} className="small" style={{ color: 'var(--red-text)', fontWeight: 600 }}>Dòng {e.row}{e.username ? ` (${e.username})` : ''}: {e.error}</span>)}
               </div>
             )}
             <div className="row" style={{ justifyContent: 'flex-end' }}>
@@ -358,7 +358,7 @@ function ClassesTab({ classes, onShowStudents }: { classes: ReturnType<typeof us
   return (
     <>
       <div className="card row" style={{ justifyContent: 'space-between', marginBottom: 14 }}>
-        <p className="muted" style={{ fontWeight: 700, maxWidth: 640 }}>Học sinh tự vào lớp bằng <b>mã vào lớp</b> (khi đăng ký hoặc trong Hồ sơ). Đổi mã nếu mã cũ bị lộ.</p>
+        <p className="muted" style={{ fontWeight: 600, maxWidth: 640 }}>Học sinh tự vào lớp bằng <b>mã vào lớp</b> (khi đăng ký hoặc trong Hồ sơ). Đổi mã nếu mã cũ bị lộ.</p>
         <Button icon="plus" onClick={() => setCreate(true)}>Tạo lớp</Button>
       </div>
       {classes.loading && !classes.data && <Spinner />}

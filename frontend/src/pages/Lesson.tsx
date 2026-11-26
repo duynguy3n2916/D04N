@@ -3,6 +3,7 @@ import { Icon } from '../components/Icon';
 import { TutorPanel, type TutorContext } from '../components/TutorPanel';
 import { Button, ErrorBox, IconButton, Progress, Spinner, useToast } from '../components/ui';
 import { api, errorText, storage, type ItemDetail, type LessonView, type Source } from '../lib/api';
+import { isTeacher, useAuth } from '../lib/auth';
 import { useAsync } from '../lib/hooks';
 import { navigate, useLocation } from '../lib/router';
 import { QuizItem } from './items/QuizItem';
@@ -32,17 +33,20 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
   const lesson = useAsync((s) => api<LessonView>(`/ai/learn/lessons/${lessonId}`, { signal: s }), [lessonId], `lesson/${lessonId}`);
   const activeId = itemId || lesson.data?.items.find((i) => i.status === 'current')?.item_id || lesson.data?.items[0]?.item_id;
   const item = useAsync((s) => (activeId ? api<ItemDetail>(`/ai/learn/items/${activeId}`, { signal: s }) : Promise.resolve(null)), [activeId], `item/${activeId || ''}`);
-  const [tutorOpen, setTutorOpen] = useState(() => storage.get('mam.tutorOpen') !== '0' && window.innerWidth > 900);
+  // Tutor AI ẩn mặc định mỗi lần mở bài; bấm "Hỏi Tutor AI" (hoặc chọn "Hỏi Tutor" trên đoạn bôi đen) mới hiện
+  const [tutorOpen, setTutorOpen] = useState(false);
   const [ctx, setCtx] = useState<TutorContext>({ label: '' });
   const [quote, setQuote] = useState<string | null>(null);
-  const [wide, setWideState] = useState(() => storage.get('mam.wide') === '1');
+  const [wide, setWideState] = useState(false); // chế độ rộng đã bỏ khỏi trình phát video
   // Mục lục thu gọn thành dải icon để vùng học rộng hơn.
   const [mini, setMiniState] = useState(() => storage.get('mam.outlineMini') === '1');
   const toggleMini = () => setMiniState((v) => { storage.set('mam.outlineMini', v ? '0' : '1'); return !v; });
   const setWide = useCallback((v: boolean) => { setWideState(v); storage.set('mam.wide', v ? '1' : '0'); }, []);
   const nav = useRef<{ seek?: (t: number) => void; page?: (p: number) => void }>({});
+  const { user } = useAuth();
+  // Bài trắc nghiệm: học sinh không dùng Tutor AI (server cũng chặn khi đang làm dở bài)
+  const quizLock = !isTeacher(user) && !!item.data && item.data.item_id === activeId && !['video', 'slide', 'reading'].includes(item.data.type);
 
-  useEffect(() => { storage.set('mam.tutorOpen', tutorOpen ? '1' : '0'); }, [tutorOpen]);
   useEffect(() => { nav.current = {}; }, [activeId]);
 
   const items = lesson.data?.items || [];
@@ -100,7 +104,9 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
           )}
         </div>
         <Button variant="ghost" size="sm" icon="refresh" disabled={!lesson.data} onClick={() => navigate(`/flashcards/${encodeURIComponent(lesson.data?.code || '')}`)}>Ôn thẻ</Button>
-        <Button variant={tutorOpen ? 'soft' : 'blue'} size="sm" icon="sparkle" aria-pressed={tutorOpen} onClick={() => setTutorOpen((v) => !v)}>Hỏi Tutor AI</Button>
+        <Button variant={tutorOpen && !quizLock ? 'soft' : 'blue'} size="sm" icon={quizLock ? 'lock' : 'sparkle'} aria-pressed={tutorOpen && !quizLock}
+          disabled={quizLock} title={quizLock ? 'Tutor AI tạm khóa trong bài trắc nghiệm' : undefined}
+          onClick={() => setTutorOpen((v) => !v)}>{quizLock ? 'Tutor khóa khi làm bài' : 'Hỏi Tutor AI'}</Button>
       </header>
 
       <div className="lesson-body">
@@ -115,7 +121,7 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
             const inner = (
               <>
                 <span className={`type-ico type-${it.type}`}><Icon name={locked ? 'lock' : TYPE_ICON[it.type]} size={19} /></span>
-                <span className="outline-text"><strong>{it.title}</strong><span className="sub">{it.meta_text}</span></span>
+                <span className="outline-text"><strong>{it.title}</strong></span>
                 {it.status === 'done' && <span className="done-dot" aria-label="Đã xong"><Icon name="check" size={14} stroke={3.4} /></span>}
               </>
             );
@@ -145,7 +151,7 @@ export function LessonPage({ lessonId, itemId }: { lessonId: string; itemId?: st
           })()}
         </main>
 
-        {tutorOpen && lesson.data && (
+        {tutorOpen && !quizLock && lesson.data && (
           <TutorPanel lessonCode={lesson.data.code} context={ctx.label ? ctx : { label: item.data ? `${TYPE_LABEL[item.data.type]} · ${item.data.title}` : lesson.data.title }}
             quote={quote} onClearQuote={() => setQuote(null)} onSource={onSource} onClose={() => setTutorOpen(false)} />
         )}

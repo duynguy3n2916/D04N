@@ -51,7 +51,7 @@ export default function Lesson() {
                   <ItemIcon type={it.type} locked={locked} />
                   <View style={{ flex: 1, gap: 1 }}>
                     <Text style={{ fontSize: 16, fontWeight: '700' }}>{it.title}</Text>
-                    <Text style={{ fontSize: 13, color: C.muted }}>{ITEM_LABEL[it.type]}{it.meta_text ? ` · ${it.meta_text}` : ''}{it.score != null ? ` · ${Math.round(it.score * 100)}%` : ''}</Text>
+                    {it.score != null && <Text style={{ fontSize: 13, color: C.muted }}>Điểm {Math.round(it.score * 100)}%</Text>}
                   </View>
                   {it.completed ? (
                     <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' }}>

@@ -7,6 +7,7 @@ import { api, errorText, fmtTime, mediaUrl, type Job, type TranscriptSegment } f
 import { useAsync } from '../../lib/hooks';
 import { Link, navigate } from '../../lib/router';
 import { FilterPills, SearchBox, StatusTag, Toolbar } from '../../components/Manage';
+import { CourseScope, UNASSIGNED, useCourseTrees, useScope } from '../../components/CourseScope';
 
 interface VideoRow {
   video_id: string; title: string; has_file: boolean; source_url: string | null; duration_seconds: number | null; size_mb: number | null;
@@ -26,14 +27,35 @@ interface CourseDestination extends CourseChoice {
 // ---------------------------------------------------------------- Danh sách video
 
 type VFilter = '' | 'no-sub' | 'draft' | 'no-file';
+/** Hỏi xác nhận rồi xóa video (kèm phụ đề, câu hỏi trong video và mục bài học dùng video). Trả về true nếu đã xóa. */
+async function confirmDeleteVideo(v: { video_id: string; title: string }, toast: ReturnType<typeof useToast>): Promise<boolean> {
+  const ok = await confirmDialog(`Xóa video “${v.title || v.video_id}”? Phụ đề, các câu hỏi trong video và mục bài học đang dùng video này cũng bị xóa. Không hoàn tác được.`,
+    { title: 'Xóa video', okLabel: 'Xóa', danger: true });
+  if (!ok) return false;
+  try {
+    await api(`/ai/media/videos/${encodeURIComponent(v.video_id)}`, { method: 'DELETE' });
+    toast('Đã xóa video', 'success');
+    return true;
+  } catch (e) { toast(errorText(e), 'error'); return false; }
+}
+
 export function Videos() {
+  const toast = useToast();
   const list = useAsync((s) => api<VideoRow[]>('/ai/media/videos', { signal: s }), [], 'teach/videos');
   const [open, setOpen] = useState(false);
   const [dropped, setDropped] = useState<File | null>(null);
   const [dragging, setDragging] = useState(false);
   const [q, setQ] = useState('');
   const [filter, setFilter] = useState<VFilter>('');
-  const all = list.data || [];
+  const trees = useCourseTrees();
+  const [scope, setScope] = useScope('videos');
+  const everything = list.data || [];
+  // video thuộc bài nào: lấy từ các mục video trong cây khóa học (item.video_id)
+  const inAnyLesson = new Set((trees.data || []).flatMap((c) => [...c.videoIds]));
+  const course = trees.data?.find((c) => c.course_id === scope.course);
+  const scopeIds = course ? new Set((scope.lesson ? course.lessons.filter((l) => l.code === scope.lesson) : course.lessons).flatMap((l) => l.videoIds)) : null;
+  const all = scope.course === UNASSIGNED ? everything.filter((v) => !inAnyLesson.has(v.video_id)) : scopeIds ? everything.filter((v) => scopeIds.has(v.video_id)) : everything;
+  const known = new Set(everything.map((v) => v.video_id));
   const test = (v: VideoRow, f: VFilter) => f === 'no-sub' ? !v.transcript : f === 'draft' ? v.questions.draft > 0 : f === 'no-file' ? !v.has_file && !v.source_url : true;
   const rows = all.filter((v) => test(v, filter) && (!q || v.title.toLowerCase().includes(q.toLowerCase())));
   // Kéo thả file video vào bất kỳ đâu trên trang để mở hộp tải lên.
@@ -47,15 +69,18 @@ export function Videos() {
       onDragLeave={(e) => { if (e.currentTarget === e.target) setDragging(false); }} onDrop={onDrop}>
       <PageHeader title="Video bài giảng" sub="Tải video, tạo phụ đề và đặt câu hỏi dừng video cho học sinh. Có thể kéo thả file video vào trang."
         actions={<Button icon="upload" onClick={() => { setDropped(null); setOpen(true); }}>Thêm video</Button>} />
+      <CourseScope courses={trees.data} loading={trees.loading || list.loading} error={trees.error || list.error} onRetry={() => { trees.reload(); list.reload(); }}
+        scope={scope} onChange={setScope} unit="video"
+        countLesson={(l) => l.videoIds.filter((id) => known.has(id)).length}
+        countCourse={(c) => [...c.videoIds].filter((id) => known.has(id)).length}
+        unassigned={everything.filter((v) => !inAnyLesson.has(v.video_id)).length}>
       <Toolbar>
         <SearchBox value={q} onChange={setQ} placeholder="Tìm video…" />
         <FilterPills<VFilter> label="Lọc video" value={filter} onChange={setFilter} options={[
           { id: '', label: 'Tất cả', count: all.length }, { id: 'no-sub', label: 'Chưa có phụ đề', count: all.filter((v) => test(v, 'no-sub')).length },
           { id: 'draft', label: 'Câu hỏi chờ duyệt', count: all.filter((v) => test(v, 'draft')).length }, { id: 'no-file', label: 'Chưa có file', count: all.filter((v) => test(v, 'no-file')).length }]} />
       </Toolbar>
-      {list.loading && !list.data && <Spinner />}
-      {list.error && <ErrorBox message={list.error} onRetry={list.reload} />}
-      {list.data && !all.length && <Empty title="Chưa có video nào">Bấm “Thêm video” hoặc kéo thả file .mp4 vào trang này. Phụ đề được tạo tự động sau khi tải lên.</Empty>}
+      {list.data && !all.length && <Empty title="Chưa có video nào ở đây">Bấm “Thêm video” hoặc kéo thả file .mp4 vào trang này, rồi chọn bài để gắn video vào.</Empty>}
       {!!all.length && !rows.length && <Empty title="Không có video nào khớp">Thử bỏ bớt bộ lọc hoặc từ khóa.</Empty>}
       <div className="video-grid">
         {rows.map((v) => (
@@ -65,6 +90,10 @@ export function Videos() {
               {v.duration_seconds ? <span className="vcard-dur">{fmtTime(v.duration_seconds)}</span> : null}
               {!v.has_file && !v.source_url && <span className="vcard-flag">Chưa có file</span>}
               {v.source_url && !v.has_file && <span className="vcard-flag">Link ngoài</span>}
+              <button type="button" className="iconbtn vcard-del" aria-label="Xóa video" title="Xóa video"
+                onClick={async (e) => { e.preventDefault(); e.stopPropagation(); if (await confirmDeleteVideo(v, toast)) list.reload(); }}>
+                <Icon name="trash" size={18} />
+              </button>
             </span>
             <span className="vcard-body">
               <strong>{v.title}</strong>
@@ -77,15 +106,18 @@ export function Videos() {
           </Link>
         ))}
       </div>
+      </CourseScope>
       {dragging && <div className="drop-hint" aria-hidden="true"><Icon name="upload" size={32} /><strong>Thả file video để tải lên</strong></div>}
-      {open && <UploadDialog initialFile={dropped} onClose={() => setOpen(false)} onDone={(id) => { setOpen(false); navigate(`/teach/videos/${encodeURIComponent(id)}`); }} />}
+      {open && <UploadDialog initialFile={dropped} initialCourse={course?.course_id} initialLesson={course?.lessons.find((l) => l.code === scope.lesson)?.lesson_id} onClose={() => setOpen(false)} onDone={(id) => { setOpen(false); navigate(`/teach/videos/${encodeURIComponent(id)}`); }} />}
     </div>
   );
 }
 
-function UploadDialog({ onClose, onDone, initialFile }: { onClose: () => void; onDone: (videoId: string) => void; initialFile?: File | null }) {
+function UploadDialog({ onClose, onDone, initialFile, initialCourse, initialLesson }: {
+  onClose: () => void; onDone: (videoId: string) => void; initialFile?: File | null; initialCourse?: string; initialLesson?: string;
+}) {
   const [mode, setMode] = useState<'file' | 'url'>('file');
-  const [f, setF] = useState({ title: initialFile ? initialFile.name.replace(/\.[^.]+$/, '') : '', class_id: '', course_id: '', target_lesson_id: '', url: '', transcribe: true });
+  const [f, setF] = useState({ title: initialFile ? initialFile.name.replace(/\.[^.]+$/, '') : '', class_id: '', course_id: initialCourse || '', target_lesson_id: initialLesson || '', url: '', transcribe: true });
   const courses = useAsync((s) => api<CourseChoice[]>('/ai/courses', { signal: s }), []);
   const destination = useAsync((s) => f.course_id
     ? api<CourseDestination>(`/ai/courses/${f.course_id}`, { signal: s }) : Promise.resolve(null), [f.course_id]);
@@ -164,7 +196,7 @@ function UploadDialog({ onClose, onDone, initialFile }: { onClose: () => void; o
         ) : (
           <Field label="Link video trực tiếp"><input value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} placeholder="https://…/bai-giang.mp4" /></Field>
         )}
-        {msg && <p className="small" style={{ fontWeight: 700 }}>{msg}</p>}
+        {msg && <p className="small" style={{ fontWeight: 600 }}>{msg}</p>}
         {err && <ErrorBox message={err} />}
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Hủy</Button>
@@ -263,8 +295,11 @@ export function VideoDetail({ videoId }: { videoId: string }) {
 
   return (
     <>
-      <div className="row" style={{ marginBottom: 8 }}><Link to="/teach/videos" className="muted small" style={{ fontWeight: 800 }}>← Tất cả video</Link></div>
-      <PageHeader title={v?.title || videoId} sub={`${videoId}${v?.duration_seconds ? ` · ${fmtTime(v.duration_seconds)}` : ''}`} />
+      <div className="row" style={{ marginBottom: 8 }}><Link to="/teach/videos" className="muted small" style={{ fontWeight: 600 }}>← Tất cả video</Link></div>
+      <PageHeader title={v?.title || videoId} sub={`${videoId}${v?.duration_seconds ? ` · ${fmtTime(v.duration_seconds)}` : ''}`}
+        actions={<Button variant="red" icon="trash" onClick={async () => {
+          if (await confirmDeleteVideo({ video_id: videoId, title: v?.title || videoId }, toast)) navigate('/teach/videos');
+        }}>Xóa video</Button>} />
       {info.error && <ErrorBox message={info.error} onRetry={info.reload} />}
       <div className="split">
         <div className="main">
@@ -305,7 +340,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
                 <Button size="sm" variant="ghost" icon="sparkle" loading={gen} disabled={!tr.data} onClick={suggest}>AI đề xuất mốc</Button>
               </div>
             </div>
-            <p className="muted small" style={{ fontWeight: 700 }}>
+            <p className="muted small" style={{ fontWeight: 600 }}>
               {tr.data ? 'AI soạn câu hỏi tại đây chỉ dùng lời giảng của video đang xem. Muốn kết hợp slide hoặc bài đọc, chọn nguồn ở mục Câu hỏi.'
                 : !tr.loading ? 'Cần có phụ đề trước khi AI soạn câu hỏi.' : 'Đang tải phụ đề…'}
             </p>
@@ -337,7 +372,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
                     </div>
                   )}
                   {!q.options && q.correct_answer && <p className="small"><b>Đáp án:</b> {q.correct_answer}</p>}
-                  {q.explanation && <p className="muted small" style={{ fontWeight: 700 }}>{q.explanation}</p>}
+                  {q.explanation && <p className="muted small" style={{ fontWeight: 600 }}>{q.explanation}</p>}
                   <div className="row">
                     {q.status !== 'approved' && <Button size="sm" icon="check" onClick={() => setStatus(q, 'approved')}>Duyệt</Button>}
                     {q.status === 'draft' && <Button size="sm" variant="danger-ghost" onClick={() => setStatus(q, 'rejected')}>Từ chối</Button>}
@@ -402,11 +437,11 @@ function TranscriptEditor({ videoId, tr, loading, now, onSeek, hasFile, job, tra
           {tr && <IconButton icon="history" label="Các phiên bản" active={showVersions} onClick={() => setShowVersions((x) => !x)} />}
         </div>
       </div>
-      {job && <p className="small" style={{ fontWeight: 800, color: 'var(--blue-dark)' }} aria-live="polite">{job}</p>}
+      {job && <p className="small" style={{ fontWeight: 600, color: 'var(--blue-dark)' }} aria-live="polite">{job}</p>}
       {showVersions && (
         <div className="col" style={{ gap: 6 }}>
           {versions.data?.map((x) => (
-            <div key={x.version} className="row small" style={{ justifyContent: 'space-between', fontWeight: 700 }}>
+            <div key={x.version} className="row small" style={{ justifyContent: 'space-between', fontWeight: 600 }}>
               <span>v{x.version} · {x.model_version || x.source} · {x.created_at ? new Date(x.created_at).toLocaleString('vi-VN') : ''}</span>
               {x.is_active ? <Badge tone="green">Đang dùng</Badge> : <Button size="sm" variant="ghost" onClick={() => rollback(x.version)}>Khôi phục</Button>}
             </div>
@@ -470,7 +505,7 @@ function QuestionEditor({ videoId, q, defaultTime, onClose, onSaved }: { videoId
         <Field label="Câu hỏi"><textarea value={f.question} onChange={(e) => setF({ ...f, question: e.target.value })} /></Field>
         {mc ? (
           <fieldset className="col" style={{ gap: 8, border: 'none', padding: 0 }}>
-            <legend className="field-label" style={{ fontWeight: 800, fontSize: 14, marginBottom: 6 }}>Lựa chọn (chọn đáp án đúng)</legend>
+            <legend className="field-label" style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>Lựa chọn (chọn đáp án đúng)</legend>
             {opts.map((o, i) => (
               <div key={i} className="row" style={{ flexWrap: 'nowrap' }}>
                 <input type="radio" name="correct" aria-label={`Đáp án đúng là lựa chọn ${i + 1}`} checked={f.correct_index === i} onChange={() => setF({ ...f, correct_index: i })} style={{ width: 20, height: 20, accentColor: 'var(--green)' }} />

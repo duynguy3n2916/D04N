@@ -11,6 +11,21 @@ import { Link, navigate } from '../lib/router';
 export const TYPE_ICON: Record<string, IconName> = { video: 'play', slide: 'slide', reading: 'book', quiz: 'star' };
 export const TYPE_LABEL: Record<string, string> = { video: 'Video', slide: 'Slide', reading: 'Bài đọc', quiz: 'Kiểm tra' };
 
+/** Tải báo cáo tiến độ (DOCX) cho học sinh / phụ huynh (nút đặt ở trang Hồ sơ). */
+export function ReportButton() {
+  const toast = useToast();
+  const download = async () => {
+    try {
+      const { blob, filename } = await apiBlob('/ai/learn/progress-report');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = filename; a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+    } catch (e) { toast(errorText(e), 'error'); }
+  };
+  return <Button variant="ghost" icon="doc" onClick={download}>Tải báo cáo tiến độ</Button>;
+}
+
 /** Lối tắt: diễn đàn lớp và tải báo cáo tiến độ (DOCX) cho học sinh / phụ huynh. */
 function StudyTools() {
   const toast = useToast();
@@ -30,7 +45,7 @@ function StudyTools() {
         <div className="card col" style={{ gap: 4 }}>
           <strong className="small">Thẻ cần ôn hôm nay</strong>
           {noti.flashcards.map((f) => (
-            <Link key={f.lesson_code} to={`/flashcards/${encodeURIComponent(f.lesson_code)}`} className="small" style={{ fontWeight: 700 }}>{f.lesson_title} · {f.due} thẻ</Link>
+            <Link key={f.lesson_code} to={`/flashcards/${encodeURIComponent(f.lesson_code)}`} className="small" style={{ fontWeight: 600 }}>{f.lesson_title} · {f.due} thẻ</Link>
           ))}
         </div>
       )}
@@ -50,7 +65,7 @@ function StudyReminder({ stats }: { stats: Stats }) {
   if (!stats.studied_today && stats.streak_days > 0) text = `Chuỗi ${stats.streak_days} ngày sẽ mất nếu hôm nay bạn chưa học. Hoàn thành một mục để giữ chuỗi.`;
   else if (!stats.studied_today) text = 'Hôm nay bạn chưa học. Hoàn thành một mục để bắt đầu chuỗi ngày mới.';
   else text = `Còn ${left} XP nữa để đạt mục tiêu hôm nay.`;
-  return <div className="notice" role="status" style={{ fontWeight: 700 }}>{text}</div>;
+  return <div className="notice" role="status" style={{ fontWeight: 600 }}>{text}</div>;
 }
 
 /** Vòng tròn tiến độ (SVG), màu theo màu chủ đạo. */
@@ -62,7 +77,7 @@ function Ring({ value, size = 64, stroke = 7, label }: { value: number; size?: n
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} style={{ stroke: 'var(--brand-soft)' }} />
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${c * v} ${c}`}
         transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ stroke: 'var(--brand)', transition: 'stroke-dasharray .5s ease' }} />
-      <text x="50%" y="52%" textAnchor="middle" dominantBaseline="middle" style={{ fill: 'var(--ink)', fontWeight: 800, fontSize: size / 4.2 }}>{Math.round(v * 100)}%</text>
+      <text x="50%" y="52%" textAnchor="middle" dominantBaseline="middle" style={{ fill: 'var(--ink)', fontWeight: 600, fontSize: size / 4.2 }}>{Math.round(v * 100)}%</text>
     </svg>
   );
 }
@@ -123,7 +138,6 @@ function ItemRow({ item, isCurrent }: { item: ItemSummary; isCurrent: boolean })
     <>
       <span className={`oi-ico oi-${state}`}><Icon name={icon} size={18} /></span>
       <span className="oi-title">{item.title}</span>
-      <span className="oi-meta">{TYPE_LABEL[item.type]}{item.meta_text ? ` · ${item.meta_text}` : ''}</span>
       <span className={`oi-chip oi-chip-${state}`}>{label}</span>
     </>
   );
@@ -149,7 +163,7 @@ function CourseOutline({ tree, filter }: { tree: CourseTree; filter: Filter }) {
         return (
           <section key={ch.chapter_id} className="card outline-card">
             <header className="oc-head">
-              <div><span className="oc-kicker">Chương {ci + 1}</span><h2>{ch.title}</h2></div>
+              <div>{!/^chương/i.test(ch.title.trim()) && <span className="oc-kicker">Chương {ci + 1}</span>}<h2>{ch.title}</h2></div>
               <span className="muted">{chDone}/{chTotal} mục</span>
             </header>
             {visible.map((ls) => {
@@ -189,7 +203,7 @@ export function CourseCoverArt({ course, className = '' }: { course: Pick<Course
     <span className={`lc-cover ${course.cover_url ? '' : 'lc-cover-blank'} ${className}`}>
       {course.cover_url
         ? <img src={mediaUrl(course.cover_url)} alt="" loading="lazy" />
-        : <span className="lc-cover-text" aria-hidden="true"><Icon name="book" size={30} /><b>{course.title}</b></span>}
+        : <span className="lc-cover-text" aria-hidden="true"><Icon name="book" size={26} /></span>}
     </span>
   );
 }
@@ -226,7 +240,6 @@ function CourseCatalog({ courses }: { courses: CourseSummary[] }) {
     <>
       <header className="learn-head">
         <div className="grow">
-          <span className="oc-kicker" style={{ color: 'var(--brand)' }}>Học</span>
           <h1>{name ? `Chào ${name}, học gì hôm nay?` : 'Khóa học của bạn'}</h1>
         </div>
       </header>
@@ -262,7 +275,6 @@ function CourseCatalog({ courses }: { courses: CourseSummary[] }) {
 
 export function Learn({ path, courseId }: { path: string; courseId?: string }) {
   const { user } = useAuth();
-  const me = useAsync((s) => api<{ stats: Stats }>('/ai/learn/me', { signal: s }), [path], 'learn/me');
   const courses = useAsync((s) => api<CourseSummary[]>('/ai/learn/courses', { signal: s }), [path], 'learn/courses');
   const selected = courseId;
   const tree = useAsync((s) => (selected ? api<CourseTree>(`/ai/learn/courses/${selected}`, { signal: s }) : Promise.resolve(null)), [selected, path], `learn/course/${selected || ''}`);
@@ -272,7 +284,7 @@ export function Learn({ path, courseId }: { path: string; courseId?: string }) {
   const current = useMemo(() => tree.data?.chapters.flatMap((c) => c.lessons.flatMap((l) => l.items)).find((i) => i.item_id === tree.data?.current_item_id), [tree.data]);
 
   return (
-    <AppShell path={path} aside={<StatsAside stats={me.data?.stats ?? null} />}>
+    <AppShell path={path}>
       <div className="learn-page">
         {!selected && courses.data && courses.data.length > 0 && <CourseCatalog courses={courses.data} />}
         {selected && (
@@ -280,15 +292,13 @@ export function Learn({ path, courseId }: { path: string; courseId?: string }) {
         )}
         {tree.data && (
           <header className="learn-head lc-detail-head">
-            <CourseCoverArt course={tree.data} className="lc-detail-cover" />
             <div className="grow">
-              <span className="oc-kicker" style={{ color: 'var(--brand)' }}>Khóa học</span>
               <h1>{tree.data.title}</h1>
               {tree.data.description && <p className="muted lc-detail-desc">{tree.data.description}</p>}
             </div>
             <div className="learn-head-stat">
               <div><strong>{tree.data.items_done}/{tree.data.items_total}</strong><span className="muted small">mục đã xong</span></div>
-              <Ring value={progress} label="Tiến độ khóa học" />
+              <Ring value={progress} size={46} stroke={5} label="Tiến độ khóa học" />
             </div>
           </header>
         )}

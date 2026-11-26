@@ -161,11 +161,11 @@ export function SlideItem({ item, onCompleted, setContext, registerNav, goNext, 
           <button className={mode === 'scroll' ? 'on' : ''} aria-pressed={mode === 'scroll'} onClick={() => setMode('scroll')}>Cuộn dọc</button>
         </div>
         <IconButton icon="zoomOut" label="Thu nhỏ" onClick={() => setZoom((z) => Math.max(0.5, +(z - 0.1).toFixed(1)))} />
-        <span style={{ fontWeight: 800, fontSize: 14, minWidth: 44, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
+        <span style={{ fontWeight: 600, fontSize: 14, minWidth: 44, textAlign: 'center' }}>{Math.round(zoom * 100)}%</span>
         <IconButton icon="zoomIn" label="Phóng to" onClick={() => setZoom((z) => Math.min(2, +(z + 0.1).toFixed(1)))} />
         <span style={{ flex: 1 }} />
         <IconButton icon="chevronLeft" label="Trang trước" onClick={() => go(page - 1)} disabled={page <= 1} />
-        <span style={{ fontWeight: 900 }} aria-live="polite">{page} / {n || '?'}</span>
+        <span style={{ fontWeight: 700 }} aria-live="polite">{page} / {n || '?'}</span>
         <IconButton icon="chevronRight" label="Trang sau" onClick={() => go(page + 1)} disabled={!!n && page >= n} />
         <IconButton icon="fullscreen" label="Toàn màn hình" onClick={() => stageRef.current?.requestFullscreen?.().catch(() => {})} />
       </div>
@@ -198,7 +198,7 @@ export function SlideItem({ item, onCompleted, setContext, registerNav, goNext, 
       {s.notes && (
         <section className="card col" style={{ gap: 6 }}>
           <h2 style={{ fontSize: 16 }}>Ghi chú của giảng viên</h2>
-          <p className="muted" style={{ fontWeight: 700 }}>{s.notes}</p>
+          <p className="muted" style={{ fontWeight: 600 }}>{s.notes}</p>
         </section>
       )}
     </div>

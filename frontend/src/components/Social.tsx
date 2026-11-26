@@ -15,7 +15,7 @@ export function Avatar({ name, id, size = 36 }: { name: string; id: string; size
   const [color, fg] = COLORS[[...id].reduce((s, c) => s + c.charCodeAt(0), 0) % COLORS.length];
   return (
     <span aria-hidden="true" style={{ width: size, height: size, borderRadius: '50%', background: color, color: fg, flex: 'none',
-      display: 'inline-grid', placeItems: 'center', fontWeight: 800, fontSize: size * 0.42 }}>
+      display: 'inline-grid', placeItems: 'center', fontWeight: 600, fontSize: size * 0.42 }}>
       {(name || id || '?').trim().slice(0, 1).toUpperCase()}
     </span>
   );

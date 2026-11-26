@@ -213,7 +213,7 @@ export function ConfirmProvider({ children }: { children: ReactNode }) {
       {children}
       <Modal open={!!state} onClose={() => close(false)} title={state?.title || 'Xác nhận'}>
         <div className="modal-body">
-          <p style={{ fontWeight: 700 }}>{state?.message}</p>
+          <p style={{ fontWeight: 600 }}>{state?.message}</p>
           <div className="row" style={{ justifyContent: 'flex-end' }}>
             <Button variant="ghost" onClick={() => close(false)}>Hủy</Button>
             <Button variant={state?.danger ? 'red' : 'green'} autoFocus onClick={() => close(true)}>{state?.okLabel || 'Đồng ý'}</Button>

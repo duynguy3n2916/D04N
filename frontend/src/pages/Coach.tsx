@@ -2,26 +2,63 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Icon, type IconName } from '../components/Icon';
 import { Markdown } from '../components/Markdown';
 import { useConfirm, useToast } from '../components/ui';
-import { api, errorText, fmtTime, storage, type Source } from '../lib/api';
+import { api, apiStream, errorText, fmtTime, storage, type Source } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { navigate } from '../lib/router';
 
 interface CoachStep { tool: string; arguments: string; ok: boolean; writes: boolean }
 interface CoachAction { type: 'item' | 'flashcards'; label: string; item_id?: string; lesson_id?: string; lesson_code?: string }
 interface CoachResult { answer: string; steps: CoachStep[]; sources: Source[]; actions: CoachAction[]; guarded: boolean; stopped: string | null }
-interface ConvSummary { id: string; title: string; created_at: string; updated_at: string }
+interface ConvSummary { id: string; title: string; course_id?: string | null; created_at: string; updated_at: string }
+interface CourseLite { course_id: string; title: string }
 interface ChatResponse extends CoachResult { llm_calls: number; conversation: ConvSummary }
+interface Live { status: string; steps: CoachStep[]; text: string }
 interface Msg { role: 'user' | 'assistant'; content: string; res?: CoachResult | null; error?: boolean }
 
 const SIDE_KEY = 'mam.coach.side';
-const TOOL_LABEL: Record<string, string> = {
-  get_progress: 'Xem tiến độ',
-  get_weak_points: 'Tìm câu hay sai',
-  get_due_flashcards: 'Kiểm tra thẻ đến hạn',
-  search_materials: 'Tìm học liệu',
-  get_practice_quiz: 'Tìm bài luyện tập',
-  queue_flashcards: 'Thêm thẻ vào lịch ôn',
+const COURSE_KEY = 'mam.coach.course';
+// Trạng thái thân thiện lúc trợ lý đang làm việc; không cho người dùng thấy tên công cụ nội bộ.
+const BUSY_TEXT: Record<string, string> = {
+  get_progress: 'Đang xem tiến độ của bạn',
+  get_weak_points: 'Đang tìm phần bạn còn yếu',
+  get_due_flashcards: 'Đang xem thẻ cần ôn',
+  search_materials: 'Đang tìm trong học liệu',
+  get_practice_quiz: 'Đang tìm bài luyện tập',
+  queue_flashcards: 'Đang chuẩn bị thẻ ôn',
 };
+const busyText = (tool?: string) => (tool && BUSY_TEXT[tool]) || 'Đang soạn câu trả lời';
+const MAX_SOURCES = 5;
+
+type CompactAction = { kind: 'item'; label: string; lesson_id: string; item_id: string } | { kind: 'cards'; label: string; lesson_code: string | null };
+
+/** Gộp nút hành động: tối đa một nút "Học tiếp" và một nút "Ôn thẻ" (cộng dồn số thẻ của mọi bài). */
+function compactActions(actions: CoachAction[] | undefined): CompactAction[] {
+  const out: CompactAction[] = [];
+  const next = (actions || []).find((a) => a.type === 'item' && a.item_id && a.lesson_id);
+  if (next) out.push({ kind: 'item', label: next.label, lesson_id: next.lesson_id!, item_id: next.item_id! });
+  const cards = (actions || []).filter((a) => a.type === 'flashcards');
+  const codes = [...new Set(cards.map((a) => a.lesson_code).filter(Boolean))] as string[];
+  if (cards.length) {
+    const counts = cards.map((a) => Number(/Ôn\s+(\d+)\s+thẻ/i.exec(a.label)?.[1]));
+    const total = counts.every((n) => Number.isFinite(n)) ? counts.reduce((s, n) => s + n, 0) : 0;
+    out.push({ kind: 'cards', label: total ? `Ôn ${total} thẻ đến hạn` : 'Ôn thẻ đến hạn', lesson_code: codes.length === 1 ? codes[0] : null });
+  }
+  return out;
+}
+
+/** Bỏ nguồn trùng (cùng tài liệu/video và cùng mục), giữ tối đa MAX_SOURCES. */
+function uniqueSources(sources: Source[] | undefined): Source[] {
+  const seen = new Set<string>();
+  const out: Source[] = [];
+  for (const s of sources || []) {
+    const key = `${s.source_type || ''}|${s.document_title || s.source_id || ''}|${s.display}|${s.page ?? ''}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(s);
+    if (out.length >= MAX_SOURCES) break;
+  }
+  return out;
+}
 const SUGGESTIONS: { icon: IconName; title: string; text: string }[] = [
   { icon: 'list', title: 'Ôn cho bài kiểm tra', text: 'Mình nên ôn gì cho bài kiểm tra sắp tới?' },
   { icon: 'chart', title: 'Tìm phần còn yếu', text: 'Mình đang yếu phần nào?' },
@@ -58,6 +95,7 @@ export function Coach({ conversationId }: { conversationId?: string }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [thinking, setThinking] = useState(0);
+  const [live, setLive] = useState<Live | null>(null); // lượt đang trả lời: công cụ đang dùng + chữ hiện dần
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<{ id: string; title: string } | null>(null);
   const [sideOpen, setSideOpen] = useState(() => storage.get(SIDE_KEY) !== '0');
@@ -65,9 +103,22 @@ export function Coach({ conversationId }: { conversationId?: string }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const justCreated = useRef<string | null>(null);
+  const [courses, setCourses] = useState<CourseLite[]>([]);
+  const [courseId, setCourseId] = useState<string>(() => storage.get(COURSE_KEY) || '');
 
   const firstName = (user?.display_name || user?.name || '').replace(/\([^)]*\)/g, '').trim().split(/\s+/).pop() || '';
   const active = convs?.find((c) => c.id === conversationId);
+
+  useEffect(() => {
+    api<CourseLite[]>('/ai/learn/courses').then((cs) => {
+      setCourses(cs);
+      // khóa đã nhớ không còn trong danh sách -> về "tất cả", chỉ có 1 khóa -> chọn sẵn khóa đó
+      setCourseId((cur) => (cur && cs.some((c) => c.course_id === cur) ? cur : cs.length === 1 ? cs[0].course_id : ''));
+    }).catch(() => setCourses([]));
+  }, []);
+  useEffect(() => { storage.set(COURSE_KEY, courseId || null); }, [courseId]);
+  // mở cuộc trò chuyện cũ: hiện đúng khóa học của cuộc đó
+  useEffect(() => { if (active) setCourseId(active.course_id || ''); }, [active?.id]);
 
   useEffect(() => {
     api<ConvSummary[]>('/ai/coach/conversations').then(setConvs).catch((e) => { setConvs([]); toast(errorText(e), 'error'); });
@@ -117,16 +168,29 @@ export function Coach({ conversationId }: { conversationId?: string }) {
     setMsgs((m) => retry ? [...m.slice(0, -1)] : [...m, { role: 'user', content: message }]);
     if (!retry) setText('');
     setBusy(true);
+    setLive({ status: '', steps: [], text: '' });
     try {
-      const res = await api<ChatResponse>('/ai/coach/chat', { json: { message, conversation_id: conversationId || null } });
-      setMsgs((m) => [...m, { role: 'assistant', content: res.answer, res }]);
-      const conv = res.conversation;
+      const out: { res?: ChatResponse; failure?: string } = {};
+      // stream: hiện công cụ agent đang dùng và chữ của câu trả lời ngay khi model sinh ra
+      await apiStream('/ai/coach/chat/stream', { message, conversation_id: conversationId || null, course_id: courseId || null }, (event, data) => {
+        if (event === 'step_start') setLive((l) => l && { ...l, status: busyText(data.tool) });
+        else if (event === 'step') setLive((l) => l && { ...l, steps: [...l.steps, data as CoachStep] });
+        else if (event === 'delta') setLive((l) => l && { ...l, text: l.text + data.text });
+        else if (event === 'reset') setLive((l) => l && { ...l, text: '' });
+        else if (event === 'done') out.res = data as ChatResponse;
+        else if (event === 'error') out.failure = data.message || 'Lỗi khi tạo câu trả lời.';
+      });
+      if (out.failure || !out.res) throw new Error(out.failure || 'Mất kết nối khi đang trả lời. Hãy thử lại.');
+      const done = out.res;
+      setMsgs((m) => [...m, { role: 'assistant', content: done.answer, res: done }]);
+      const conv = done.conversation;
       setConvs((list) => [conv, ...(list || []).filter((c) => c.id !== conv.id)]);
       if (!conversationId) { justCreated.current = conv.id; navigate(`/coach/${conv.id}`, true); }
     } catch (e) {
       setMsgs((m) => [...m, { role: 'assistant', content: errorText(e), error: true }]);
     } finally {
       setBusy(false);
+      setLive(null);
       inputRef.current?.focus();
     }
   };
@@ -173,9 +237,9 @@ export function Coach({ conversationId }: { conversationId?: string }) {
     }
   };
 
-  const runAction = (a: CoachAction) => {
-    if (a.type === 'flashcards' && a.lesson_code) navigate(`/flashcards/${encodeURIComponent(a.lesson_code)}`);
-    else if (a.item_id && a.lesson_id) navigate(`/lesson/${a.lesson_id}/${a.item_id}`);
+  const runAction = (a: CompactAction) => {
+    if (a.kind === 'cards') navigate(a.lesson_code ? `/flashcards/${encodeURIComponent(a.lesson_code)}` : '/flashcards');
+    else navigate(`/lesson/${a.lesson_id}/${a.item_id}`);
   };
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -196,14 +260,29 @@ export function Coach({ conversationId }: { conversationId?: string }) {
 
   const empty = !conversationId && msgs.length === 0 && !busy;
 
+  const coursePicker = courses.length > 0 && (
+    <label className="cc-course" title={conversationId ? 'Khóa học của cuộc trò chuyện này' : 'Trợ lý chỉ ôn trong khóa học bạn chọn'}>
+      <Icon name="book" size={16} />
+      <span className="sr-only">Khóa học đang ôn</span>
+      <select value={courseId} onChange={(e) => setCourseId(e.target.value)} disabled={!!conversationId || busy}>
+        <option value="">Tất cả khóa học</option>
+        {courses.map((c) => <option key={c.course_id} value={c.course_id}>{c.title}</option>)}
+      </select>
+    </label>
+  );
+
+  // Ô chat kiểu ChatGPT: ô nhập ở trên, hàng công cụ (chọn khóa học) + nút gửi ở dưới; luôn ghim ở cuối trang.
   const composer = (
     <form className="cc-composer" onSubmit={(e) => { e.preventDefault(); send(); }} aria-label="Gửi tin cho trợ lý">
       <label className="sr-only" htmlFor="coach-input">Tin nhắn cho trợ lý học tập</label>
       <textarea id="coach-input" ref={inputRef} rows={1} value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKey}
-        placeholder={empty ? 'Hỏi trợ lý, ví dụ: Mai kiểm tra chương 1, giúp mình ôn' : 'Nhắn tiếp cho trợ lý…'} autoFocus />
-      <button type="submit" className="cc-send" aria-label="Gửi" disabled={busy || !text.trim()}>
-        <Icon name="send" size={18} stroke={2.4} />
-      </button>
+        placeholder={empty ? 'Hỏi trợ lý học tập bất cứ điều gì…' : 'Nhắn tiếp cho trợ lý…'} autoFocus />
+      <div className="cc-composer-row">
+        {coursePicker}
+        <button type="submit" className="cc-send" aria-label="Gửi" disabled={busy || !text.trim()}>
+          <Icon name="arrowUp" size={18} stroke={2.6} />
+        </button>
+      </div>
     </form>
   );
 
@@ -225,7 +304,6 @@ export function Coach({ conversationId }: { conversationId?: string }) {
             <span className="cc-hero-mark" aria-hidden="true"><Icon name="sparkle" size={28} /></span>
             <h1>{firstName ? `Chào ${firstName}, hôm nay mình ôn gì?` : 'Hôm nay mình ôn gì nhỉ?'}</h1>
             <p>Trợ lý xem tiến độ, các câu bạn hay sai và thẻ đến hạn của bạn, rồi lập kế hoạch ôn. Trợ lý không nói đáp án bài kiểm tra.</p>
-            {composer}
             <div className="cc-sugg">
               {SUGGESTIONS.map((s) => (
                 <button key={s.text} type="button" className="cc-sugg-card" onClick={() => send(s.text)}>
@@ -240,43 +318,36 @@ export function Coach({ conversationId }: { conversationId?: string }) {
             <div className="cc-scroll" ref={scrollRef} aria-live="polite">
               <div className="cc-thread">
                 {loadingConv && <div className="cc-loading"><span className="typing" aria-label="Đang tải"><i /><i /><i /></span></div>}
-                {!loadingConv && msgs.map((m, i) => m.role === 'user' ? (
-                  <div key={i} className="cc-msg cc-msg-user"><div className="cc-bubble">{m.content}</div></div>
-                ) : (
+                {!loadingConv && msgs.map((m, i) => {
+                  if (m.role === 'user') return <div key={i} className="cc-msg cc-msg-user"><div className="cc-bubble">{m.content}</div></div>;
+                  const sources = uniqueSources(m.res?.sources);
+                  const actions = compactActions(m.res?.actions);
+                  return (
                   <div key={i} className={`cc-msg cc-msg-bot ${m.error ? 'cc-msg-error' : ''} ${m.res?.guarded ? 'cc-msg-guard' : ''}`}>
                     <span className="cc-avatar" aria-hidden="true"><Icon name={m.error ? 'x' : 'sparkle'} size={16} /></span>
                     <div className="cc-body">
-                      {!!m.res?.steps?.length && (
-                        <details className="cc-steps">
-                          <summary>Đã dùng {m.res.steps.length} công cụ: {[...new Set(m.res.steps.map((s) => TOOL_LABEL[s.tool] || s.tool))].join(', ')}</summary>
-                          <div className="cc-step-list">
-                            {m.res.steps.map((s, j) => (
-                              <span key={j} className={`cc-step ${s.ok ? '' : 'cc-step-fail'}`} title={s.arguments}>
-                                <Icon name={s.ok ? (s.writes ? 'edit' : 'check') : 'x'} size={12} /> {TOOL_LABEL[s.tool] || s.tool}
-                              </span>
+                      {m.error ? <p>{m.content}</p> : <Markdown source={m.content} />}
+                      {actions.length > 0 && (
+                        <div className="cc-actions">
+                          {actions.map((a) => (
+                            <button key={a.kind} type="button" className="cc-action" onClick={() => runAction(a)}>
+                              <Icon name={a.kind === 'cards' ? 'copy' : 'play'} size={15} /> {a.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {sources.length > 0 && (
+                        <details className="cc-src-fold">
+                          <summary>Nguồn ({sources.length})</summary>
+                          <div className="cc-sources">
+                            {sources.map((s) => (
+                              <button key={s.label} type="button" className="src" onClick={() => openSource(s)} title={s.display}>
+                                <Icon name={s.source_type === 'video' ? 'play' : s.page ? 'slide' : 'book'} size={14} />
+                                <span>{sourceText(s)}</span>
+                              </button>
                             ))}
                           </div>
                         </details>
-                      )}
-                      {m.error ? <p>{m.content}</p> : <Markdown source={m.content} />}
-                      {!!m.res?.sources?.length && (
-                        <div className="cc-sources">
-                          {m.res.sources.map((s) => (
-                            <button key={s.label} type="button" className="src" onClick={() => openSource(s)} title={s.display}>
-                              <Icon name={s.source_type === 'video' ? 'play' : s.page ? 'slide' : 'book'} size={14} />
-                              <span>{sourceText(s)}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {!!m.res?.actions?.length && (
-                        <div className="cc-actions">
-                          {m.res.actions.map((a, j) => (
-                            <button key={j} type="button" className="cc-action" onClick={() => runAction(a)}>
-                              <Icon name={a.type === 'flashcards' ? 'copy' : 'play'} size={15} /> {a.label}
-                            </button>
-                          ))}
-                        </div>
                       )}
                       <div className="cc-tools">
                         {m.error ? (
@@ -287,21 +358,28 @@ export function Coach({ conversationId }: { conversationId?: string }) {
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {busy && (
                   <div className="cc-msg cc-msg-bot">
                     <span className="cc-avatar cc-avatar-busy" aria-hidden="true"><Icon name="sparkle" size={16} /></span>
-                    <div className="cc-body cc-thinking">{THINKING[thinking]}<span className="typing" aria-hidden="true"><i /><i /><i /></span></div>
+                    {live?.text ? (
+                      <div className="cc-body"><Markdown source={live.text} /></div>
+                    ) : (
+                      <div className="cc-body">
+                        <div className="cc-thinking">{live?.status || THINKING[thinking]}<span className="typing" aria-hidden="true"><i /><i /><i /></span></div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
             </div>
-            <div className="cc-bottom">
-              {composer}
-              <p className="cc-foot">Trợ lý dựa trên tiến độ và học liệu của bạn, có thể sai. Hãy đối chiếu với bài giảng.</p>
-            </div>
           </>
         )}
+        <div className="cc-bottom">
+          {composer}
+          <p className="cc-foot">Trợ lý dựa trên tiến độ và học liệu của bạn, có thể sai. Hãy đối chiếu với bài giảng.</p>
+        </div>
       </section>
       <aside className="cc-side" aria-label="Lịch sử trò chuyện">
         <div className="cc-side-head">

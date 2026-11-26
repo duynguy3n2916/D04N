@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
-    "@expo-google-fonts/bricolage-grotesque": "^0.4.1",
+    "@expo-google-fonts/be-vietnam-pro": "^0.4.1",
     "@expo/vector-icons": "^15.0.2",
     "expo": "~58.0.26",
     "expo-build-properties": "~58.0.12",

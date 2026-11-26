@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { FilterPills } from '../components/Manage';
+import { Icon } from '../components/Icon';
 import { PageHeader } from '../components/AppShell';
 import { Markdown } from '../components/Markdown';
 import { Button, Empty, ErrorBox, Progress, Spinner, useToast } from '../components/ui';
-import { api, errorText } from '../lib/api';
+import { api, errorText, storage } from '../lib/api';
 import { useAsync } from '../lib/hooks';
 import { navigate } from '../lib/router';
 
@@ -61,7 +63,7 @@ export function Flashcards({ lessonCode }: { lessonCode: string }) {
   return (
     <div className="fc-page">
       <PageHeader title="Ôn thẻ ghi nhớ" sub={`${summary.data?.lesson_title || 'Bài học'} · lật thẻ, tự chấm mức nhớ. Thẻ bạn quên sẽ quay lại sớm, thẻ nhớ tốt sẽ giãn ra.`}
-        actions={<Button variant="ghost" icon="chevronLeft" onClick={() => navigate('/learn')}>Về trang học</Button>} />
+        actions={<Button variant="ghost" icon="chevronLeft" onClick={() => navigate('/flashcards')}>Tất cả thẻ</Button>} />
       {loading && <Spinner />}
       {error && <ErrorBox message={error} onRetry={() => { summary.reload(); due.reload(); }} />}
       {summary.data && !summary.data.total && <Empty title="Bài này chưa có thẻ">Giáo viên cần duyệt câu hỏi cho bài để tạo thẻ.</Empty>}
@@ -114,6 +116,54 @@ export function Flashcards({ lessonCode }: { lessonCode: string }) {
             </Empty>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+interface LessonDeck extends Summary { lesson_id: string; chapter_title: string }
+interface CourseDecks { course_id: string; code: string; title: string; total: number; due: number; lessons: LessonDeck[] }
+const FC_COURSE_KEY = 'mam.fc.course';
+
+/** Trang Thẻ ghi nhớ (ngoài bài học): chọn khóa học rồi chọn bài để ôn. Lối vào "Ôn thẻ" trong bài vẫn giữ. */
+export function FlashcardHub() {
+  const data = useAsync((s) => api<CourseDecks[]>('/ai/learn/flashcards', { signal: s }), [], 'fc-overview');
+  const [courseId, setCourseId] = useState<string>(() => storage.get(FC_COURSE_KEY) || '');
+  const courses = data.data || [];
+  const current = courses.find((c) => c.course_id === courseId) || courses.find((c) => c.due > 0) || courses[0];
+  useEffect(() => { if (current) storage.set(FC_COURSE_KEY, current.course_id); }, [current?.course_id]);
+  const dueAll = courses.reduce((n, c) => n + c.due, 0);
+  const firstDue = current?.lessons.find((l) => l.due > 0);
+  return (
+    <div className="fc-hub">
+      <PageHeader title="Thẻ ghi nhớ" sub={dueAll ? `Hôm nay bạn có ${dueAll} thẻ cần ôn. Chọn khóa học và bài để bắt đầu.` : 'Chọn khóa học và bài học để ôn thẻ.'}
+        actions={firstDue && <Button icon="refresh" onClick={() => navigate(`/flashcards/${encodeURIComponent(firstDue.lesson_code)}`)}>Ôn ngay {firstDue.due} thẻ</Button>} />
+      {data.loading && !data.data && <Spinner />}
+      {data.error && <ErrorBox message={data.error} onRetry={data.reload} />}
+      {data.data && !courses.length && <Empty title="Bạn chưa có khóa học nào">Vào lớp và khóa học trước để có thẻ ôn.</Empty>}
+      {courses.length > 1 && (
+        <FilterPills label="Khóa học" value={current?.course_id || ''} onChange={setCourseId}
+          options={courses.map((c) => ({ id: c.course_id, label: c.title, count: c.due || undefined }))} />
+      )}
+      {current && !current.lessons.length && <Empty title="Khóa này chưa có bài học" />}
+      {current && current.lessons.length > 0 && (
+        <div className="fc-deck-list">
+          {current.lessons.map((l) => {
+            const empty = !l.total;
+            return (
+              <button key={l.lesson_code} type="button" className={`fc-deck ${l.due ? 'fc-deck-due' : ''}`} disabled={empty}
+                onClick={() => navigate(`/flashcards/${encodeURIComponent(l.lesson_code)}`)}>
+                <span className="fc-deck-ico"><Icon name="copy" size={20} /></span>
+                <span className="fc-deck-text">
+                  <small>{l.chapter_title}</small>
+                  <strong>{l.lesson_title}</strong>
+                  <span className="fc-deck-meta">{empty ? 'Chưa có thẻ' : `${l.total} thẻ · ${l.new} mới · ${l.learned} đã thuộc`}</span>
+                </span>
+                {!empty && (l.due ? <span className="fc-deck-due-pill">{l.due} cần ôn</span> : <span className="fc-deck-ok"><Icon name="check" size={14} /> Đã ôn xong</span>)}
+              </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );

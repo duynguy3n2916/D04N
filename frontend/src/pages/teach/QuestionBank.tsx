@@ -4,6 +4,7 @@ import { Button, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } 
 import { api, apiBlob, errorText } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { ManualCreateDialog } from '../../components/ManualCreateDialog';
+import { CourseScope, UNASSIGNED, knownLesson, scopeLessons, useCourseTrees, useScope } from '../../components/CourseScope';
 import { Icon } from '../../components/Icon';
 import { BulkBar, Check, FilterPills, KpiRow, PillSelect, SearchBox, StatusTag, Toolbar, useSelection } from '../../components/Manage';
 
@@ -15,22 +16,37 @@ interface Stats { reviewed: number; approved: number; approved_without_edit: num
 interface TeachingSource { document_id: string; title: string; kind: 'video' | 'reading' | 'slide' | 'document' }
 const SOURCE_KIND = { video: 'Video', reading: 'Bài đọc', slide: 'Slide', document: 'Tài liệu' };
 
-/** Danh sách mã bài học từ các khóa học (dùng cho ô chọn). */
+/** Danh sách mã bài học từ các khóa học (dùng cho ô chọn).
+ *  Một khóa lỗi (bị xóa, mất quyền, mạng chập chờn) không được làm mất bài của các khóa khác. */
 export function useLessonCodes() {
   return useAsync(async (s) => {
     const courses = await api<{ course_id: string; title: string }[]>('/ai/courses', { signal: s });
-    const trees = await Promise.all(courses.map((c) => api<{ title: string; chapters: { lessons: { code: string; title: string }[] }[] }>(`/ai/courses/${c.course_id}`, { signal: s })));
-    return trees.flatMap((t) => t.chapters.flatMap((ch) => ch.lessons.map((l) => ({ code: l.code, title: l.title, course: t.title }))));
-  }, []);
+    const trees = await Promise.allSettled(courses.map((c) => api<{ title: string; chapters: { lessons: { code: string; title: string }[] }[] }>(`/ai/courses/${c.course_id}`, { signal: s })));
+    return trees.flatMap((t) => t.status === 'fulfilled'
+      ? t.value.chapters.flatMap((ch) => ch.lessons.filter((l) => l.code).map((l) => ({ code: l.code, title: l.title, course: t.value.title }))) : []);
+  }, [], 'lesson-codes');
 }
 
 export function LessonSelect({ value, onChange, allowAll }: { value: string; onChange: (v: string) => void; allowAll?: boolean }) {
   const lessons = useLessonCodes();
+  const groups = new Map<string, { code: string; title: string }[]>();
+  for (const l of lessons.data || []) groups.set(l.course, [...(groups.get(l.course) || []), l]);
+  const known = !value || (lessons.data || []).some((l) => l.code === value);
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}>
-      {allowAll ? <option value="">Tất cả bài</option> : <option value="">— Chọn bài học —</option>}
-      {lessons.data?.map((l) => <option key={l.code} value={l.code}>{l.course} · {l.title}</option>)}
-    </select>
+    <>
+      <select value={value} onChange={(e) => onChange(e.target.value)} disabled={lessons.loading && !lessons.data}>
+        {allowAll ? <option value="">Tất cả bài</option>
+          : <option value="">{lessons.loading && !lessons.data ? 'Đang tải danh sách bài…' : '— Chọn bài học —'}</option>}
+        {!known && <option value={value}>{value}</option>}
+        {[...groups].map(([course, ls]) => (
+          <optgroup key={course} label={course}>
+            {ls.map((l) => <option key={l.code} value={l.code}>{l.title}</option>)}
+          </optgroup>
+        ))}
+      </select>
+      {lessons.error && <span className="small" style={{ color: 'var(--red-text)' }}>Không tải được danh sách bài: {lessons.error} <button type="button" className="linkbtn" onClick={lessons.reload}>Thử lại</button></span>}
+      {lessons.data && !lessons.data.length && <span className="small muted">Chưa có bài học nào. Tạo khóa học và bài học ở mục Khóa học trước.</span>}
+    </>
   );
 }
 
@@ -46,14 +62,19 @@ export function QuestionBank() {
     return new URLSearchParams(query);
   };
 
-  const [lesson, setLesson] = useState(() => getUrlParams().get('lesson') || '');
+  const trees = useCourseTrees();
+  const [scope, setScope] = useScope('questions');
+  const lesson = scope.lesson;
+  const setLesson = (code: string) => { const c = trees.data?.find((x) => x.lessonCodes.has(code)); if (c) setScope({ course: c.course_id, lesson: code }); };
+  // mở từ thông báo (#/teach/questions?lesson=...): nhảy thẳng tới khóa/bài đó
+  const urlLesson = getUrlParams().get('lesson');
+  useEffect(() => { if (urlLesson && trees.data) setLesson(urlLesson); }, [urlLesson, !!trees.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const [status, setStatus] = useState('');
   const [q_, setQ] = useState('');
   const [typeF, setTypeF] = useState('');
   const [srcF, setSrcF] = useState('');
-  const lessons = useLessonCodes();
 
-  const bank = useAsync((s) => api<BankItem[]>(`/ai/teacher/question-bank?${new URLSearchParams({ ...(lesson && { lesson_id: lesson }), ...(status && { status }) })}`, { signal: s }), [lesson, status]);
+  const bank = useAsync((s) => api<BankItem[]>('/ai/teacher/question-bank', { signal: s }), [], 'teach/qbank');
   const stats = useAsync((s) => api<Stats>('/ai/teacher/stats', { signal: s }), [], 'teach/qstats');
 
   useEffect(() => {
@@ -82,7 +103,15 @@ export function QuestionBank() {
 
 
   const st = stats.data;
-  const rows = (bank.data || []).filter((q) => (!q_ || q.question.toLowerCase().includes(q_.toLowerCase()))
+  const everything = bank.data || [];
+  // câu hỏi thuộc bài nào: theo mã bài của câu hỏi (lesson_id = mã bài, vd. BH-000011)
+  const inScope = scopeLessons(trees.data, scope);
+  const codes = inScope ? new Set(inScope.map((l) => l.code)) : null;
+  const scoped = scope.course === UNASSIGNED ? everything.filter((q) => !knownLesson(trees.data, q.lesson_id))
+    : codes ? everything.filter((q) => !!q.lesson_id && codes.has(q.lesson_id)) : everything;
+  const lessonTitle = new Map((trees.data || []).flatMap((c) => c.lessons.map((l) => [l.code, l.title] as const)));
+  const nSt = (s: string) => scoped.filter((q) => q.status === s).length;
+  const rows = scoped.filter((q) => (!status || q.status === status) && (!q_ || q.question.toLowerCase().includes(q_.toLowerCase()))
     && (!typeF || q.type === typeF) && (!srcF || (srcF === 'ai' ? !!q.generation_id : !q.generation_id)));
   const sel = useSelection(rows.map((q) => q.item_id));
   const [open, setOpen] = useState<string | null>(null);
@@ -103,20 +132,20 @@ export function QuestionBank() {
             <Button icon="wand" onClick={() => setGenOpen(true)}>AI soạn câu hỏi</Button>
           </div>
         } />
+      <CourseScope courses={trees.data} loading={trees.loading || bank.loading} error={trees.error || bank.error} onRetry={() => { trees.reload(); bank.reload(); }}
+        scope={scope} onChange={setScope} unit="câu hỏi"
+        countLesson={(l) => everything.filter((q) => q.lesson_id === l.code).length}
+        unassigned={everything.filter((q) => !knownLesson(trees.data, q.lesson_id)).length}>
       {st && <KpiRow items={[
-        { label: 'Tổng câu hỏi', value: st.approved + st.pending + st.rejected },
-        { label: 'Chờ duyệt', value: st.pending, brand: true },
-        { label: 'Đã duyệt', value: st.approved },
+        { label: 'Câu hỏi', value: scoped.length },
+        { label: 'Chờ duyệt', value: nSt('draft'), brand: true },
+        { label: 'Đã duyệt', value: nSt('approved') },
         { label: 'Tỉ lệ chấp nhận', value: st.acceptance_rate != null ? `${Math.round(st.acceptance_rate * 100)}%` : '—', hint: `${st.approved_without_edit} câu không cần sửa` },
       ]} />}
       <Toolbar>
         <SearchBox value={q_} onChange={setQ} placeholder="Tìm câu hỏi…" />
         <FilterPills label="Trạng thái" value={status} onChange={setStatus}
-          options={[{ id: '', label: 'Tất cả' }, { id: 'draft', label: 'Chờ duyệt' }, { id: 'approved', label: 'Đã duyệt' }, { id: 'rejected', label: 'Từ chối' }]} />
-        <PillSelect label="Bài học" value={lesson} onChange={setLesson}>
-          <option value="">Tất cả bài</option>
-          {lessons.data?.map((l) => <option key={l.code} value={l.code}>{l.code} · {l.title}</option>)}
-        </PillSelect>
+          options={[{ id: '', label: 'Tất cả', count: scoped.length }, { id: 'draft', label: 'Chờ duyệt', count: nSt('draft') }, { id: 'approved', label: 'Đã duyệt', count: nSt('approved') }, { id: 'rejected', label: 'Từ chối', count: nSt('rejected') }]} />
         <PillSelect label="Loại câu hỏi" value={typeF} onChange={setTypeF}>
           <option value="">Mọi loại</option>
           {Object.entries(TYPE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -125,10 +154,8 @@ export function QuestionBank() {
           <option value="">Mọi nguồn</option><option value="ai">AI soạn</option><option value="manual">Thủ công</option>
         </PillSelect>
       </Toolbar>
-      {bank.loading && !bank.data && <Spinner />}
-      {bank.error && <ErrorBox message={bank.error} onRetry={bank.reload} />}
-      {bank.data && !bank.data.length && <Empty title="Chưa có câu hỏi">Bấm “AI soạn câu hỏi”, chọn bài học và nguồn, AI sẽ soạn nháp để bạn duyệt.</Empty>}
-      {bank.data && !!bank.data.length && !rows.length && <Empty title="Không có câu nào khớp">Thử bỏ bớt bộ lọc hoặc từ khóa.</Empty>}
+      {bank.data && !scoped.length && <Empty title="Chưa có câu hỏi ở đây">Bấm “AI soạn câu hỏi”, AI sẽ soạn nháp từ tài liệu của bài để bạn duyệt.</Empty>}
+      {bank.data && !!scoped.length && !rows.length && <Empty title="Không có câu nào khớp">Thử bỏ bớt bộ lọc hoặc từ khóa.</Empty>}
       {!!rows.length && (
         <div className="table-wrap">
           <table className="table">
@@ -145,7 +172,7 @@ export function QuestionBank() {
                       <td className="td-check"><Check checked={sel.has(q.item_id)} onChange={() => sel.toggle(q.item_id)} label={`Chọn câu: ${q.question}`} /></td>
                       <td className="td-main"><strong>{q.question}</strong>
                         <span className="td-sub">{[DIFF[q.difficulty] || q.difficulty, q.sources?.[0], q.edited ? 'đã sửa' : ''].filter(Boolean).join(' · ')}</span></td>
-                      <td className="td-num">{q.lesson_id || '—'}</td>
+                      <td>{q.lesson_id ? (lessonTitle.get(q.lesson_id) || q.lesson_id) : '—'}</td>
                       <td>{TYPE[q.type] || q.type}</td>
                       <td>{q.generation_id ? <StatusTag tone="ai"><Icon name="sparkle" size={13} />AI</StatusTag> : <StatusTag tone="muted">Thủ công</StatusTag>}</td>
                       <td>{q.status === 'approved' ? <StatusTag tone="ok">Đã duyệt</StatusTag> : q.status === 'rejected' ? <StatusTag tone="bad">Từ chối</StatusTag> : <StatusTag tone="wait">Chờ duyệt</StatusTag>}</td>
@@ -174,6 +201,7 @@ export function QuestionBank() {
           </table>
         </div>
       )}
+      </CourseScope>
       <BulkBar count={sel.selected.length} noun="câu" onClear={sel.clear}>
         <Button size="sm" icon="check" onClick={() => bulk('approved')}>Duyệt</Button>
         <Button size="sm" variant="ghost" onClick={() => bulk('rejected')}>Từ chối</Button>
@@ -243,7 +271,7 @@ function GenerateDialog({ defaultLesson, onClose, onDone }: { defaultLesson: str
         <div className="row">
           {Object.entries(TYPE).map(([k, v]) => <label key={k} className="check"><input type="checkbox" checked={types.includes(k)} onChange={() => toggle(k)} />{v}</label>)}
         </div>
-        {busy && <p className="small" style={{ fontWeight: 700 }}>AI đang đọc tài liệu và soạn câu hỏi, có thể mất 10–40 giây…</p>}
+        {busy && <p className="small" style={{ fontWeight: 600 }}>AI đang đọc tài liệu và soạn câu hỏi, có thể mất 10–40 giây…</p>}
         {err && <ErrorBox message={err} />}
         <div className="row" style={{ justifyContent: 'flex-end' }}>
           <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Hủy</Button>
@@ -271,7 +299,7 @@ function BankEditor({ item, onClose, onSaved }: { item: BankItem; onClose: () =>
         <Field label="Câu hỏi"><textarea value={f.question} onChange={(e) => setF({ ...f, question: e.target.value })} /></Field>
         {f.options.length > 0 && (
           <fieldset className="col" style={{ gap: 8, border: 'none', padding: 0 }}>
-            <legend className="field-label" style={{ fontWeight: 800, fontSize: 14, marginBottom: 6 }}>Lựa chọn (chọn đáp án đúng)</legend>
+            <legend className="field-label" style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>Lựa chọn (chọn đáp án đúng)</legend>
             {f.options.map((o, i) => (
               <div key={i} className="row" style={{ flexWrap: 'nowrap' }}>
                 <input type="radio" name="bank-correct" aria-label={`Đáp án đúng là lựa chọn ${i + 1}`} checked={f.correct_answer === o} onChange={() => setF({ ...f, correct_answer: o })} style={{ width: 20, height: 20, accentColor: 'var(--green)' }} />

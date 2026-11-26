@@ -28,7 +28,9 @@ export function VideoItem({ item, onCompleted, goNext }: ItemProps) {
   const [t, setT] = useState(0);
   const [segments, setSegments] = useState<TranscriptSegment[]>([]);
   const [questions, setQuestions] = useState<PublicQuestion[]>([]);
-  const [tab, setTab] = useState<'subs' | 'questions'>('subs');
+  // danh sách phụ đề / câu hỏi ẩn mặc định, bấm mới mở, bấm lại để thu gọn
+  const [tab, setTabState] = useState<'subs' | 'questions' | null>(null);
+  const setTab = (v: 'subs' | 'questions') => setTabState((cur) => (cur === v ? null : v));
   const [popup, setPopup] = useState<{ question: PublicQuestion; result: AnswerResult | null } | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [text, setText] = useState('');
@@ -135,12 +137,12 @@ export function VideoItem({ item, onCompleted, goNext }: ItemProps) {
         </View>
       )}
       <Row style={{ padding: 12, paddingBottom: 4 }}>
-        <Pill label="Phụ đề" active={tab === 'subs'} onPress={() => setTab('subs')} count={segments.length} />
+        <Pill label="Toàn bộ phụ đề" active={tab === 'subs'} onPress={() => setTab('subs')} count={segments.length} />
         <Pill label="Câu hỏi" active={tab === 'questions'} onPress={() => setTab('questions')} count={questions.length} />
         <View style={{ flex: 1 }} />
         {goNext && <Button small variant="soft" title="Tiếp" icon="arrow-forward" onPress={goNext} />}
       </Row>
-      {tab === 'subs' ? (
+      {tab === null ? null : tab === 'subs' ? (
         segments.length ? (
           <FlatList ref={listRef} data={segments} keyExtractor={(_, i) => String(i)} contentContainerStyle={{ padding: 12, gap: 4 }}
             onScrollToIndexFailed={() => {}}

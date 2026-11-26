@@ -5,6 +5,7 @@
 // Chỉ khi không tự tìm được (hoặc người dùng tự đổi) mới dùng địa chỉ lưu trong SecureStore.
 import Constants from 'expo-constants';
 import * as SecureStore from 'expo-secure-store';
+import { fetch as expoFetch } from 'expo/fetch';
 
 export type Role = 'student' | 'teacher' | 'admin';
 export interface User {
@@ -101,6 +102,49 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
   }
   if (!res.ok) throw new ApiError(res.status, data);
   return data as T;
+}
+
+/** Gọi API trả Server-Sent Events (vd. /ai/coach/chat/stream): gọi onEvent cho từng sự kiện ngay khi tới.
+ * fetch gốc của React Native không đọc được body dạng stream nên dùng fetch của Expo. */
+export async function apiStream(path: string, json: unknown, onEvent: (event: string, data: any) => void,
+                                timeoutMs = 180_000): Promise<void> {
+  if (!server) throw new ApiError(0, { detail: 'Chưa có địa chỉ máy chủ.' });
+  const headers: Record<string, string> = { 'Content-Type': 'application/json', Accept: 'text/event-stream' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    let res: Awaited<ReturnType<typeof expoFetch>>;
+    try {
+      res = await expoFetch(server + path, { method: 'POST', headers, body: JSON.stringify(json), signal: ctrl.signal });
+    } catch {
+      throw new ApiError(0, { detail: `Không kết nối được máy chủ ${server}.` });
+    }
+    if (!res.ok || !res.body) {
+      const data = await res.json().catch(() => null);
+      if (res.status === 401 && token) onUnauthorized?.(data?.error?.message);
+      throw new ApiError(res.status, data);
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    const flush = (block: string) => {
+      let event = 'message', data = '';
+      for (const line of block.split('\n')) {
+        if (line.startsWith('event: ')) event = line.slice(7).trim();
+        else if (line.startsWith('data: ')) data += line.slice(6);
+      }
+      if (data) onEvent(event, JSON.parse(data));
+    };
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let i: number;
+      while ((i = buf.indexOf('\n\n')) >= 0) { flush(buf.slice(0, i)); buf = buf.slice(i + 2); }
+    }
+    if (buf.trim()) flush(buf);
+  } finally { clearTimeout(timer); }
 }
 
 /** URL file media cho video (trình phát không gửi header được) — gắn access_token như bản web. */

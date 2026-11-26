@@ -1,4 +1,4 @@
-// Bảng màu và chữ giống bản web (frontend/src/styles/theme.css): mặc định Xanh mầm, chữ Bricolage Grotesque.
+// Bảng màu và chữ giống bản web (frontend/src/styles/theme.css): mặc định Xanh mầm, chữ Be Vietnam Pro (dễ đọc tiếng Việt).
 export const C = {
   brand: '#287F39',
   brandHover: '#247233',
@@ -25,13 +25,14 @@ export const C = {
   white: '#FFFFFF',
 };
 
-/** Mỗi độ đậm của Bricolage Grotesque là một họ chữ riêng trong React Native. */
+/** Mỗi độ đậm của Be Vietnam Pro là một họ chữ riêng trong React Native.
+ *  Chữ đậm được hạ một bậc để giao diện bớt rối mắt (800 -> 600, 700 -> 600). */
 export const F = {
-  400: 'BricolageGrotesque_400Regular',
-  500: 'BricolageGrotesque_500Medium',
-  600: 'BricolageGrotesque_600SemiBold',
-  700: 'BricolageGrotesque_700Bold',
-  800: 'BricolageGrotesque_800ExtraBold',
+  400: 'BeVietnamPro_400Regular',
+  500: 'BeVietnamPro_500Medium',
+  600: 'BeVietnamPro_600SemiBold',
+  700: 'BeVietnamPro_600SemiBold',
+  800: 'BeVietnamPro_700Bold',
 } as const;
 
 export const R = { xl: 28, lg: 24, md: 16, sm: 12, pill: 999 };

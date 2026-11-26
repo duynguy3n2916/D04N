@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from 're
 import { Icon } from '../../components/Icon';
 import { Button, celebrate, ErrorBox, MarkIcon, Progress } from '../../components/ui';
 import { api, ApiError, errorText } from '../../lib/api';
+import { navigate } from '../../lib/router';
 import type { ItemProps } from '../Lesson';
 
 interface QuizQ { question_id: string; type: string; question: string; options: string[] | null; difficulty?: string }
@@ -11,7 +12,7 @@ interface QFinish { correct: number; total: number; score: number; pass_ratio: n
 const fmtWhen = (iso: string) => new Date(iso).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit', year: 'numeric' });
 
 /** Bài kiểm tra cuối bài: từng câu một, chọn → Kiểm tra → phản hồi → Tiếp tục → màn hình kết quả. */
-export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: ItemProps) {
+export function QuizItem({ item, onCompleted, setContext, goNext }: ItemProps) {
   const quiz = item.quiz || { count: 5, pass_ratio: 0.8, available: 0 };
   const [phase, setPhase] = useState<'intro' | 'run' | 'done'>('intro');
   const [qs, setQs] = useState<QuizQ[]>([]);
@@ -106,13 +107,13 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
         <div className="result-hero">
           <MarkIcon icon={item.completed ? 'check' : 'question'} size={84} tone={item.completed ? 'brand' : 'soft'} />
           <h2>{item.title}</h2>
-          <p className="muted" style={{ fontWeight: 700, maxWidth: 520 }}>
+          <p className="muted" style={{ fontWeight: 600, maxWidth: 520 }}>
             {Math.min(quiz.count, quiz.available || quiz.count)} câu hỏi · cần đúng {Math.round(quiz.pass_ratio * 100)}% để qua bài.
             Trong lúc làm, Tutor chỉ đưa gợi ý chứ không nói đáp án.
             {quiz.time_limit_minutes ? <> Bài có giới hạn <b>{quiz.time_limit_minutes} phút</b>; hết giờ bài sẽ tự nộp.</> : null}
           </p>
           {(quiz.open_at || quiz.close_at) && (
-            <p className="muted small" style={{ fontWeight: 700 }}>
+            <p className="muted small" style={{ fontWeight: 600 }}>
               {quiz.open_at && <>Mở: {fmtWhen(quiz.open_at)}. </>}{quiz.close_at && <>Đóng: {fmtWhen(quiz.close_at)}.</>}
             </p>
           )}
@@ -139,7 +140,7 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
         <div className="result-hero">
           <MarkIcon icon={final.passed ? 'trophy' : 'refresh'} size={96} tone={final.passed ? 'brand' : 'bad'} />
           <h2>{final.passed ? 'Xuất sắc, bạn đã qua bài!' : 'Chưa đạt lần này'}</h2>
-          <p className="muted" style={{ fontWeight: 700 }}>
+          <p className="muted" style={{ fontWeight: 600 }}>
             {final.passed ? 'Bài tiếp theo đã được mở khóa.' : `Cần đúng ít nhất ${Math.round(final.pass_ratio * 100)}%. Ôn lại rồi thử lần nữa nhé.`}
             {final.time_up ? ` Hết giờ: ${final.unanswered || 0} câu chưa trả lời được tính là sai.` : ''}
           </p>
@@ -152,7 +153,7 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
           <div className="row" style={{ justifyContent: 'center' }}>
             <Button variant="ghost" size="lg" icon="refresh" onClick={start} loading={busy}>Làm lại</Button>
             {final.passed && goNext && <Button size="lg" icon="chevronRight" onClick={goNext}>Mục tiếp theo</Button>}
-            {!final.passed && <Button variant="blue" size="lg" icon="sparkle" onClick={() => askTutor('Mình vừa làm sai bài kiểm tra, nên ôn lại phần nào?')}>Hỏi Tutor nên ôn gì</Button>}
+            {!final.passed && <Button variant="blue" size="lg" icon="sparkle" onClick={() => navigate('/coach')}>Hỏi trợ lý nên ôn gì</Button>}
           </div>
         </div>
       </div>
@@ -166,11 +167,11 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
       <div className="row" style={{ gap: 14 }}>
         <div style={{ flex: 1 }}><Progress value={(i + (answer ? 1 : 0)) / qs.length} label="Tiến độ bài kiểm tra" height={16} /></div>
         {remaining !== null && (
-          <span style={{ fontWeight: 900, color: remaining <= 60 ? 'var(--red)' : undefined }} aria-live="off" title="Thời gian còn lại">
+          <span style={{ fontWeight: 700, color: remaining <= 60 ? 'var(--red)' : undefined }} aria-live="off" title="Thời gian còn lại">
             ⏱ {String(Math.floor(remaining / 60)).padStart(2, '0')}:{String(remaining % 60).padStart(2, '0')}
           </span>
         )}
-        <span style={{ fontWeight: 900 }}>{i + 1}/{qs.length}</span>
+        <span style={{ fontWeight: 700 }}>{i + 1}/{qs.length}</span>
       </div>
       <span className="qkicker"><Icon name="star" size={18} />Câu {i + 1}{q.difficulty ? ` · ${q.difficulty === 'easy' ? 'Dễ' : q.difficulty === 'hard' ? 'Khó' : 'Vừa'}` : ''}</span>
       <h2 className="qtitle">{q.question}</h2>
@@ -198,7 +199,7 @@ export function QuizItem({ item, onCompleted, setContext, askTutor, goNext }: It
         <div className="quiz-bottom-inner">
           {!answer ? (
             <>
-              <Button variant="ghost" size="lg" onClick={() => askTutor(`Gợi ý giúp mình câu: ${q.question}`)} icon="bulb">Xin gợi ý</Button>
+              <span className="small muted quiz-no-ai"><Icon name="lock" size={14} /> Tutor AI tạm khóa khi làm bài</span>
               <Button size="lg" loading={busy} disabled={hasOptions ? selected === null : !text.trim()} onClick={check} style={{ minWidth: 180 }}>Kiểm tra</Button>
             </>
           ) : (

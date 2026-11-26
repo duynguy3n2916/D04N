@@ -8,6 +8,7 @@ import { useAsync } from '../lib/hooks';
 import { navigate } from '../lib/router';
 import { AccountSection } from './Account';
 import { Icon } from '../components/Icon';
+import { ReportButton } from './Learn';
 import { savedTheme, setTheme, THEME_PRESETS } from '../lib/theme';
 
 const GOALS = [{ v: 10, t: 'Nhẹ nhàng' }, { v: 20, t: 'Vừa phải' }, { v: 30, t: 'Nghiêm túc' }, { v: 50, t: 'Chăm chỉ' }, { v: 100, t: 'Thử thách' }];
@@ -65,6 +66,7 @@ export function Profile() {
           <h1>{name}</h1>
           <p className="muted">@{user?.user_id}{user?.class_ids?.length ? ` · lớp ${user.class_ids.join(', ')}` : ' · chưa vào lớp nào'}</p>
         </div>
+        <ReportButton />
         <Button variant="ghost" icon="settings" onClick={() => navigate('/settings')}>Cài đặt tài khoản</Button>
       </header>
       {me.loading && <Spinner />}

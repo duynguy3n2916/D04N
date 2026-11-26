@@ -10,7 +10,7 @@ function inline(text: string, key: string) {
   const parts = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*\s][^*]*\*|\[[^\]]+\]\([^)]+\))/g).filter(Boolean);
   return parts.map((p, i) => {
     const k = `${key}-${i}`;
-    if (p.startsWith('**') && p.endsWith('**')) return <Text key={k} style={{ fontWeight: '700' }}>{p.slice(2, -2)}</Text>;
+    if (p.startsWith('**') && p.endsWith('**')) return <Text key={k} style={{ fontWeight: '600' }}>{p.slice(2, -2)}</Text>;
     if (p.startsWith('`') && p.endsWith('`')) return <Text key={k} style={{ fontFamily: 'monospace', backgroundColor: C.wash, color: C.brandStrong }}>{p.slice(1, -1)}</Text>;
     if (p.startsWith('*') && p.endsWith('*') && p.length > 2) return <Text key={k} style={{ fontStyle: 'italic' }}>{p.slice(1, -1)}</Text>;
     const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(p);
@@ -41,7 +41,7 @@ export function Markdown({ text, size = 16 }: { text: string; size?: number }) {
     const h = /^(#{1,4})\s+(.*)$/.exec(line);
     if (h) {
       const lvl = h[1].length;
-      blocks.push(<Text key={`h${i}`} style={{ fontSize: size + (lvl === 1 ? 8 : lvl === 2 ? 5 : 2), fontWeight: '800', color: C.ink, marginTop: 6 }}>{inline(h[2], `h${i}`)}</Text>);
+      blocks.push(<Text key={`h${i}`} style={{ fontSize: size + (lvl === 1 ? 4 : lvl === 2 ? 2 : 1), fontWeight: '700', color: C.ink, marginTop: 6 }}>{inline(h[2], `h${i}`)}</Text>);
       i++; continue;
     }
     const li = /^\s*([-*+]|\d+[.)])\s+(.*)$/.exec(line);

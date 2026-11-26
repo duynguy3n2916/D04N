@@ -68,7 +68,7 @@ function CoverPicker({ file, onChange }: { file: File | null; onChange: (f: File
   }, [file]);
   return (
     <div className="col" style={{ gap: 8 }}>
-      <span style={{ fontWeight: 800, fontSize: 14 }}>Ảnh bìa <span className="muted">(tùy chọn)</span></span>
+      <span style={{ fontWeight: 600, fontSize: 14 }}>Ảnh bìa <span className="muted">(tùy chọn)</span></span>
       <div className="cover-pick">
         {preview ? <img src={preview} alt="Xem trước ảnh bìa" /> : <span className="muted small">Chưa có ảnh · PNG, JPG hoặc WEBP, tối đa 5 MB</span>}
       </div>
@@ -124,7 +124,7 @@ export function Courses() {
               <strong>{c.title}</strong>
               <span className="muted small">{c.code}{c.class_id ? ` · lớp ${c.class_id}` : ' · mọi lớp'}</span>
               <span className="course-card-foot">
-                <span className="muted small" style={{ fontWeight: 800 }}>{c.chapters} chương · {c.items} mục học</span>
+                <span className="muted small" style={{ fontWeight: 600 }}>{c.chapters} chương · {c.items} mục học</span>
                 <Icon name="chevronRight" />
               </span>
             </span>
@@ -181,7 +181,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
   const c = tree.data;
   return (
     <>
-      <div className="row" style={{ marginBottom: 8 }}><Link to="/teach/courses" className="muted small" style={{ fontWeight: 800 }}>← Tất cả khóa học</Link></div>
+      <div className="row" style={{ marginBottom: 8 }}><Link to="/teach/courses" className="muted small" style={{ fontWeight: 600 }}>← Tất cả khóa học</Link></div>
       <PageHeader title={c?.title || 'Đang tải…'} sub={c ? `${c.code}${c.class_id ? ` · lớp ${c.class_id}` : ' · mọi lớp'}${c.description ? ` · ${c.description}` : ''}` : undefined}
         actions={c && <>
           <Button variant="ghost" icon="play" onClick={() => navigate(`/learn/${c.course_id}`)}>Xem như học sinh</Button>
@@ -290,7 +290,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
                   {ch.lessons.map((ls) => (
                     <div key={ls.lesson_id}>
                       <button type="button" className={`ce-node ce-lesson ${on('lesson', ls.lesson_id) ? 'on' : ''}`} onClick={() => setSel({ kind: 'lesson', id: ls.lesson_id })}>
-                        <span className="ol-code">{ls.code}</span>{ls.title}<span className="ce-n">{ls.items.length}</span></button>
+                        <span className="ce-lesson-text"><span className="ol-code">{ls.code}</span><span>{ls.title}</span></span><span className="ce-n">{ls.items.length}</span></button>
                       {(on('lesson', ls.lesson_id) || ls.items.some((x) => on('item', x.item_id))) && ls.items.map((it) => (
                         <button key={it.item_id} type="button" className={`ce-node ce-item ${on('item', it.item_id) ? 'on' : ''}`} onClick={() => setSel({ kind: 'item', id: it.item_id })}>
                           <Icon name={TYPE_ICON[it.type]} size={15} />{it.title}</button>
@@ -662,7 +662,7 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
           <input ref={videoFileRef} type="file" accept="video/*" disabled={uploadingVideo}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadVideoInline(f); }} />
         </Field>
-        {upload && <p className="small" style={{ fontWeight: 700 }} aria-live="polite">{upload}</p>}
+        {upload && <p className="small" style={{ fontWeight: 600 }} aria-live="polite">{upload}</p>}
         </>
       )}
 
@@ -679,7 +679,7 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
           <Field label="…hoặc tải file mới (PDF/PPTX)">
             <input type="file" accept=".pdf,.pptx" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadSlide(f); }} />
           </Field>
-          {upload && <p className="small" style={{ fontWeight: 700 }} aria-live="polite">{upload}</p>}
+          {upload && <p className="small" style={{ fontWeight: 600 }} aria-live="polite">{upload}</p>}
           <Field label="Ghi chú của giảng viên (hiện dưới slide)"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
         </>
       )}
@@ -687,7 +687,7 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
       {type === 'reading' && (
         <>
           <div className="row" style={{ justifyContent: 'space-between' }}>
-            <span className="field-label" style={{ fontWeight: 800, fontSize: 14 }}>Nội dung (Markdown)</span>
+            <span className="field-label" style={{ fontWeight: 600, fontSize: 14 }}>Nội dung (Markdown)</span>
             <div className="seg" role="group" aria-label="Chế độ soạn">
               <button type="button" className={!preview ? 'on' : ''} onClick={() => setPreview(false)}>Soạn</button>
               <button type="button" className={preview ? 'on' : ''} onClick={() => setPreview(true)}>Xem trước</button>
@@ -717,7 +717,7 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
             <Field label="Mở lúc" hint="Để trống = mở ngay."><input type="datetime-local" value={openAt} onChange={(e) => setOpenAt(e.target.value)} /></Field>
             <Field label="Đóng lúc" hint="Để trống = không hạn chót."><input type="datetime-local" value={closeAt} onChange={(e) => setCloseAt(e.target.value)} /></Field>
           </div>
-          <p className="muted small" style={{ fontWeight: 700 }}>
+          <p className="muted small" style={{ fontWeight: 600 }}>
             Câu hỏi lấy ngẫu nhiên từ ngân hàng câu hỏi <b>đã duyệt</b> của bài {lesson.code}. Sinh và duyệt câu hỏi ở mục <Link to="/teach/questions">Câu hỏi</Link>.
           </p>
         </>

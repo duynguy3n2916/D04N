@@ -176,7 +176,7 @@ export function ManualCreateDialog({ defaultLesson = '', onClose, onSaved }: { d
             </Field>
             
             <fieldset className="col" style={{ gap: 8, border: 'none', padding: 0 }}>
-              <legend className="field-label" style={{ fontWeight: 800, fontSize: 14, marginBottom: 6 }}>Các đáp án (Nhập nội dung và Tích chọn đáp án đúng)</legend>
+              <legend className="field-label" style={{ fontWeight: 600, fontSize: 14, marginBottom: 6 }}>Các đáp án (Nhập nội dung và Tích chọn đáp án đúng)</legend>
               {f.options.map((o, i) => (
                 <div key={i} className="row" style={{ flexWrap: 'nowrap' }}>
                   <input type="radio" name="manual-correct" checked={f.correct_answer === o && o.trim() !== ''} onChange={() => setF({ ...f, correct_answer: o })} style={{ width: 20, height: 20, accentColor: 'var(--green)' }} disabled={!o.trim()} />
@@ -201,7 +201,7 @@ export function ManualCreateDialog({ defaultLesson = '', onClose, onSaved }: { d
             
             {/* BỘ LỌC NGUỒN */}
             <div className="row" style={{ alignItems: 'center', gap: 12, background: 'var(--bg-soft)', padding: '10px 12px', borderRadius: 8 }}>
-              <span className="small" style={{ fontWeight: 700, minWidth: 90 }}>Lọc nguồn từ:</span>
+              <span className="small" style={{ fontWeight: 600, minWidth: 90 }}>Lọc nguồn từ:</span>
               <div style={{ flex: 1 }}>
                  <LessonSelect value={sourceFilter} onChange={setSourceFilter} allowAll />
               </div>
@@ -231,7 +231,7 @@ export function ManualCreateDialog({ defaultLesson = '', onClose, onSaved }: { d
                       }} 
                     />
                     <div className="col" style={{ gap: 4 }}>
-                      <span style={{ fontWeight: 600 }}>{q.question}</span>
+                      <span style={{ fontWeight: 500 }}>{q.question}</span>
                       <div className="row" style={{ gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                         {getDifficultyLabel(q.difficulty)}
                         <span className="small muted">

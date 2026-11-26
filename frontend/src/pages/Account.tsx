@@ -75,7 +75,7 @@ export function AccountSection() {
 
       <div className="card col" style={{ gap: 12 }}>
         <h2>Lớp học</h2>
-        {me.data && !me.data.classes.length && <p className="muted" style={{ fontWeight: 700 }}>Bạn chưa thuộc lớp nào.</p>}
+        {me.data && !me.data.classes.length && <p className="muted" style={{ fontWeight: 600 }}>Bạn chưa thuộc lớp nào.</p>}
         {me.data?.classes.map((c) => (
           <div key={c.class_id} className="row" style={{ justifyContent: 'space-between' }}>
             <span className="row" style={{ gap: 8 }}><Icon name="school" size={20} /><strong>{c.name}</strong><span className="muted small">{c.class_id}</span>
@@ -99,7 +99,7 @@ export function AccountSection() {
           <Field label="Nhập lại mật khẩu mới"><PasswordInput value={pw.confirm} onChange={(e) => setPw({ ...pw, confirm: e.target.value })} autoComplete="new-password" /></Field>
         </div>
         {pw.next && <PasswordRules value={pw.next} username={user?.user_id} />}
-        {pw.confirm && pw.confirm !== pw.next && <span className="small" style={{ color: 'var(--red-text)', fontWeight: 800 }}>Hai mật khẩu chưa khớp.</span>}
+        {pw.confirm && pw.confirm !== pw.next && <span className="small" style={{ color: 'var(--red-text)', fontWeight: 600 }}>Hai mật khẩu chưa khớp.</span>}
         {pwErr && <ErrorBox message={pwErr} />}
         <div className="row" style={{ justifyContent: 'space-between' }}>
           <Button type="button" variant="danger-ghost" icon="logout" onClick={logoutAll}>Đăng xuất mọi thiết bị</Button>

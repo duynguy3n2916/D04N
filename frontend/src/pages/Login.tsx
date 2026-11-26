@@ -69,7 +69,7 @@ export function Login() {
 
           {mode === 'forgot' ? (
             <>
-              <p className="muted" style={{ fontWeight: 700 }}>Nhập tên đăng nhập hoặc email của tài khoản. Nếu tài khoản có email, hệ thống gửi link đặt mật khẩu mới.</p>
+              <p className="muted" style={{ fontWeight: 600 }}>Nhập tên đăng nhập hoặc email của tài khoản. Nếu tài khoản có email, hệ thống gửi link đặt mật khẩu mới.</p>
               <Field label="Tên đăng nhập hoặc email">
                 <input value={f.username} onChange={set('username')} required autoFocus autoComplete="username" />
               </Field>
@@ -97,7 +97,7 @@ export function Login() {
               <Field label="Nhập lại mật khẩu">
                 <PasswordInput value={f.confirm} onChange={set('confirm')} required autoComplete="new-password" />
               </Field>
-              {f.confirm && f.confirm !== f.password && <span className="small" style={{ color: 'var(--red-text)', fontWeight: 800 }}>Hai mật khẩu chưa khớp.</span>}
+              {f.confirm && f.confirm !== f.password && <span className="small" style={{ color: 'var(--red-text)', fontWeight: 600 }}>Hai mật khẩu chưa khớp.</span>}
               <div className="form-grid">
                 <Field label="Email (tùy chọn)"><input type="email" value={f.email} onChange={set('email')} autoComplete="email" /></Field>
                 <Field label="Mã vào lớp (tùy chọn)" hint="Giáo viên cung cấp">
@@ -113,7 +113,7 @@ export function Login() {
           </Button>
 
           {cfg?.allow_registration && mode !== 'forgot' && (
-            <p className="muted" style={{ textAlign: 'center', fontWeight: 700 }}>
+            <p className="muted" style={{ textAlign: 'center', fontWeight: 600 }}>
               {mode === 'login' ? 'Chưa có tài khoản? ' : 'Đã có tài khoản? '}
               <button type="button" className="linkbtn" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>
                 {mode === 'login' ? 'Tạo tài khoản học sinh' : 'Đăng nhập'}
@@ -121,14 +121,14 @@ export function Login() {
             </p>
           )}
           {mode === 'login' && (cfg?.password_reset_email ? (
-            <p className="muted small" style={{ textAlign: 'center', fontWeight: 700 }}>
+            <p className="muted small" style={{ textAlign: 'center', fontWeight: 600 }}>
               <button type="button" className="linkbtn" onClick={() => setMode('forgot')}>Quên mật khẩu?</button>
             </p>
           ) : (
             <p className="muted small" style={{ textAlign: 'center' }}>Quên mật khẩu? Nhờ giáo viên hoặc quản trị viên cấp lại mật khẩu tạm.</p>
           ))}
           {mode === 'forgot' && (
-            <p className="muted small" style={{ textAlign: 'center', fontWeight: 700 }}>
+            <p className="muted small" style={{ textAlign: 'center', fontWeight: 600 }}>
               <button type="button" className="linkbtn" onClick={() => setMode('login')}>Quay lại đăng nhập</button>
             </p>
           )}
@@ -162,14 +162,14 @@ export function ForceChangePassword() {
         <form className="login-form card" onSubmit={submit} aria-label="Đổi mật khẩu" style={{ padding: '26px 28px' }}>
           <MarkIcon icon="key" size={56} tone="soft" />
           <h2 style={{ fontSize: 26 }}>Đặt mật khẩu của riêng bạn</h2>
-          <p className="muted" style={{ fontWeight: 700 }}>
+          <p className="muted" style={{ fontWeight: 600 }}>
             Xin chào {user?.name || user?.user_id}! Bạn đang dùng mật khẩu tạm do giáo viên cấp. Hãy đổi sang mật khẩu mới để tiếp tục.
           </p>
           <Field label="Mật khẩu tạm"><PasswordInput value={cur} onChange={(e) => setCur(e.target.value)} required autoFocus autoComplete="current-password" /></Field>
           <Field label="Mật khẩu mới"><PasswordInput value={next} onChange={(e) => setNext(e.target.value)} required autoComplete="new-password" /></Field>
           {next && <PasswordRules value={next} username={user?.user_id} />}
           <Field label="Nhập lại mật khẩu mới"><PasswordInput value={confirm} onChange={(e) => setConfirm(e.target.value)} required autoComplete="new-password" /></Field>
-          {confirm && confirm !== next && <span className="small" style={{ color: 'var(--red-text)', fontWeight: 800 }}>Hai mật khẩu chưa khớp.</span>}
+          {confirm && confirm !== next && <span className="small" style={{ color: 'var(--red-text)', fontWeight: 600 }}>Hai mật khẩu chưa khớp.</span>}
           {error && <ErrorBox message={error} />}
           <Button type="submit" size="lg" loading={busy} disabled={!ok}>Lưu mật khẩu mới</Button>
           <button type="button" className="linkbtn" onClick={() => logout()}>Đăng xuất</button>
@@ -206,7 +206,7 @@ export function ResetPassword() {
           <Field label="Mật khẩu mới"><PasswordInput value={next} onChange={(e) => setNext(e.target.value)} required autoFocus autoComplete="new-password" /></Field>
           {next && <PasswordRules value={next} />}
           <Field label="Nhập lại mật khẩu mới"><PasswordInput value={confirm} onChange={(e) => setConfirm(e.target.value)} required autoComplete="new-password" /></Field>
-          {confirm && confirm !== next && <span className="small" style={{ color: 'var(--red-text)', fontWeight: 800 }}>Hai mật khẩu chưa khớp.</span>}
+          {confirm && confirm !== next && <span className="small" style={{ color: 'var(--red-text)', fontWeight: 600 }}>Hai mật khẩu chưa khớp.</span>}
           {error && <ErrorBox message={error} />}
           <Button type="submit" size="lg" loading={busy} disabled={!ok}>Lưu mật khẩu mới</Button>
           <button type="button" className="linkbtn" onClick={() => navigate('/login', true)}>Quay lại đăng nhập</button>

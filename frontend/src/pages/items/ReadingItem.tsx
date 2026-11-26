@@ -86,7 +86,7 @@ export function ReadingItem({ item, onCompleted, setContext, askTutor, goNext }:
   return (
     <div className="reading">
       <div className="reading-article" ref={articleRef}>
-        <div className="row muted small" style={{ gap: 8, marginBottom: 10, fontWeight: 800 }}>
+        <div className="row muted small" style={{ gap: 8, marginBottom: 10, fontWeight: 600 }}>
           <Icon name="book" size={16} />Bài đọc · khoảng {minutes} phút{done && <> · <span style={{ color: 'var(--green-text)' }}>đã đọc xong</span></>}
         </div>
         <div className="md" dangerouslySetInnerHTML={{ __html: html }} />
