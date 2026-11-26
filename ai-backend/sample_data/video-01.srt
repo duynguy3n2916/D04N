@@ -1,0 +1,147 @@
+1
+00:00:02,000 --> 00:00:10,167
+Chào các em, hôm nay chúng ta bắt đầu bài học về lập trình hướng đối tượng.
+
+2
+00:00:10,667 --> 00:00:19,333
+Lập trình hướng đối tượng, gọi tắt là OOP, tổ chức chương trình thành các đối tượng.
+
+3
+00:00:19,833 --> 00:00:27,889
+Mỗi đối tượng có dữ liệu gọi là thuộc tính và hành vi gọi là phương thức.
+
+4
+00:00:28,389 --> 00:00:36,000
+Trước hết chúng ta cần phân biệt hai khái niệm: lớp và đối tượng.
+
+5
+00:00:36,500 --> 00:00:43,111
+Lớp giống như bản vẽ thiết kế của một ngôi nhà.
+
+6
+00:00:43,611 --> 00:00:50,833
+Còn đối tượng là ngôi nhà thật được xây dựng từ bản vẽ đó.
+
+7
+00:00:51,333 --> 00:00:58,611
+Từ một lớp, ta có thể tạo ra rất nhiều đối tượng khác nhau.
+
+8
+00:00:59,111 --> 00:01:07,167
+Ví dụ lớp SinhVien có thuộc tính họ tên, mã sinh viên và điểm trung bình.
+
+9
+00:01:07,667 --> 00:01:16,056
+Trong Python, hàm init là hàm khởi tạo, được gọi tự động khi tạo đối tượng mới.
+
+10
+00:01:16,556 --> 00:01:23,889
+Tham số self chính là đối tượng hiện tại đang được thao tác.
+
+11
+00:01:24,389 --> 00:01:32,944
+Như vậy các em đã nắm được lớp là khuôn mẫu, đối tượng là thể hiện cụ thể của lớp.
+
+12
+00:01:33,444 --> 00:01:40,500
+Tiếp theo là tính chất đầu tiên của OOP: tính đóng gói.
+
+13
+00:01:41,000 --> 00:01:48,833
+Đóng gói nghĩa là gom dữ liệu và phương thức xử lý vào trong một lớp.
+
+14
+00:01:49,333 --> 00:01:57,278
+Đồng thời che giấu dữ liệu bên trong, không cho bên ngoài sửa tùy tiện.
+
+15
+00:01:57,778 --> 00:02:04,389
+Ví dụ số dư tài khoản ngân hàng nên để private.
+
+16
+00:02:04,889 --> 00:02:13,667
+Muốn rút tiền thì phải gọi phương thức rút tiền, phương thức này kiểm tra số dư trước.
+
+17
+00:02:14,167 --> 00:02:23,000
+Getter và setter là các phương thức để đọc và cập nhật thuộc tính private có kiểm soát.
+
+18
+00:02:23,500 --> 00:02:31,556
+Mục đích của đóng gói là bảo vệ dữ liệu và giữ cho đối tượng luôn hợp lệ.
+
+19
+00:02:32,056 --> 00:02:37,944
+Tính chất thứ hai là tính kế thừa.
+
+20
+00:02:38,444 --> 00:02:46,444
+Kế thừa cho phép lớp con dùng lại thuộc tính và phương thức của lớp cha.
+
+21
+00:02:46,944 --> 00:02:55,389
+Ví dụ lớp Chó kế thừa lớp Động vật, vì chó là một động vật, đây là quan hệ is-a.
+
+22
+00:02:55,889 --> 00:03:03,389
+Trong Python ta dùng hàm super để gọi hàm khởi tạo của lớp cha.
+
+23
+00:03:03,889 --> 00:03:11,944
+Lợi ích lớn nhất của kế thừa là tái sử dụng mã nguồn, tránh viết lặp lại.
+
+24
+00:03:12,444 --> 00:03:20,056
+Python cho phép đa kế thừa, còn Java chỉ cho đơn kế thừa với lớp.
+
+25
+00:03:20,556 --> 00:03:26,389
+Tính chất thứ ba là tính đa hình.
+
+26
+00:03:26,889 --> 00:03:35,667
+Đa hình là cùng một lời gọi phương thức nhưng mỗi đối tượng thực hiện theo cách riêng.
+
+27
+00:03:36,167 --> 00:03:43,944
+Ví dụ gọi phương thức kêu: con chó kêu gâu gâu, con mèo kêu meo meo.
+
+28
+00:03:44,444 --> 00:03:52,500
+Ghi đè phương thức là khi lớp con định nghĩa lại phương thức của lớp cha.
+
+29
+00:03:52,1000 --> 00:04:01,333
+Nạp chồng là nhiều phương thức cùng tên nhưng khác tham số trong cùng một lớp.
+
+30
+00:04:01,833 --> 00:04:09,556
+Ghi đè là đa hình lúc chạy, còn nạp chồng là đa hình lúc biên dịch.
+
+31
+00:04:10,056 --> 00:04:16,222
+Tính chất cuối cùng là tính trừu tượng.
+
+32
+00:04:16,722 --> 00:04:24,722
+Trừu tượng là chỉ thể hiện những gì cần thiết và ẩn đi chi tiết cài đặt.
+
+33
+00:04:25,222 --> 00:04:31,944
+Lớp trừu tượng không thể tạo đối tượng trực tiếp.
+
+34
+00:04:32,444 --> 00:04:40,056
+Trong Python ta kế thừa lớp ABC và dùng decorator abstractmethod.
+
+35
+00:04:40,556 --> 00:04:48,389
+Lớp con bắt buộc phải cài đặt các phương thức trừu tượng của lớp cha.
+
+36
+00:04:48,889 --> 00:04:56,833
+Tóm lại OOP có bốn tính chất: đóng gói, kế thừa, đa hình và trừu tượng.
+
+37
+00:04:57,333 --> 00:05:05,833
+Bài sau chúng ta sẽ thực hành xây dựng lớp TaiKhoan áp dụng cả bốn tính chất này.
