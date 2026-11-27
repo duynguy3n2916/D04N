@@ -28,6 +28,7 @@ export function Users() {
   const [tab, setTab] = useState<'users' | 'classes'>('users');
   const [classFilter, setClassFilter] = useState('');
   const classes = useAsync((s) => api<ClassInfo[]>('/ai/classes', { signal: s }), [], 'classes');
+  const [createClass, setCreateClass] = useState(false);
 
   const toast = useToast();
   const cur = classes.data?.find((c) => c.class_id === classFilter);
@@ -40,7 +41,8 @@ export function Users() {
   return (
     <>
       <PageHeader title={admin ? 'Người dùng & lớp' : 'Học sinh & lớp'}
-        sub={admin ? 'Tạo tài khoản, phân quyền, cấp lại mật khẩu, quản lý lớp học.' : 'Tạo tài khoản cho học sinh lớp bạn dạy, chia sẻ mã vào lớp, cấp lại mật khẩu khi học sinh quên.'} />
+        sub={admin ? 'Tạo tài khoản, phân quyền, cấp lại mật khẩu, quản lý lớp học.' : 'Tạo tài khoản cho học sinh lớp bạn dạy, chia sẻ mã vào lớp, cấp lại mật khẩu khi học sinh quên.'}
+        actions={<Button icon="plus" onClick={() => setCreateClass(true)}>Tạo lớp</Button>} />
       <div className="class-tabs" role="tablist" aria-label="Chọn lớp">
         <button role="tab" aria-selected={tab === 'users' && !classFilter} className={tab === 'users' && !classFilter ? 'on' : ''} onClick={() => { setTab('users'); setClassFilter(''); }}>{admin ? 'Tất cả tài khoản' : 'Mọi lớp'}</button>
         {classes.data?.filter((c) => c.is_active).map((c) => (
@@ -67,15 +69,16 @@ export function Users() {
         </section>
       )}
       {tab === 'users'
-        ? <UsersTab classes={classes.data || []} classFilter={classFilter} />
+        ? <UsersTab classes={classes.data || []} classFilter={classFilter} onCreateClass={() => setCreateClass(true)} />
         : <ClassesTab classes={classes} onShowStudents={(c) => { setClassFilter(c); setTab('users'); }} />}
+      {createClass && <ClassDialog onClose={() => setCreateClass(false)} onSaved={() => { setCreateClass(false); classes.reload(); toast('Đã tạo lớp', 'success'); }} />}
     </>
   );
 }
 
 // ---------------------------------------------------------------- Tài khoản
 
-function UsersTab({ classes, classFilter }: { classes: ClassInfo[]; classFilter: string }) {
+function UsersTab({ classes, classFilter, onCreateClass }: { classes: ClassInfo[]; classFilter: string; onCreateClass: () => void }) {
   const { user } = useAuth();
   const admin = user?.role === 'admin';
   const toast = useToast();
@@ -114,10 +117,15 @@ function UsersTab({ classes, classFilter }: { classes: ClassInfo[]; classFilter:
         <FilterPills label="Trạng thái" value={status} onChange={setStatus}
           options={[{ id: '', label: 'Tất cả' }, { id: 'true', label: 'Đang hoạt động' }, { id: 'false', label: 'Đã khóa' }]} />
         <span className="grow" />
-        <Button variant="ghost" icon="upload" disabled={noClass} onClick={() => setImportOpen(true)}>Nhập từ CSV</Button>
-        <Button icon="plus" disabled={noClass} onClick={() => setEdit('new')}>{admin ? 'Thêm tài khoản' : 'Thêm học sinh'}</Button>
+        <Button variant="ghost" icon="upload" disabled={noClass} title={noClass ? 'Tạo lớp trước rồi mới thêm học sinh' : undefined} onClick={() => setImportOpen(true)}>Nhập từ CSV</Button>
+        <Button icon="plus" disabled={noClass} title={noClass ? 'Tạo lớp trước rồi mới thêm học sinh' : undefined} onClick={() => setEdit('new')}>{admin ? 'Thêm tài khoản' : 'Thêm học sinh'}</Button>
       </Toolbar>
-      {noClass && <div className="notice" style={{ marginBottom: 14 }}>Bạn chưa có lớp nào. Tạo lớp ở thẻ “Lớp học” trước, rồi thêm học sinh vào lớp.</div>}
+      {noClass && (
+        <div className="notice row" style={{ marginBottom: 14, justifyContent: 'space-between', gap: 12 }}>
+          <span>Bạn chưa có lớp nào. Bấm “Tạo lớp” để tạo lớp đầu tiên, rồi thêm học sinh vào lớp.</span>
+          <Button size="sm" icon="plus" onClick={onCreateClass}>Tạo lớp</Button>
+        </div>
+      )}
       {list.loading && !list.data && <Spinner />}
       {list.error && <ErrorBox message={list.error} onRetry={list.reload} />}
       {list.data && !list.data.length && <Empty title="Không có tài khoản nào khớp" />}
