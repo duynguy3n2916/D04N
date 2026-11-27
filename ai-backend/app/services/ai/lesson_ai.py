@@ -24,7 +24,13 @@ def lesson_by_code(db: Session, user: Principal, lesson_code: str, teacher: bool
 
 def lesson_context(db: Session, lesson: Lesson, max_chars: int = 12000, max_chunks: int = 40) -> tuple[str, list[dict]]:
     """Toàn bộ học liệu của bài theo thứ tự tài liệu (bài đọc, slide, lời giảng video), kèm nhãn [S1]..."""
-    scope = RetrievalScope(allowed_class_ids=None, lesson_id=lesson.code)
+    return lessons_context(db, [lesson.code], max_chars, max_chunks)
+
+
+def lessons_context(db: Session, lesson_codes: list[str], max_chars: int = 12000,
+                    max_chunks: int = 40) -> tuple[str, list[dict]]:
+    """Học liệu của một hay nhiều bài (vd. mọi bài trong một chương), xen kẽ giữa các tài liệu, kèm nhãn [S1]..."""
+    scope = RetrievalScope(allowed_class_ids=None, lesson_ids=list(lesson_codes))
     stmt = (_apply_scope(select(AIChunk, AIDocument).join(AIDocument, AIChunk.document_id == AIDocument.id), scope)
             .order_by(AIDocument.created_at, AIChunk.chunk_index).limit(max_chunks * 4))
     rows = [_row_to_dict(c, d, None) for c, d in db.execute(stmt).all()]

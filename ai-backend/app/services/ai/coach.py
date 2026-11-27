@@ -106,6 +106,28 @@ def _lesson_or_error(db: Session, user: Principal, code: str | None, state: "Run
     return lesson
 
 
+def _chapter_label(index: int, ch) -> str:
+    return f"Chương {index}: {ch.title}"
+
+
+def _chapter_or_error(db: Session, user: Principal, ref, state: "RunState"):
+    """Chương học sinh nói tới: số thứ tự ("1", "chương 1") hoặc tên chương. Không khớp -> lỗi kèm danh sách chương."""
+    if ref is None or str(ref).strip() == "":
+        return None, None
+    chapters = [ch for c in _courses(db, user, state) for ch in c.chapters]
+    text = str(ref).strip().lower()
+    m = re.fullmatch(r"(?:chương|chuong|chapter|module|phần)?\s*(\d+)", text)
+    if m and 1 <= int(m.group(1)) <= len(chapters):
+        i = int(m.group(1))
+        return i, chapters[i - 1]
+    for i, ch in enumerate(chapters, 1):
+        if text and (text == ch.title.lower() or text in ch.title.lower()):
+            return i, ch
+    listing = "; ".join(_chapter_label(i, ch) for i, ch in enumerate(chapters, 1)) or "khóa chưa có chương nào"
+    raise AppError(404, "NOT_FOUND", f"Không có chương «{ref}» trong khóa. Các chương: {listing}. "
+                                     "Hãy hỏi lại học sinh (ask_clarification) với các chương này.")
+
+
 def resolve_course(db: Session, user: Principal, course_id):
     """Khóa học học sinh chọn để ôn (phải là khóa học sinh được học)."""
     if not course_id:
@@ -126,14 +148,15 @@ def tool_get_progress(db: Session, user: Principal, args: dict, state: RunState)
         done = sum(1 for i in items if status_of[i.id] == "done")
         current = next((i for i in items if i.id == current_id), None)
         lessons = []
-        for ch in course.chapters:
+        for ch_index, ch in enumerate(course.chapters, 1):
             for ls in ch.lessons:
                 its = ls.items
                 quiz = [{"item_id": str(i.id), "title": i.title,
                          "best_score": round(progress[i.id].score, 2) if progress.get(i.id) and progress[i.id].score is not None else None,
                          "passed": bool(progress.get(i.id) and progress[i.id].status == "completed")}
                         for i in its if i.type == "quiz"]
-                lessons.append({"lesson_code": ls.code, "title": ls.title, "items_total": len(its),
+                lessons.append({"chapter": _chapter_label(ch_index, ch), "lesson_code": ls.code, "title": ls.title,
+                                "items_total": len(its),
                                 "items_done": sum(1 for i in its if status_of[i.id] == "done"), "quizzes": quiz})
         out.append({"course": course.title, "items_total": len(items), "items_done": done,
                     "current_item": {"item_id": str(current.id), "lesson_id": str(current.lesson_id), "title": current.title,
@@ -302,6 +325,9 @@ def tool_create_my_flashcards(db: Session, user: Principal, args: dict, state: R
     from app.services.ai import practice_quiz
     topic = str(args.get("topic") or "").strip()
     lesson = _lesson_or_error(db, user, args.get("lesson_code"), state)
+    ch_index, chapter = _chapter_or_error(db, user, args.get("chapter"), state) if lesson is None else (None, None)
+    if chapter is not None:
+        return _chapter_flashcards(db, user, args, state, ch_index, chapter, topic)
     if lesson is None and not guardrails.content_words(topic):
         raise AppError(400, "TOPIC_VAGUE", "Chủ đề chưa rõ. Hãy hỏi lại học sinh muốn tạo thẻ về bài / khái niệm nào "
                                            "(ask_clarification), đừng tự chọn.")
@@ -334,18 +360,63 @@ def tool_create_my_flashcards(db: Session, user: Principal, args: dict, state: R
             "cards": [{"front": c["front"], "back": c["back"]} for c in cards]}
 
 
+def _count(args: dict, default: int = 5) -> int:
+    try:
+        return max(1, min(10, int(args.get("count") or default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _chapter_flashcards(db: Session, user: Principal, args: dict, state: RunState, ch_index: int, chapter,
+                        topic: str) -> dict:
+    """Thẻ cho cả một chương: học liệu của mọi bài trong chương (có chủ đề thì chỉ phần nói về chủ đề đó)."""
+    from app.services.ai import practice_quiz
+    from app.services.ai.lesson_ai import lessons_context
+    from app.services.courses import my_flashcards
+    from app.services.rag.retrieval import build_context
+    lessons = {ls.code: ls for ls in chapter.lessons}
+    label = _chapter_label(ch_index, chapter)
+    if not lessons:
+        return {"created": 0, "reason": "no_material", "note": f"{label} chưa có bài nào."}
+    if guardrails.content_words(topic):
+        chunks = practice_quiz.find_course_material(db, user, topic, lessons)
+        if not chunks:
+            return {"created": 0, "reason": "not_in_course", "note": f"Không tìm thấy «{topic}» trong {label}."}
+        grounded, text = build_context(chunks), topic
+    else:
+        try:
+            grounded = lessons_context(db, list(lessons))
+        except AppError:
+            return {"created": 0, "reason": "no_material", "note": f"{label} chưa có học liệu đã nạp."}
+        text = label
+    cards = my_flashcards.generate(db, user, _count(args), None, text, label[:120], grounded=grounded,
+                                   course_id=chapter.course_id)
+    if cards:
+        state.add_action("my_flashcards", f"Xem {len(cards)} thẻ vừa tạo", deck=cards[0]["deck"],
+                         course_id=cards[0]["course_id"])
+    return {"created": len(cards), "deck": cards[0]["deck"] if cards else "", "chapter": label,
+            "lessons": [f"{c}: {ls.title}" for c, ls in lessons.items()],
+            "cards": [{"front": c["front"], "back": c["back"]} for c in cards]}
+
+
 def tool_create_practice_quiz(db: Session, user: Principal, args: dict, state: RunState) -> dict:
     from app.services.ai import practice_quiz
     if state.course is None:
         raise AppError(400, "COURSE_REQUIRED", "Học sinh chưa chọn khóa học.")
     lesson = _lesson_or_error(db, user, args.get("lesson_code"), state)
-    topic = str(args.get("topic") or "").strip() or (lesson.title if lesson else "")
-    try:
-        count = int(args.get("count") or 5)
-    except (TypeError, ValueError):
-        count = 5
-    res = practice_quiz.create(db, user, state.course, _visible_lessons(db, user, state), topic, count,
-                               lesson.code if lesson else None)
+    ch_index, chapter = _chapter_or_error(db, user, args.get("chapter"), state) if lesson is None else (None, None)
+    topic = str(args.get("topic") or "").strip()
+    count = _count(args)
+    has_topic = bool(guardrails.content_words(topic))
+    if chapter is not None:
+        lessons = {ls.code: ls for ls in chapter.lessons}
+        res = practice_quiz.create(db, user, state.course, lessons, topic if has_topic else _chapter_label(ch_index, chapter),
+                                   count, whole=not has_topic)
+    elif lesson is not None and not has_topic:  # cả bài: soạn từ toàn bộ học liệu của bài
+        res = practice_quiz.create(db, user, state.course, {lesson.code: lesson}, lesson.title, count, lesson.code, whole=True)
+    else:
+        res = practice_quiz.create(db, user, state.course, _visible_lessons(db, user, state), topic, count,
+                                   lesson.code if lesson else None)
     if res.get("created"):
         state.add_action("practice_quiz", f"Làm quiz luyện tập: {res['topic']} ({res['count']} câu)",
                          quiz_id=res["quiz_id"], count=res["count"], topic=res["topic"])
@@ -361,6 +432,8 @@ def tool_ask_clarification(db: Session, user: Principal, args: dict, state: RunS
     return {"ok": True}
 
 
+_CHAPTER_ARG = {"type": "string", "description": "Chương khi học sinh nói \"chương N\" (số thứ tự chương hoặc tên chương): "
+                "dùng học liệu của MỌI bài trong chương. Không dùng lesson_code cho yêu cầu theo chương."}
 _LESSON_ARG = {"type": "string", "description": "Mã bài học (lesson_code), ví dụ lesson-oop-01. Bỏ trống = mọi bài."}
 
 TOOLS: dict[str, Tool] = {t.name: t for t in [
@@ -384,16 +457,18 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
     Tool("queue_flashcards", "Đưa các câu hay sai (question_id lấy từ get_weak_points) vào lịch ôn thẻ ngay hôm nay của học sinh.",
          {"type": "object", "properties": {"question_ids": {"type": "array", "items": {"type": "string"}, "maxItems": 30}},
           "required": ["question_ids"], "additionalProperties": False}, tool_queue_flashcards, writes=True),
-    Tool("create_my_flashcards", "AI soạn thẻ ghi nhớ mới về một bài học (lesson_code) hoặc một chủ đề (topic) rồi lưu vào \"Thẻ của tôi\" của học sinh.",
+    Tool("create_my_flashcards", "AI soạn thẻ ghi nhớ mới về một chương (chapter), một bài học (lesson_code) hoặc một chủ đề (topic) rồi lưu vào \"Thẻ của tôi\" của học sinh.",
          {"type": "object", "properties": {"lesson_code": {"type": "string", "description": "Mã bài học để soạn thẻ từ học liệu của bài."},
                                            "topic": {"type": "string", "description": "Chủ đề/khái niệm khi không soạn theo bài."},
-                                           "count": {"type": "integer", "minimum": 1, "maximum": 10}},
+                                           "count": {"type": "integer", "minimum": 1, "maximum": 10},
+                                           "chapter": _CHAPTER_ARG},
           "additionalProperties": False}, tool_create_my_flashcards, writes=True),
-    Tool("create_practice_quiz", "Soạn quiz luyện tập (tối đa 10 câu trắc nghiệm) về một chủ đề trong khóa để học sinh làm ngay "
+    Tool("create_practice_quiz", "Soạn quiz luyện tập (tối đa 10 câu trắc nghiệm) về một chương, một bài hoặc một chủ đề trong khóa để học sinh làm ngay "
          "trong khung chat. Chỉ tạo được khi học liệu của khóa có nói về chủ đề đó; không tính vào điểm bài kiểm tra.",
          {"type": "object", "properties": {"topic": {"type": "string", "description": "Chủ đề / khái niệm cụ thể học sinh muốn luyện."},
                                            "lesson_code": {"type": "string", "description": "Mã bài học nếu học sinh chọn một bài."},
-                                           "count": {"type": "integer", "minimum": 1, "maximum": 10}},
+                                           "count": {"type": "integer", "minimum": 1, "maximum": 10},
+                                           "chapter": _CHAPTER_ARG},
           "additionalProperties": False}, tool_create_practice_quiz, writes=True),
     Tool("ask_clarification", "Hỏi lại học sinh khi yêu cầu mơ hồ (bài kiểm tra nào, bài/chủ đề nào, yếu phần nào...). "
          "Kết thúc lượt: question hiện cho học sinh, options (2-5 lựa chọn cụ thể lấy từ dữ liệu tool) hiện thành nút bấm.",
@@ -445,9 +520,14 @@ def _history(history: list[dict] | None) -> list[dict]:
 
 
 def _course_note(course) -> str:
-    lessons = "; ".join(f"{ls.code}: {ls.title}" for ch in course.chapters for ls in ch.lessons)
+    """Cấu trúc khóa (chương -> bài) để model phân biệt "chương 1" (cả chương) với "bài 1" (một bài)."""
+    parts = []
+    for i, ch in enumerate(course.chapters, 1):
+        lessons = ", ".join(f"{ls.code} «{ls.title}»" for ls in ch.lessons) or "chưa có bài"
+        parts.append(f"{_chapter_label(i, ch)} gồm các bài: {lessons}")
+    structure = "; ".join(parts) or "chưa có chương nào"
     return (f"(Học sinh đang ôn khóa học «{course.title}». Chỉ dùng dữ liệu và học liệu của khóa này. "
-            f"Các bài trong khóa: {lessons or 'chưa có bài'}.)\n\n")
+            f"Cấu trúc khóa: {structure}. \"Chương N\" là cả chương (tham số chapter), \"bài\" là một bài (lesson_code).)\n\n")
 
 
 def ask_events(db: Session, user: Principal, message: str, history: list[dict] | None = None, course=None,

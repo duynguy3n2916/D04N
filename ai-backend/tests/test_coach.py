@@ -407,3 +407,44 @@ def test_coach_weak_points_point_to_material_and_strip_fake_sources(client, teac
     assert weak["weak_by_lesson"][0]["lesson_code"] == "lesson-cowk" and weak["weak_by_lesson"][0]["weak_count"] == 1
     assert weak["weak_questions"][0]["review"]["label"] == "S1"
     assert d["answer"] == "1. Xem lại [S1] và." and [s["label"] for s in d["sources"]] == ["S1"]
+
+
+def _course_with_chapters(client, teacher, code):
+    """Khóa 2 chương: chương 1 có 2 bài (nội dung khác nhau), chương 2 có 1 bài."""
+    from tests.test_api_core import upload
+    client.post("/ai/courses", headers=teacher, json={"code": f"course-{code}", "title": "ML cơ bản", "class_id": "lop-a"})
+    cid = next(c["course_id"] for c in client.get("/ai/courses", headers=teacher).json() if c["code"] == f"course-{code}")
+    texts = {f"{code}-b1": "# Giới thiệu\n\nHọc máy là cho máy tính học từ dữ liệu.",
+             f"{code}-b2": "# Hồi quy tuyến tính\n\nHồi quy tuyến tính dự đoán giá trị liên tục bằng một đường thẳng.",
+             f"{code}-b3": "# Mạng nơ-ron\n\nMạng nơ-ron gồm nhiều lớp nơ-ron nhân tạo."}
+    for title, lessons in (("Nhập môn", [f"{code}-b1", f"{code}-b2"]), ("Học sâu", [f"{code}-b3"])):
+        tree = client.post(f"/ai/courses/{cid}/chapters", headers=teacher, json={"title": title}).json()
+        ch = tree["chapters"][-1]["chapter_id"]
+        for i, lc in enumerate(lessons, 1):
+            client.post(f"/ai/chapters/{ch}/lessons", headers=teacher, json={"code": lc, "title": f"Bài {i}: {lc}"})
+            upload(client, teacher, f"{lc}.md", texts[lc], lesson_id=lc, class_id="lop-a")
+    return cid
+
+
+def test_coach_chapter_means_whole_chapter_not_first_lesson(client, teacher, fake_llm):
+    _course_with_chapters(client, teacher, "cch")
+    sv = token(client, "sv-cch", "student", ["lop-a"])
+    cid = _cid(client, sv, "course-cch")
+    fake_llm.push("coach", {"tool_calls": [_call("create_my_flashcards", {"chapter": "chương 1", "count": 3}),
+                                           _call("create_practice_quiz", {"chapter": "1", "count": 3}, "c2"),
+                                           _call("create_my_flashcards", {"chapter": "7"}, "c3")]}, "Xong.")
+    d = client.post("/ai/coach/chat", headers=sv, json={"message": "tạo bộ thẻ theo chương 1 của khóa học", "course_id": cid}).json()
+    # model được biết cấu trúc chương -> bài
+    first_user = next(m for m in fake_llm.calls[-1]["messages"] if m["role"] == "user")
+    assert "Chương 1: Nhập môn gồm các bài: cch-b1" in first_user["content"] and "cch-b2" in first_user["content"]
+    fc, quiz, missing = (json.loads(m["content"]) for m in _tool_messages(fake_llm))
+    # học liệu của CẢ hai bài trong chương 1 được gửi cho AI soạn thẻ / quiz, không có bài của chương 2
+    gen = [c for c in fake_llm.calls if c["kind"] in ("flashcards", "teacher")]
+    for call in gen[-2:]:
+        assert "Học máy" in call["user"] and "Hồi quy tuyến tính" in call["user"] and "Mạng nơ-ron" not in call["user"]
+    assert fc["created"] >= 1 and fc["deck"] == "Chương 1: Nhập môn" and fc["chapter"] == "Chương 1: Nhập môn"
+    assert quiz["created"] is True
+    assert "error" in missing and "Chương 2: Học sâu" in missing["error"]
+    mine = client.get("/ai/learn/my-flashcards", headers=sv).json()
+    assert all(c["course_id"] == cid for c in mine["cards"])
+    assert any(a["type"] == "practice_quiz" for a in d["actions"])

@@ -29,17 +29,27 @@ def find_course_material(db: Session, user: Principal, topic: str, lessons: dict
 
 
 def create(db: Session, user: Principal, course, lessons: dict, topic: str, count: int = 5,
-           lesson_code: str | None = None) -> dict:
+           lesson_code: str | None = None, whole: bool = False) -> dict:
+    """whole=True: soạn từ toàn bộ học liệu của các bài trong `lessons` (cả một bài / một chương), topic chỉ là nhãn.
+    Ngược lại: chỉ phần học liệu nói về `topic` (truy xuất qua ngưỡng điểm)."""
     topic = (guardrails.clean_user_text(topic) or "").strip()[:200]
-    if not guardrails.content_words(topic):
+    if not whole and not guardrails.content_words(topic):
         raise AppError(400, "TOPIC_VAGUE", "Chủ đề chưa rõ. Hãy hỏi lại học sinh muốn luyện khái niệm / phần nào.")
     count = max(1, min(MAX_QUESTIONS, int(count or 5)))
-    chunks = find_course_material(db, user, topic, lessons, lesson_code)
-    if not chunks:
-        return {"created": False, "reason": "not_in_course",
-                "note": f"Không tìm thấy học liệu về «{topic}» trong khóa này nên không tạo quiz.",
-                "course_lessons": [f"{code}: {ls.title}" for code, ls in lessons.items()][:20]}
-    context, sources = build_context(chunks)
+    if whole:
+        from app.services.ai.lesson_ai import lessons_context
+        try:
+            context, sources = lessons_context(db, list(lessons))
+        except AppError:
+            return {"created": False, "reason": "no_material", "note": f"«{topic}» chưa có học liệu đã nạp nên không tạo quiz."}
+        chunks = sources
+    else:
+        chunks = find_course_material(db, user, topic, lessons, lesson_code)
+        if not chunks:
+            return {"created": False, "reason": "not_in_course",
+                    "note": f"Không tìm thấy học liệu về «{topic}» trong khóa này nên không tạo quiz.",
+                    "course_lessons": [f"{code}: {ls.title}" for code, ls in lessons.items()][:20]}
+        context, sources = build_context(chunks)
     prompt = (f"{wrap_documents(context)}\n\nChủ đề học sinh muốn luyện: «{topic}».\n"
               f"Yêu cầu: sinh {count} câu hỏi trắc nghiệm luyện tập về đúng chủ đề này. Mỗi câu ghi sources theo nhãn S1, S2…")
     out, _ = llm.complete_json("coach_practice", PRACTICE_QUIZ, prompt, QuizOutput, max_tokens=3500,
@@ -60,7 +70,7 @@ def create(db: Session, user: Principal, course, lessons: dict, topic: str, coun
     db.add(quiz)
     db.commit()
     return {"created": True, "quiz_id": str(quiz.id), "topic": topic, "count": len(questions),
-            "lessons": sorted({c["lesson_id"] for c in chunks if c.get("lesson_id")})}
+            "lessons": sorted({c.get("lesson_id") for c in chunks if c.get("lesson_id")})}
 
 
 def _own(db: Session, user: Principal, quiz_id) -> CoachPracticeQuiz:
