@@ -8,6 +8,7 @@ import { api, errorText, storage } from '../lib/api';
 import { useAsync } from '../lib/hooks';
 import { refreshNotifications } from '../lib/notifications';
 import { navigate } from '../lib/router';
+import { MyFlashcards } from './MyFlashcards';
 
 interface Card { card_id: string; front: string; back: string; explanation: string; new: boolean }
 interface Summary { lesson_code: string; lesson_title?: string | null; total: number; new: number; due: number; learned: number }
@@ -129,6 +130,7 @@ export function Flashcards({ lessonCode }: { lessonCode: string }) {
 interface LessonDeck extends Summary { lesson_id: string; chapter_title: string; locked: boolean }
 interface CourseDecks { course_id: string; code: string; title: string; total: number; due: number; lessons: LessonDeck[] }
 const FC_COURSE_KEY = 'mam.fc.course';
+const FC_TAB_KEY = 'mam.fc.tab';
 
 /** Trang Thẻ ghi nhớ (ngoài bài học): chọn khóa học rồi chọn bài để ôn. Lối vào "Ôn thẻ" trong bài vẫn giữ. */
 export function FlashcardHub() {
@@ -140,6 +142,23 @@ export function FlashcardHub() {
   useEffect(() => { if (current) storage.set(FC_COURSE_KEY, current.course_id); }, [current?.course_id]);
   const dueAll = courses.reduce((n, c) => n + c.due, 0);
   const firstDue = current?.lessons.find((l) => l.due > 0);
+  const [tab, setTabState] = useState<'course' | 'mine'>(() => (storage.get(FC_TAB_KEY) === 'mine' ? 'mine' : 'course'));
+  const setTab = (t: 'course' | 'mine') => { setTabState(t); storage.set(FC_TAB_KEY, t); };
+  const tabs = (
+    <div className="tabs" role="tablist" style={{ marginBottom: 14 }}>
+      <button type="button" className={`tab ${tab === 'course' ? 'tab-on' : ''}`} role="tab" aria-selected={tab === 'course'} onClick={() => setTab('course')}>Bộ thẻ khóa học</button>
+      <button type="button" className={`tab ${tab === 'mine' ? 'tab-on' : ''}`} role="tab" aria-selected={tab === 'mine'} onClick={() => setTab('mine')}>Thẻ của tôi</button>
+    </div>
+  );
+  if (tab === 'mine') {
+    return (
+      <div className="fc-hub">
+        <PageHeader title="Thẻ ghi nhớ" sub="Thẻ riêng của bạn: tự viết hoặc nhờ AI soạn từ bài học hay ghi chú. Chỉ mình bạn thấy." />
+        {tabs}
+        <MyFlashcards />
+      </div>
+    );
+  }
   return (
     <div className="fc-hub">
       <PageHeader title="Thẻ ghi nhớ" sub={dueAll ? `Hôm nay bạn có ${dueAll} thẻ cần ôn. Chọn khóa học và bài để bắt đầu.` : 'Chọn khóa học và bài học để ôn thẻ.'}
@@ -147,6 +166,7 @@ export function FlashcardHub() {
           <Button variant="ghost" icon="copy" onClick={() => navigate('/flashcards/library/all')}>Tất cả thẻ đã học</Button>
           {firstDue && <Button icon="refresh" onClick={() => navigate(`/flashcards/${encodeURIComponent(firstDue.lesson_code)}`)}>Ôn ngay {firstDue.due} thẻ</Button>}
         </>} />
+      {tabs}
       {data.loading && !data.data && <Spinner />}
       {data.error && <ErrorBox message={data.error} onRetry={data.reload} />}
       {data.data && !courses.length && <Empty title="Bạn chưa có khóa học nào">Vào lớp và khóa học trước để có thẻ ôn.</Empty>}

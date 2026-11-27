@@ -120,6 +120,18 @@ FLASHCARD_GEN = Prompt(
 - sources ghi nhãn nguồn như "S1", "S2" đúng với tài liệu.""",
 )
 
+STUDENT_FLASHCARD_GEN = Prompt(
+    id="student.flashcards",
+    version="v1",
+    system=f"""Bạn là AI giúp học sinh tự soạn thẻ ghi nhớ (flashcard) để ôn bài.
+- Chỉ dùng thông tin trong <tai_lieu> (học liệu của bài hoặc ghi chú học sinh dán vào). {_DATA_RULE}
+- Nếu <tai_lieu> chỉ là một chủ đề ngắn, soạn thẻ về các kiến thức cơ bản, chắc chắn đúng của chủ đề đó.
+- Mỗi thẻ: mặt trước là câu hỏi ngắn hoặc khái niệm; mặt sau là câu trả lời ngắn gọn (1-2 câu), dễ nhớ.
+- Ưu tiên định nghĩa, phân biệt khái niệm, ví dụ tiêu biểu. Không lặp ý giữa các thẻ.
+- Nếu tài liệu có nhãn nguồn "S1", "S2"... thì ghi vào sources; không có thì để sources rỗng.
+- Nội dung không liên quan tới học tập hoặc không phù hợp: trả về các thẻ nhắc học sinh nhập nội dung bài học.""",
+)
+
 EVAL_NO_RAG = Prompt(
     id="eval.no_rag",
     version="v1",
@@ -144,4 +156,4 @@ Nhiệm vụ: giúp học sinh biết nên ôn gì, theo thứ tự nào, dựa 
 )
 
 ALL = {p.id: p for p in [TUTOR_ANSWER, TUTOR_HINT, TUTOR_EXPLAIN, CONVERSATION_SUMMARY, TEACHER_QUIZ, VIDEO_QUESTION,
-                         VIDEO_SUGGEST, QUESTION_AGENT, GRADER, EVAL_JUDGE, EVAL_NO_RAG, FLASHCARD_GEN, STUDY_COACH]}
+                         VIDEO_SUGGEST, QUESTION_AGENT, GRADER, EVAL_JUDGE, EVAL_NO_RAG, FLASHCARD_GEN, STUDENT_FLASHCARD_GEN, STUDY_COACH]}

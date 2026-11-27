@@ -94,3 +94,65 @@ def update_flashcard_card(card_id: str, req: CardUpdateIn, user: Principal = Dep
                           db: Session = Depends(get_db)):
     from app.services.courses import flashcards
     return flashcards.update_ai_card(db, user, parse_uuid(card_id, "card_id"), req.front, req.back, req.status)
+
+
+# ---------------------------------------------------------------- thẻ riêng của học sinh ("Thẻ của tôi")
+
+@router.get("/learn/my-flashcards")
+def my_flashcards(deck: str | None = None, due: bool = False, user: Principal = Depends(get_current_user),
+                  db: Session = Depends(get_db)):
+    from app.services.courses import my_flashcards as svc
+    return svc.list_cards(db, user, deck, due)
+
+
+class MyCardIn(BaseModel):
+    front: str = Field(min_length=1, max_length=300)
+    back: str = Field(min_length=1, max_length=600)
+    deck: str | None = Field(default=None, max_length=120)
+
+
+@router.post("/learn/my-flashcards")
+def create_my_flashcard(req: MyCardIn, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.services.courses import my_flashcards as svc
+    return svc.create_card(db, user, req.front, req.back, req.deck)
+
+
+class MyGenerateIn(BaseModel):
+    count: int = Field(default=10, ge=1, le=20)
+    lesson_code: str | None = Field(default=None, max_length=128)
+    text: str | None = Field(default=None, max_length=12000)
+    deck: str | None = Field(default=None, max_length=120)
+
+
+@router.post("/learn/my-flashcards/generate")
+def generate_my_flashcards(req: MyGenerateIn, user: Principal = Depends(get_current_user),
+                           db: Session = Depends(get_db)):
+    """AI soạn thẻ riêng cho học sinh từ một bài học hoặc từ ghi chú/chủ đề học sinh nhập; lưu thẳng vào Thẻ của tôi."""
+    from app.services.courses import my_flashcards as svc
+    return svc.generate(db, user, req.count, clean_id(req.lesson_code) if req.lesson_code else None, req.text, req.deck)
+
+
+class MyCardUpdateIn(BaseModel):
+    front: str | None = Field(default=None, max_length=300)
+    back: str | None = Field(default=None, max_length=600)
+    deck: str | None = Field(default=None, max_length=120)
+
+
+@router.patch("/learn/my-flashcards/{card_id}")
+def update_my_flashcard(card_id: str, req: MyCardUpdateIn, user: Principal = Depends(get_current_user),
+                        db: Session = Depends(get_db)):
+    from app.services.courses import my_flashcards as svc
+    return svc.update_card(db, user, parse_uuid(card_id, "card_id"), req.front, req.back, req.deck)
+
+
+@router.delete("/learn/my-flashcards/{card_id}")
+def delete_my_flashcard(card_id: str, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.services.courses import my_flashcards as svc
+    return svc.delete_card(db, user, parse_uuid(card_id, "card_id"))
+
+
+@router.post("/learn/my-flashcards/{card_id}/review")
+def review_my_flashcard(card_id: str, req: FlashcardReviewIn, user: Principal = Depends(get_current_user),
+                        db: Session = Depends(get_db)):
+    from app.services.courses import my_flashcards as svc
+    return svc.review(db, user, parse_uuid(card_id, "card_id"), req.rating)

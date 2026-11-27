@@ -249,3 +249,24 @@ class FlashcardCard(Base):
     status = Column(String(16), nullable=False, default="draft", index=True)  # draft | approved | rejected
     created_by = Column(String(128), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
+class PersonalFlashcard(Base):
+    """Thẻ ghi nhớ riêng của học sinh (tự viết hoặc nhờ AI soạn); chỉ chủ thẻ thấy và ôn, không cần duyệt."""
+    __tablename__ = "personal_flashcards"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    owner_id = Column(String(128), nullable=False, index=True)
+    deck = Column(String(120), nullable=True)  # chủ đề/bộ thẻ do học sinh đặt
+    lesson_code = Column(String(128), nullable=True)  # bài học dùng làm nguồn khi nhờ AI soạn
+    front = Column(String(300), nullable=False)
+    back = Column(String(600), nullable=False)
+    origin = Column(String(16), nullable=False, default="manual")  # manual | ai
+    sources = Column(JSONB, nullable=True)
+    ease = Column(Float, nullable=False, default=2.5)
+    interval_days = Column(Float, nullable=False, default=0.0)
+    reps = Column(Integer, nullable=False, default=0)
+    lapses = Column(Integer, nullable=False, default=0)
+    due_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    last_reviewed_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())

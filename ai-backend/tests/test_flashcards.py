@@ -178,3 +178,32 @@ def test_flashcard_overview_by_course(client, teacher, fake_llm):
     unlocked_course = next(c for c in client.get(overview_url, headers=sv).json() if c["code"] == "course-fco-locked")
     assert unlocked_course["due"] == 1 and unlocked_course["lessons"][0]["locked"] is False
     assert client.get("/ai/learn/flashcards/lesson-fco-locked/due", headers=sv).json()["cards"][0]["card_id"] == locked[0]
+
+
+def test_my_flashcards_crud_review_and_privacy(client):
+    me = token(client, "hs-my-fc", "student", ["lop-a"])
+    other = token(client, "hs-my-fc-2", "student", ["lop-a"])
+    c = client.post("/ai/learn/my-flashcards", headers=me, json={"front": "Đóng gói là gì?", "back": "Giấu dữ liệu", "deck": "OOP"})
+    assert c.status_code == 200, c.text
+    cid = c.json()["card_id"]
+    data = client.get("/ai/learn/my-flashcards", headers=me).json()
+    assert data["total"] == 1 and data["due"] == 1 and data["decks"] == ["OOP"]
+    assert client.get("/ai/learn/my-flashcards", headers=other).json()["total"] == 0
+    assert client.patch(f"/ai/learn/my-flashcards/{cid}", headers=other, json={"front": "x"}).status_code == 404
+    assert client.patch(f"/ai/learn/my-flashcards/{cid}", headers=me, json={"back": "Ẩn chi tiết bên trong"}).json()["back"] == "Ẩn chi tiết bên trong"
+    r = client.post(f"/ai/learn/my-flashcards/{cid}/review", headers=me, json={"rating": "good"})
+    assert r.status_code == 200 and r.json()["remembered"]
+    assert client.get("/ai/learn/my-flashcards?due=true", headers=me).json()["cards"] == []
+    assert client.delete(f"/ai/learn/my-flashcards/{cid}", headers=me).status_code == 200
+    assert client.get("/ai/learn/my-flashcards", headers=me).json()["total"] == 0
+
+
+def test_my_flashcards_ai_from_notes(client, fake_llm):
+    me = token(client, "hs-my-fc-ai", "student", ["lop-a"])
+    assert client.post("/ai/learn/my-flashcards/generate", headers=me, json={"count": 3}).status_code == 400
+    r = client.post("/ai/learn/my-flashcards/generate", headers=me,
+                    json={"count": 2, "text": "Đóng gói, kế thừa, đa hình trong OOP", "deck": "Ghi chú"})
+    assert r.status_code == 200, r.text
+    cards = r.json()
+    assert 1 <= len(cards) <= 2 and all(c["origin"] == "ai" and c["deck"] == "Ghi chú" for c in cards)
+    assert client.get("/ai/learn/my-flashcards", headers=me).json()["total"] == len(cards)
