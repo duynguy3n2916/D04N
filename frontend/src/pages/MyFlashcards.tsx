@@ -97,7 +97,7 @@ function CardEditor({ card, decks, defaultDeck, onClose, onSaved }: {
   };
   return (
     <Modal open title={card ? 'Sửa thẻ' : 'Tự viết thẻ'} onClose={again ? onSaved : onClose}>
-      <form className="col" style={{ gap: 12 }} onSubmit={(e) => { e.preventDefault(); void save(); }}>
+      <form className="modal-body" onSubmit={(e) => { e.preventDefault(); void save(); }}>
         <Field label="Mặt trước (câu hỏi, khái niệm)"><textarea value={front} onChange={(e) => setFront(e.target.value)} maxLength={300} rows={3} autoFocus /></Field>
         <Field label="Mặt sau (đáp án)"><textarea value={back} onChange={(e) => setBack(e.target.value)} maxLength={600} rows={4} /></Field>
         <Field label="Chủ đề (không bắt buộc)" hint="Gom các thẻ cùng chủ đề để lọc và ôn riêng.">
@@ -139,7 +139,7 @@ function AiGenerate({ decks, onClose, onDone }: { decks: string[]; onClose: () =
   };
   return (
     <Modal open title="Tạo thẻ bằng AI" onClose={busy ? undefined : onClose} dismissable={!busy}>
-      <form className="col" style={{ gap: 12 }} onSubmit={(e) => { e.preventDefault(); if (canGo) void go(); }}>
+      <form className="modal-body" onSubmit={(e) => { e.preventDefault(); if (canGo) void go(); }}>
         <div className="seg" role="group" aria-label="Nguồn để AI soạn">
           <button type="button" className={mode === 'lesson' ? 'on' : ''} onClick={() => setMode('lesson')}>Từ bài học</button>
           <button type="button" className={mode === 'text' ? 'on' : ''} onClick={() => setMode('text')}>Từ ghi chú của tôi</button>
