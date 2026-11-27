@@ -74,3 +74,27 @@ def test_shared_course_documents_visible_to_linked_class(client, teacher, admin,
     sv_b = token(client, "sv-shared3-b", "student", ["lop-b"])
     r = client.post("/ai/chat", headers=sv_b, json={"question": "Đóng gói là gì?", "lesson_id": "lesson-shared3"}).json()
     assert r["refused"] is False and r["sources"]
+
+
+def test_delete_class(client, admin):
+    """Xóa lớp: học sinh bị gỡ khỏi lớp (tài khoản giữ nguyên), khóa học bỏ liên kết, giáo viên khác không xóa được."""
+    _ensure_class(client, admin, "lop-xoa")
+    _ensure_class(client, admin, "lop-xoa-2")
+    gv = token(client, "gv-xoa", "teacher", ["lop-xoa"])
+    gv_khac = token(client, "gv-xoa-khac", "teacher", ["lop-xoa-2"])
+    sv = token(client, "sv-xoa", "student", ["lop-xoa"])
+    cid = client.post("/ai/courses", headers=gv, json={"code": "course-xoa", "title": "Khóa lớp xóa", "class_id": "lop-xoa"}).json()["course_id"]
+    client.post(f"/ai/courses/{cid}/classes", headers=admin, json={"class_id": "lop-xoa-2"})
+
+    # giáo viên không phụ trách lớp không xóa được (cùng quy tắc với sửa lớp)
+    assert client.delete("/ai/classes/lop-xoa", headers=gv_khac).status_code in (403, 404)
+
+    r = client.delete("/ai/classes/lop-xoa", headers=gv)
+    assert r.status_code == 200 and r.json() == {"ok": True}
+    assert all(c["class_id"] != "lop-xoa" for c in client.get("/ai/classes", headers=admin).json())
+    # học sinh vẫn còn tài khoản nhưng không còn lớp
+    me = client.get("/ai/auth/me", headers=sv).json()
+    assert "lop-xoa" not in (me.get("class_ids") or [])
+    # khóa học vẫn còn, không còn gắn lớp đã xóa
+    tree = client.get(f"/ai/courses/{cid}", headers=admin).json()
+    assert "lop-xoa" not in (tree.get("class_ids") or []) and tree.get("class_id") != "lop-xoa"

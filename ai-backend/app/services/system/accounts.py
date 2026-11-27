@@ -547,6 +547,41 @@ def update_class(db: Session, actor: Principal, class_id: str, name: str | None,
     return class_dict(c, _count_members(db, [c.class_id])[c.class_id])
 
 
+def delete_class(db: Session, actor: Principal, class_id: str) -> dict:
+    """Xóa lớp (admin hoặc giáo viên của lớp). Tài khoản, khóa học và tin nhắn riêng được giữ lại;
+    học sinh chỉ bị gỡ khỏi lớp, khóa học bỏ liên kết với lớp, bài trên diễn đàn của lớp bị xóa."""
+    from app.models.learning import Course, CourseClass, ForumReply, ForumReport, ForumThread
+    from app.models.social import ForumImage, ForumReaction
+
+    c = _managed_class(db, actor, class_id)
+    cid = c.class_id
+    try:
+        # 1. gỡ lớp khỏi mọi tài khoản (và hồ sơ học tập đi kèm)
+        for u in db.query(User).filter(User.class_ids.contains([cid])).all():
+            u.class_ids = [x for x in (u.class_ids or []) if x != cid]
+            _sync_profile(db, u)
+        # 2. khóa học: bỏ liên kết với lớp, khóa có lớp chính là lớp này thì về "mọi lớp"
+        db.query(CourseClass).filter(CourseClass.class_id == cid).delete(synchronize_session=False)
+        db.query(Course).filter(Course.class_id == cid).update({Course.class_id: None}, synchronize_session=False)
+        # 3. diễn đàn của lớp: lượt thích, báo cáo, ảnh, bình luận rồi bài đăng
+        thread_ids = [t for (t,) in db.query(ForumThread.id).filter(ForumThread.class_id == cid).all()]
+        if thread_ids:
+            reply_ids = [r for (r,) in db.query(ForumReply.id).filter(ForumReply.thread_id.in_(thread_ids)).all()]
+            db.query(ForumReaction).filter(ForumReaction.target_id.in_(thread_ids + reply_ids)).delete(synchronize_session=False)
+            db.query(ForumReport).filter(ForumReport.thread_id.in_(thread_ids)).delete(synchronize_session=False)
+            db.query(ForumReply).filter(ForumReply.thread_id.in_(thread_ids)).delete(synchronize_session=False)
+            db.query(ForumThread).filter(ForumThread.id.in_(thread_ids)).delete(synchronize_session=False)
+        db.query(ForumReport).filter(ForumReport.class_id == cid).delete(synchronize_session=False)
+        db.query(ForumImage).filter(ForumImage.class_id == cid).delete(synchronize_session=False)
+        # 4. bản ghi lớp
+        db.delete(c)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return {"ok": True}
+
+
 def join_class(db: Session, me: Principal, code: str) -> dict:
     c = _class_by_code(db, code)
     u = get_user(db, me.user_id)

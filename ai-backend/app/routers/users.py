@@ -91,3 +91,9 @@ class UpdateClassRequest(BaseModel):
 def update_class(class_id: str, req: UpdateClassRequest, user: Principal = Depends(require_teacher),
                  db: Session = Depends(get_db)):
     return accounts.update_class(db, user, class_id, req.name, req.is_active, req.rotate_code)
+
+
+@router.delete("/classes/{class_id}")
+def delete_class(class_id: str, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
+    """Xóa lớp: học sinh vẫn giữ tài khoản nhưng bị gỡ khỏi lớp, bài trên diễn đàn của lớp bị xóa."""
+    return accounts.delete_class(db, user, class_id)

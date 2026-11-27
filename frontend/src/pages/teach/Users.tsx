@@ -40,6 +40,12 @@ export function Users() {
     try { await api(`/ai/classes/${encodeURIComponent(c.class_id)}`, { method: 'PATCH', json: body }); classes.reload(); toast(msg, 'success'); }
     catch (e) { toast(errorText(e), 'error'); }
   };
+  const removeClass = async (c: ClassInfo) => {
+    if (!await confirmDialog(`Xóa lớp “${c.name}”? Học sinh vẫn giữ tài khoản nhưng bị gỡ khỏi lớp, khóa học bỏ liên kết với lớp, các bài trên diễn đàn của lớp bị xóa. Không hoàn tác được.`,
+      { title: 'Xóa lớp', okLabel: 'Xóa lớp', danger: true })) return;
+    try { await api(`/ai/classes/${encodeURIComponent(c.class_id)}`, { method: 'DELETE' }); setOpen(''); classes.reload(); toast(`Đã xóa lớp ${c.name}`, 'success'); }
+    catch (e) { toast(errorText(e), 'error'); }
+  };
   const rotate = async (c: ClassInfo) => { if (await confirmDialog('Tạo mã vào lớp mới? Mã cũ sẽ không dùng được nữa.')) patch(c, { rotate_code: true }, 'Đã đổi mã vào lớp'); };
   const title = admin ? 'Người dùng & lớp' : 'Học sinh & lớp';
   const inside = open === ALL || !!cur;
@@ -111,6 +117,7 @@ export function Users() {
               <Button size="sm" variant="ghost" icon={cur.is_active ? 'lock' : 'check'} onClick={() => patch(cur, { is_active: !cur.is_active }, cur.is_active ? 'Đã đóng lớp' : 'Đã mở lại lớp')}>
                 {cur.is_active ? 'Đóng lớp' : 'Mở lại lớp'}
               </Button>
+              <Button size="sm" variant="danger-ghost" icon="trash" onClick={() => removeClass(cur)}>Xóa lớp</Button>
             </div>
           </div>
           <div className="join-code">
