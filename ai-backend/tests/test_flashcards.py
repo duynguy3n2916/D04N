@@ -187,7 +187,7 @@ def test_my_flashcards_crud_review_and_privacy(client):
     assert c.status_code == 200, c.text
     cid = c.json()["card_id"]
     data = client.get("/ai/learn/my-flashcards", headers=me).json()
-    assert data["total"] == 1 and data["due"] == 1 and data["decks"] == ["OOP"]
+    assert data["total"] == 1 and data["due"] == 1 and [d["deck"] for d in data["decks"]] == ["OOP"]
     assert client.get("/ai/learn/my-flashcards", headers=other).json()["total"] == 0
     assert client.patch(f"/ai/learn/my-flashcards/{cid}", headers=other, json={"front": "x"}).status_code == 404
     assert client.patch(f"/ai/learn/my-flashcards/{cid}", headers=me, json={"back": "Ẩn chi tiết bên trong"}).json()["back"] == "Ẩn chi tiết bên trong"
@@ -207,3 +207,26 @@ def test_my_flashcards_ai_from_notes(client, fake_llm):
     cards = r.json()
     assert 1 <= len(cards) <= 2 and all(c["origin"] == "ai" and c["deck"] == "Ghi chú" for c in cards)
     assert client.get("/ai/learn/my-flashcards", headers=me).json()["total"] == len(cards)
+
+
+def test_my_flashcards_course_decks(client, teacher, fake_llm):
+    _lesson_with_bank(client, teacher, "mydk", n=1)
+    me = token(client, "hs-my-deck", "student", ["lop-a"])
+    cid = next(c["course_id"] for c in client.get("/ai/courses", headers=teacher).json() if c["code"] == "course-mydk")
+    # AI soạn từ bài -> thẻ tự gắn khóa của bài, bộ = tên bài
+    r = client.post("/ai/learn/my-flashcards/generate", headers=me, json={"count": 2, "lesson_code": "lesson-mydk"})
+    assert r.status_code == 200, r.text
+    assert all(c["course_id"] == cid for c in r.json())
+    client.post("/ai/learn/my-flashcards", headers=me, json={"front": "A?", "back": "a", "deck": "Ôn thi", "course_id": cid})
+    client.post("/ai/learn/my-flashcards", headers=me, json={"front": "B?", "back": "b"})
+    other = token(client, "hs-my-deck-z", "student", ["lop-z"])
+    assert client.post("/ai/learn/my-flashcards", headers=other, json={"front": "x", "back": "y", "course_id": cid}).status_code == 404
+    data = client.get("/ai/learn/my-flashcards", headers=me).json()
+    decks = {(d["course_id"], d["deck"]): d["total"] for d in data["decks"]}
+    assert decks[(cid, "Ôn thi")] == 1 and decks[(None, "")] == 1 and decks[(cid, "B")] >= 1
+    assert any(c["course_id"] == cid for c in data["courses"])
+    assert client.post("/ai/learn/my-flashcards/decks/rename", headers=me,
+                       json={"course_id": cid, "deck": "Ôn thi", "new_deck": "Giữa kỳ"}).json()["updated"] == 1
+    assert client.post("/ai/learn/my-flashcards/decks/delete", headers=me, json={"course_id": None, "deck": ""}).json()["deleted"] == 1
+    decks = {(d["course_id"], d["deck"]) for d in client.get("/ai/learn/my-flashcards", headers=me).json()["decks"]}
+    assert (cid, "Giữa kỳ") in decks and (None, "") not in decks

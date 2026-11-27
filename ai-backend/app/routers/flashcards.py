@@ -109,12 +109,13 @@ class MyCardIn(BaseModel):
     front: str = Field(min_length=1, max_length=300)
     back: str = Field(min_length=1, max_length=600)
     deck: str | None = Field(default=None, max_length=120)
+    course_id: str | None = None
 
 
 @router.post("/learn/my-flashcards")
 def create_my_flashcard(req: MyCardIn, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
     from app.services.courses import my_flashcards as svc
-    return svc.create_card(db, user, req.front, req.back, req.deck)
+    return svc.create_card(db, user, req.front, req.back, req.deck, req.course_id)
 
 
 class MyGenerateIn(BaseModel):
@@ -122,6 +123,7 @@ class MyGenerateIn(BaseModel):
     lesson_code: str | None = Field(default=None, max_length=128)
     text: str | None = Field(default=None, max_length=12000)
     deck: str | None = Field(default=None, max_length=120)
+    course_id: str | None = None
 
 
 @router.post("/learn/my-flashcards/generate")
@@ -129,20 +131,49 @@ def generate_my_flashcards(req: MyGenerateIn, user: Principal = Depends(get_curr
                            db: Session = Depends(get_db)):
     """AI soạn thẻ riêng cho học sinh từ một bài học hoặc từ ghi chú/chủ đề học sinh nhập; lưu thẳng vào Thẻ của tôi."""
     from app.services.courses import my_flashcards as svc
-    return svc.generate(db, user, req.count, clean_id(req.lesson_code) if req.lesson_code else None, req.text, req.deck)
+    return svc.generate(db, user, req.count, clean_id(req.lesson_code) if req.lesson_code else None, req.text, req.deck,
+                        course_id=req.course_id)
 
 
 class MyCardUpdateIn(BaseModel):
     front: str | None = Field(default=None, max_length=300)
     back: str | None = Field(default=None, max_length=600)
     deck: str | None = Field(default=None, max_length=120)
+    course_id: str | None = None  # "" = chuyển ra ngoài khóa; bỏ trống trường = giữ nguyên
 
 
 @router.patch("/learn/my-flashcards/{card_id}")
 def update_my_flashcard(card_id: str, req: MyCardUpdateIn, user: Principal = Depends(get_current_user),
                         db: Session = Depends(get_db)):
     from app.services.courses import my_flashcards as svc
-    return svc.update_card(db, user, parse_uuid(card_id, "card_id"), req.front, req.back, req.deck)
+    return svc.update_card(db, user, parse_uuid(card_id, "card_id"), req.front, req.back, req.deck,
+                           req.course_id, move_course="course_id" in req.model_fields_set)
+
+
+class DeckRenameIn(BaseModel):
+    course_id: str | None = None
+    deck: str = Field(default="", max_length=120)
+    new_deck: str | None = Field(default=None, max_length=120)
+    new_course_id: str | None = None
+
+
+@router.post("/learn/my-flashcards/decks/rename")
+def rename_my_deck(req: DeckRenameIn, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Đổi tên một bộ thẻ (khóa + tên bộ), có thể chuyển cả bộ sang khóa khác."""
+    from app.services.courses import my_flashcards as svc
+    return svc.rename_deck(db, user, req.course_id, req.deck, req.new_deck, req.new_course_id,
+                           move_course="new_course_id" in req.model_fields_set)
+
+
+class DeckRef(BaseModel):
+    course_id: str | None = None
+    deck: str = Field(default="", max_length=120)
+
+
+@router.post("/learn/my-flashcards/decks/delete")
+def delete_my_deck(req: DeckRef, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    from app.services.courses import my_flashcards as svc
+    return svc.delete_deck(db, user, req.course_id, req.deck)
 
 
 @router.delete("/learn/my-flashcards/{card_id}")

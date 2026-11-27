@@ -31,7 +31,10 @@ export default function Review() {
   return (
     <Screen onRefresh={data.reload} refreshing={data.loading && !!data.data}>
       <Muted>{dueAll ? `Hôm nay có ${dueAll} thẻ cần ôn. ` : ''}Chọn khóa học và bài để ôn. Thẻ bạn quên sẽ quay lại sớm, thẻ nhớ tốt sẽ giãn ra.</Muted>
-      <Button variant="ghost" icon="layers-outline" title="Tất cả thẻ đã học" onPress={() => router.push('/flashcards/library/all')} />
+      <Row>
+        <Button style={{ flex: 1 }} icon="albums-outline" title="Thẻ của tôi" onPress={() => router.push('/flashcards/mine')} />
+        <Button style={{ flex: 1 }} variant="ghost" icon="layers-outline" title="Đã học" onPress={() => router.push('/flashcards/library/all')} />
+      </Row>
       {data.loading && !data.data && <Spinner />}
       {data.error && <ErrorBox message={data.error} onRetry={data.reload} />}
       {data.data && !courses.length && <Empty title="Bạn chưa có khóa học nào" icon="book-outline">Vào lớp và khóa học trước để có thẻ ôn.</Empty>}
