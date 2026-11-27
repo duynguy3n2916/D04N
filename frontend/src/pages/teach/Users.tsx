@@ -1,5 +1,6 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { PageHeader } from '../../components/AppShell';
+import { Icon } from '../../components/Icon';
 import { PasswordInput } from '../../components/PasswordInput';
 import { Badge, Button, confirmDialog, Empty, ErrorBox, Field, IconButton, Modal, Spinner, useToast } from '../../components/ui';
 import { api, errorText, type ClassInfo, type Role } from '../../lib/api';
@@ -25,38 +26,92 @@ function copy(text: string, toast: (t: string, tone?: any) => void) {
 export function Users() {
   const { user } = useAuth();
   const admin = user?.role === 'admin';
-  const [tab, setTab] = useState<'users' | 'classes'>('users');
-  const [classFilter, setClassFilter] = useState('');
+  // '' = lưới thẻ lớp; ALL = mọi tài khoản; còn lại = mã lớp đang mở
+  const [open, setOpenState] = useState(() => { try { return sessionStorage.getItem('mam.users.class') || ''; } catch { return ''; } });
+  const setOpen = (v: string) => { setOpenState(v); try { sessionStorage.setItem('mam.users.class', v); } catch { /* bỏ qua */ } };
   const classes = useAsync((s) => api<ClassInfo[]>('/ai/classes', { signal: s }), [], 'classes');
   const [createClass, setCreateClass] = useState(false);
+  const [rename, setRename] = useState<ClassInfo | null>(null);
 
   const toast = useToast();
-  const cur = classes.data?.find((c) => c.class_id === classFilter);
-  const rotate = async (c: ClassInfo) => {
-    if (!await confirmDialog('Tạo mã vào lớp mới? Mã cũ sẽ không dùng được nữa.')) return;
-    try { await api(`/ai/classes/${encodeURIComponent(c.class_id)}`, { method: 'PATCH', json: { rotate_code: true } }); classes.reload(); toast('Đã đổi mã vào lớp', 'success'); }
+  const list = classes.data || [];
+  const cur = list.find((c) => c.class_id === open);
+  const patch = async (c: ClassInfo, body: object, msg: string) => {
+    try { await api(`/ai/classes/${encodeURIComponent(c.class_id)}`, { method: 'PATCH', json: body }); classes.reload(); toast(msg, 'success'); }
     catch (e) { toast(errorText(e), 'error'); }
   };
+  const rotate = async (c: ClassInfo) => { if (await confirmDialog('Tạo mã vào lớp mới? Mã cũ sẽ không dùng được nữa.')) patch(c, { rotate_code: true }, 'Đã đổi mã vào lớp'); };
+  const title = admin ? 'Người dùng & lớp' : 'Học sinh & lớp';
+  const inside = open === ALL || !!cur;
 
   return (
     <>
-      <PageHeader title={admin ? 'Người dùng & lớp' : 'Học sinh & lớp'}
-        sub={admin ? 'Tạo tài khoản, phân quyền, cấp lại mật khẩu, quản lý lớp học.' : 'Tạo tài khoản cho học sinh lớp bạn dạy, chia sẻ mã vào lớp, cấp lại mật khẩu khi học sinh quên.'}
+      <PageHeader title={title}
+        sub={admin ? 'Tạo tài khoản, phân quyền, cấp lại mật khẩu, quản lý lớp học.' : 'Chọn một lớp để thêm học sinh, chia sẻ mã vào lớp, cấp lại mật khẩu khi học sinh quên.'}
         actions={<Button icon="plus" onClick={() => setCreateClass(true)}>Tạo lớp</Button>} />
-      <div className="class-tabs" role="tablist" aria-label="Chọn lớp">
-        <button role="tab" aria-selected={tab === 'users' && !classFilter} className={tab === 'users' && !classFilter ? 'on' : ''} onClick={() => { setTab('users'); setClassFilter(''); }}>{admin ? 'Tất cả tài khoản' : 'Mọi lớp'}</button>
-        {classes.data?.filter((c) => c.is_active).map((c) => (
-          <button key={c.class_id} role="tab" aria-selected={tab === 'users' && classFilter === c.class_id} className={tab === 'users' && classFilter === c.class_id ? 'on' : ''}
-            onClick={() => { setTab('users'); setClassFilter(c.class_id); }}>{c.name || c.class_id}<span className="m-pill-n">{c.students ?? 0}</span></button>
-        ))}
-        <button role="tab" aria-selected={tab === 'classes'} className={`class-tab-manage ${tab === 'classes' ? 'on' : ''}`} onClick={() => setTab('classes')}>Quản lý lớp ({classes.data?.length ?? 0})</button>
-      </div>
-      {tab === 'users' && cur && (
+      {inside && (
+        <nav className="cs-crumbs" aria-label="Vị trí">
+          <button type="button" onClick={() => setOpen('')}>{title}</button>
+          <Icon name="chevronRight" size={14} /><span>{cur ? cur.name : admin ? 'Tất cả tài khoản' : 'Tất cả học sinh'}</span>
+        </nav>
+      )}
+      {!inside && (
+        <>
+          {classes.loading && !classes.data && <Spinner />}
+          {classes.error && <ErrorBox message={classes.error} onRetry={classes.reload} />}
+          <div className="course-grid">
+            {list.map((c) => (
+              <div key={c.class_id} role="button" tabIndex={0} className={`course-card class-card ${c.is_active ? '' : 'class-card-closed'}`}
+                onClick={() => setOpen(c.class_id)} onKeyDown={(e) => { if (e.key === 'Enter') setOpen(c.class_id); }}>
+                <span className="course-card-body">
+                  <span className="class-card-top">
+                    <span className="oc-kicker">{c.class_id}{c.is_active ? '' : ' · đã đóng'}</span>
+                    <IconButton icon="edit" label="Đổi tên lớp" onClick={() => setRename(c)} />
+                  </span>
+                  <strong>{c.name}</strong>
+                  <span className="class-card-count"><b>{c.students ?? 0}</b> học sinh</span>
+                  <span className="course-card-foot" onClick={(e) => e.stopPropagation()}>
+                    <span className="class-card-code" title="Mã vào lớp">
+                      <span className="code-chip">{c.join_code}</span>
+                      <IconButton icon="copy" label="Sao chép mã vào lớp" onClick={() => copy(c.join_code || '', toast)} />
+                    </span>
+                    <Icon name="chevronRight" />
+                  </span>
+                </span>
+              </div>
+            ))}
+            {classes.data && (
+              <div role="button" tabIndex={0} className="course-card class-card class-card-all" onClick={() => setOpen(ALL)} onKeyDown={(e) => { if (e.key === 'Enter') setOpen(ALL); }}>
+                <span className="course-card-body">
+                  <span className="oc-kicker">{admin ? 'Mọi vai trò' : 'Mọi lớp'}</span>
+                  <strong>{admin ? 'Tất cả tài khoản' : 'Tất cả học sinh'}</strong>
+                  <span className="muted small">Xem cả tài khoản chưa thuộc lớp nào.</span>
+                  <span className="course-card-foot"><span /><Icon name="chevronRight" /></span>
+                </span>
+              </div>
+            )}
+          </div>
+          {classes.data && !list.length && (
+            <div className="card class-empty">
+              <Icon name="school" size={28} />
+              <div className="grow"><strong>Chưa có lớp nào</strong><p className="muted small">Tạo lớp đầu tiên, rồi thêm học sinh hoặc đưa mã vào lớp cho học sinh tự tham gia.</p></div>
+              <Button icon="plus" onClick={() => setCreateClass(true)}>Tạo lớp</Button>
+            </div>
+          )}
+        </>
+      )}
+      {cur && (
         <section className="card class-banner">
           <div className="grow" style={{ minWidth: 0 }}>
             <span className="oc-kicker">{cur.class_id}</span>
             <h2>{cur.name}</h2>
             <p className="muted">{cur.students ?? 0} học sinh · {cur.teachers ?? 0} giáo viên{cur.is_active ? '' : ' · lớp đã đóng'}</p>
+            <div className="row" style={{ gap: 6, marginTop: 6 }}>
+              <Button size="sm" variant="ghost" icon="edit" onClick={() => setRename(cur)}>Đổi tên</Button>
+              <Button size="sm" variant="ghost" icon={cur.is_active ? 'lock' : 'check'} onClick={() => patch(cur, { is_active: !cur.is_active }, cur.is_active ? 'Đã đóng lớp' : 'Đã mở lại lớp')}>
+                {cur.is_active ? 'Đóng lớp' : 'Mở lại lớp'}
+              </Button>
+            </div>
           </div>
           <div className="join-code">
             <span className="oc-kicker">Mã vào lớp</span>
@@ -68,13 +123,13 @@ export function Users() {
           </div>
         </section>
       )}
-      {tab === 'users'
-        ? <UsersTab classes={classes.data || []} classFilter={classFilter} onCreateClass={() => setCreateClass(true)} />
-        : <ClassesTab classes={classes} onShowStudents={(c) => { setClassFilter(c); setTab('users'); }} />}
+      {inside && <UsersTab classes={list} classFilter={cur ? cur.class_id : ''} onCreateClass={() => setCreateClass(true)} />}
       {createClass && <ClassDialog onClose={() => setCreateClass(false)} onSaved={() => { setCreateClass(false); classes.reload(); toast('Đã tạo lớp', 'success'); }} />}
+      {rename && <ClassDialog cls={rename} onClose={() => setRename(null)} onSaved={() => { setRename(null); classes.reload(); }} />}
     </>
   );
 }
+const ALL = '__all__';
 
 // ---------------------------------------------------------------- Tài khoản
 
@@ -348,60 +403,6 @@ function ImportDialog({ classes, defaultClass, onClose }: { classes: ClassInfo[]
         )}
       </div>
     </Modal>
-  );
-}
-
-// ---------------------------------------------------------------- Lớp học
-
-function ClassesTab({ classes, onShowStudents }: { classes: ReturnType<typeof useAsync<ClassInfo[]>>; onShowStudents: (classId: string) => void }) {
-  const toast = useToast();
-  const [create, setCreate] = useState(false);
-  const [rename, setRename] = useState<ClassInfo | null>(null);
-
-  const patch = async (c: ClassInfo, body: object, msg: string) => {
-    try { await api(`/ai/classes/${encodeURIComponent(c.class_id)}`, { method: 'PATCH', json: body }); classes.reload(); toast(msg, 'success'); }
-    catch (e) { toast(errorText(e), 'error'); }
-  };
-
-  return (
-    <>
-      <div className="card row" style={{ justifyContent: 'space-between', marginBottom: 14 }}>
-        <p className="muted" style={{ fontWeight: 600, maxWidth: 640 }}>Học sinh tự vào lớp bằng <b>mã vào lớp</b> (khi đăng ký hoặc trong Hồ sơ). Đổi mã nếu mã cũ bị lộ.</p>
-        <Button icon="plus" onClick={() => setCreate(true)}>Tạo lớp</Button>
-      </div>
-      {classes.loading && !classes.data && <Spinner />}
-      {classes.error && <ErrorBox message={classes.error} onRetry={classes.reload} />}
-      {classes.data && !classes.data.length && <Empty title="Chưa có lớp nào">Tạo lớp để thêm học sinh và gán khóa học theo lớp.</Empty>}
-      {!!classes.data?.length && (
-        <div className="table-wrap">
-          <table className="table">
-            <thead><tr><th>Lớp</th><th>Mã vào lớp</th><th>Học sinh</th><th>Giáo viên</th><th>Trạng thái</th><th /></tr></thead>
-            <tbody>
-              {classes.data.map((c) => (
-                <tr key={c.class_id} className={c.is_active ? '' : 'row-dim'}>
-                  <td><strong>{c.name}</strong><div className="muted small">{c.class_id}</div></td>
-                  <td>
-                    <span className="code-chip">{c.join_code}</span>
-                    <IconButton icon="copy" label="Sao chép mã" onClick={() => copy(c.join_code || '', toast)} />
-                    <IconButton icon="refresh" label="Đổi mã mới" onClick={async () => { if (await confirmDialog('Tạo mã vào lớp mới? Mã cũ sẽ không dùng được nữa.')) patch(c, { rotate_code: true }, 'Đã đổi mã vào lớp'); }} />
-                  </td>
-                  <td><button className="linkbtn" onClick={() => onShowStudents(c.class_id)}>{c.students ?? 0} học sinh</button></td>
-                  <td>{c.teachers ?? 0}</td>
-                  <td>{c.is_active ? <StatusTag tone="ok">Đang mở</StatusTag> : <StatusTag tone="muted">Đã đóng</StatusTag>}</td>
-                  <td style={{ whiteSpace: 'nowrap' }}>
-                    <IconButton icon="edit" label="Đổi tên lớp" onClick={() => setRename(c)} />
-                    <IconButton icon={c.is_active ? 'lock' : 'check'} label={c.is_active ? 'Đóng lớp (không nhận học sinh mới)' : 'Mở lại lớp'}
-                      onClick={() => patch(c, { is_active: !c.is_active }, c.is_active ? 'Đã đóng lớp' : 'Đã mở lại lớp')} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {create && <ClassDialog onClose={() => setCreate(false)} onSaved={() => { setCreate(false); classes.reload(); }} />}
-      {rename && <ClassDialog cls={rename} onClose={() => setRename(null)} onSaved={() => { setRename(null); classes.reload(); }} />}
-    </>
   );
 }
 
