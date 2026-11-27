@@ -4,6 +4,7 @@ import { useCourseTrees } from '../components/CourseScope';
 import { Button, Empty, ErrorBox, Field, Modal, Progress, Spinner, confirmDialog, useToast } from '../components/ui';
 import { api, errorText } from '../lib/api';
 import { useAsync } from '../lib/hooks';
+import { Select } from '../components/Select';
 
 interface MyCard { card_id: string; deck: string; front: string; back: string; origin: 'manual' | 'ai'; new: boolean; due: boolean; remembered: boolean }
 interface MyList { cards: MyCard[]; decks: string[]; total: number; due: number; learned: number }
@@ -147,9 +148,9 @@ function AiGenerate({ decks, onClose, onDone }: { decks: string[]; onClose: () =
         {mode === 'lesson' ? (
           trees.loading && !trees.data ? <Spinner /> : lessons.length ? (
             <Field label="Bài học" hint="AI chỉ dùng học liệu của bài này (bài đọc, slide, lời giảng).">
-              <select value={lesson} onChange={(e) => setLesson(e.target.value)}>
+              <Select value={lesson} onChange={(v) => setLesson(v)}>
                 {lessons.map((l) => <option key={l.lesson_id} value={l.code}>{l.course} · {l.title}</option>)}
-              </select>
+              </Select>
             </Field>
           ) : <p className="muted small">Bạn chưa có bài học nào. Chuyển sang “Từ ghi chú của tôi” để dán nội dung.</p>
         ) : (
@@ -159,7 +160,7 @@ function AiGenerate({ decks, onClose, onDone }: { decks: string[]; onClose: () =
         )}
         <div className="row" style={{ gap: 12, flexWrap: 'wrap' }}>
           <Field label="Số thẻ">
-            <select value={count} onChange={(e) => setCount(Number(e.target.value))}>{[5, 10, 15, 20].map((v) => <option key={v} value={v}>{v} thẻ</option>)}</select>
+            <Select value={count} onChange={(v) => setCount(Number(v))}>{[5, 10, 15, 20].map((v) => <option key={v} value={v}>{v} thẻ</option>)}</Select>
           </Field>
           <div style={{ flex: 1, minWidth: 180 }}>
             <Field label="Chủ đề lưu vào (không bắt buộc)">

@@ -596,3 +596,43 @@ html::-webkit-scrollbar, .sidenav::-webkit-scrollbar { display: none; }
 @media (max-width: 700px) { .forum-bar .dd-pill { flex: 1 1 0; max-width: none; } }
 .sn-inline .dd { flex: 1; min-width: 0; min-height: 42px; padding: 8px 12px; font-size: 14px; }
 .caption-settings .dd { width: auto; }
+/* Ô chọn khóa học của Trợ lý: cùng kiểu danh sách với Select */
+.cc-course-menu { border-radius: 16px; box-shadow: 0 18px 40px -16px rgba(20, 28, 20, .35), 0 2px 6px rgba(20, 28, 20, .06); }
+.cc-course-option { padding: 8px 12px; font-weight: 500; }
+.cc-course-option svg { color: var(--brand); }
+
+/* ===== Thu / mở menu trái không làm nhảy chữ =====
+   Trước đây khi thu gọn, chữ bị display:none và các mục chuyển sang canh giữa ngay lập tức, còn khi mở rộng thì chữ hiện ra
+   lúc menu còn hẹp nên bị xuống dòng rồi mới dàn ra. Giờ chữ luôn ở một dòng, chỉ mờ dần; biểu tượng giữ nguyên vị trí;
+   tiêu đề nhóm giữ chiều cao nên các mục không bị đẩy lên xuống. */
+@media (min-width: 901px) {
+  .sidenav { overflow-x: hidden; transition: flex-basis .22s ease, width .22s ease; }
+  .sidenav-group .nav-item, .user-chip { white-space: nowrap; overflow: hidden; transition: padding .22s ease, background .2s, color .2s; }
+  .sidenav-group .nav-item > span:not(.nav-badge), .user-chip .sidenav-user-text, .sidenav-title, .sidenav-logo .logo-text {
+    transition: opacity .16s ease .06s; }
+  .sidenav-group .nav-item > span:not(.nav-badge) { min-width: 0; overflow: hidden; text-overflow: clip; }
+  .sidenav-title { white-space: nowrap; overflow: hidden; }
+  .sidenav-logo { transition: padding .22s ease; }
+  .sidenav-top { position: relative; }
+
+  .shell-compact .sidenav { flex: 0 0 76px; width: 76px; padding-left: 14px; padding-right: 14px; align-items: stretch; gap: 8px; }
+  .shell-compact .sidenav-top { flex-direction: row; justify-content: flex-start; gap: 6px; }
+  .shell-compact .sidenav-logo { padding: 6px 7px; margin: 0 0 6px; }
+  .shell-compact .sidenav-logo .logo-text { display: inline; opacity: 0; transition-delay: 0s; transition-duration: .08s; }
+  .shell-compact .sidenav-toggle { position: absolute; left: 7px; top: 6px; opacity: 0; }
+  .shell-compact .sidenav-top:hover .sidenav-toggle, .shell-compact .sidenav-toggle:focus-visible { opacity: 1; background: var(--brand-soft); }
+  .shell-compact .sidenav-top:hover .logo-mark, .shell-compact .sidenav-top:focus-within .logo-mark { opacity: 0; }
+  .logo-mark { transition: opacity .12s; }
+  .sidenav-toggle { transition: opacity .12s, background .15s, color .15s; }
+
+  .shell-compact .sidenav-title { display: block; opacity: 0; transition-delay: 0s; transition-duration: .08s; }
+  .shell-compact .sidenav-group { align-items: stretch; width: auto; }
+  .shell-compact .sidenav-group + .sidenav-group { border-top: 0; padding-top: 0; }
+  .shell-compact .nav-item { position: relative; justify-content: flex-start; width: auto; padding: 0 13px; gap: 14px; }
+  .shell-compact .nav-item > span:not(.nav-badge) { display: inline; opacity: 0; transition-delay: 0s; transition-duration: .08s; }
+  .shell-compact .nav-badge { position: absolute; top: 3px; left: 28px; right: auto; }
+
+  .shell-compact .sidenav-user { flex-direction: row; width: auto; align-items: stretch; }
+  .shell-compact .user-chip { justify-content: flex-start; width: 100%; margin: 0; padding: 8px 5px; }
+  .shell-compact .sidenav-user-text { display: flex; opacity: 0; transition-delay: 0s; transition-duration: .08s; }
+}
