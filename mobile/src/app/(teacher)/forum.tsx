@@ -41,12 +41,12 @@ export default function Forum() {
       </Row>
       {list.loading && !list.data && <Spinner />}
       {list.error && <ErrorBox message={list.error} onRetry={list.reload} />}
-      {list.data && !list.data.length && <Empty title={sort === 'unanswered' ? 'Không còn câu hỏi chờ trả lời' : 'Chưa có bài nào'} icon="chatbubbles-outline" />}
+      {list.data && !list.data.length && <Empty title={sort === 'unanswered' ? 'Không còn bài chờ trả lời' : 'Chưa có bài nào'} icon="chatbubbles-outline" />}
       {list.data?.map((t) => (
         <Card key={t.thread_id} onPress={() => router.push(`/forum/${t.thread_id}`)}>
           <Row style={{ flexWrap: 'wrap' }}>
             {t.pinned && <Tag tone="brand" label="Ghim" />}
-            {t.has_answer ? <Tag tone="ok" label="Đã có lời giải" /> : t.kind === 'question' ? <Tag tone="bad" label="Chưa giải" /> : null}
+            {t.has_answer ? <Tag tone="ok" label="Đã có lời giải" /> : t.kind !== 'announcement' && !t.reply_count ? <Tag tone="bad" label="Chưa trả lời" /> : null}
             {!!t.lesson_code && <Tag label={t.lesson_code} />}
           </Row>
           <Text style={{ fontSize: 16, fontWeight: '700', color: C.ink }}>{t.title}</Text>

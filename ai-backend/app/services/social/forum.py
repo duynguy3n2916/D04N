@@ -3,7 +3,6 @@
 AI chỉ soạn bản nháp để giáo viên duyệt, không tự đăng.
 """
 import re
-from datetime import timedelta
 
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
@@ -24,6 +23,9 @@ MAX_BODY = 5000
 MAX_TAGS = 5
 MAX_IMAGES = 4
 KINDS = ("question", "post", "announcement")
+# "question" và "post" là cùng một loại bài thường (bài cũ có thể mang một trong hai giá trị);
+# chỉ "announcement" (thông báo của giáo viên) là khác.
+NORMAL_KINDS = ("question", "post")
 SORTS = ("new", "top", "unanswered")
 _MENTION = re.compile(r"(?<![\w@])@([a-z0-9][a-z0-9._-]{2,63})")
 _TAG = re.compile(r"^[\w.-]{1,30}$", re.UNICODE)
@@ -135,7 +137,7 @@ def _notify_mentions(db: Session, actor: Principal, class_id: str, thread_id, bo
 def _thread_dict(t: ForumThread, names: dict[str, str], replies: int = 0, has_answer: bool = False,
                  likes: int = 0, liked: bool = False) -> dict:
     return {"thread_id": str(t.id), "class_id": t.class_id, "lesson_code": t.lesson_code, "title": t.title,
-            "body": t.body, "kind": t.kind or "question", "tags": t.tags or [],
+            "body": t.body, "kind": "announcement" if t.kind == "announcement" else "post", "tags": t.tags or [],
             "images": [f"/ai/forum/images/{i}" for i in (t.images or [])],
             "author_id": t.author_id, "author_name": names.get(t.author_id, t.author_id),
             "pinned": bool(t.pinned), "locked": bool(t.locked), "hidden": bool(t.hidden),
@@ -157,7 +159,7 @@ def _likes(db: Session, user: Principal, target_type: str, ids: list) -> tuple[d
 
 def list_threads(db: Session, user: Principal, class_id: str, lesson_code: str | None = None, sort: str = "new",
                  tag: str | None = None, q: str | None = None, kind: str | None = None) -> list[dict]:
-    """Bảng tin của lớp. Thông báo và bài ghim luôn ở đầu; sort = new | top (nhiều thích, 30 ngày) | unanswered."""
+    """Bảng tin của lớp. Thông báo và bài ghim luôn ở đầu; sort = new | top (nhiều tương tác: thích + bình luận) | unanswered."""
     class_id = clean_id(class_id) or ""
     _require_member(user, class_id)
     sort = sort if sort in SORTS else "new"
@@ -166,15 +168,15 @@ def list_threads(db: Session, user: Principal, class_id: str, lesson_code: str |
         query = query.filter(ForumThread.hidden.isnot(True))
     if lesson_code:
         query = query.filter(ForumThread.lesson_code == lesson_code)
-    if kind in KINDS:
-        query = query.filter(ForumThread.kind == kind)
+    if kind == "announcement":
+        query = query.filter(ForumThread.kind == "announcement")
+    elif kind in NORMAL_KINDS:
+        query = query.filter(or_(ForumThread.kind.is_(None), ForumThread.kind.in_(NORMAL_KINDS)))
     if tag:
         query = query.filter(ForumThread.tags.contains([tag.strip().lstrip("#").lower()]))
     if q and q.strip():
         like = f"%{q.strip()[:100]}%"
         query = query.filter(or_(ForumThread.title.ilike(like), ForumThread.body.ilike(like)))
-    if sort == "top":
-        query = query.filter(ForumThread.created_at >= utcnow() - timedelta(days=30))
     threads = query.order_by(ForumThread.created_at.desc()).limit(300).all()
     if not threads:
         return []
@@ -189,19 +191,19 @@ def list_threads(db: Session, user: Principal, class_id: str, lesson_code: str |
     rows = [_thread_dict(t, names, int(counts.get(t.id, 0)), t.id in accepted, int(likes.get(t.id, 0)), t.id in mine)
             for t in threads]
     if sort == "unanswered":
-        rows = [r for r in rows if r["kind"] == "question" and not r["has_answer"] and r["reply_count"] == 0]
+        rows = [r for r in rows if r["kind"] != "announcement" and not r["has_answer"] and r["reply_count"] == 0]
     elif sort == "top":
-        rows.sort(key=lambda r: (r["like_count"], r["reply_count"]), reverse=True)
+        rows.sort(key=lambda r: (r["like_count"] + r["reply_count"], r["reply_count"]), reverse=True)
     # thông báo của giáo viên và bài ghim lên đầu (giữ thứ tự bên trong mỗi nhóm)
     rows.sort(key=lambda r: (r["kind"] != "announcement", not r["pinned"]))
     return rows[:200]
 
 
 def create_thread(db: Session, user: Principal, class_id: str, title: str, body: str, lesson_code: str | None,
-                  kind: str = "question", tags: list[str] | None = None, images: list | None = None) -> dict:
+                  kind: str = "post", tags: list[str] | None = None, images: list | None = None) -> dict:
     class_id = clean_id(class_id) or ""
     _require_member(user, class_id)
-    kind = kind if kind in KINDS else "question"
+    kind = "announcement" if kind == "announcement" else "post"
     if kind == "announcement" and not _is_moderator(user, class_id):
         raise AppError(403, "FORBIDDEN", "Chỉ giáo viên của lớp mới đăng thông báo.")
     lesson_code = clean_id(lesson_code)

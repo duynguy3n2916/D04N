@@ -14,7 +14,7 @@ class ThreadIn(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     body: str = Field(min_length=1, max_length=5000)
     lesson_code: str | None = Field(default=None, max_length=128)
-    kind: str = Field(default="question", pattern="^(question|post|announcement)$")
+    kind: str = Field(default="post", pattern="^(question|post|announcement)$")  # question = post (giữ cho client cũ)
     tags: list[str] | None = Field(default=None, max_length=10)
     images: list[str] | None = Field(default=None, max_length=4)
 
