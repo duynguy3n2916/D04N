@@ -6,7 +6,7 @@ import { Badge, Button, confirmDialog, Empty, ErrorBox, Modal, Spinner, useToast
 import { api, errorText } from '../lib/api';
 import { useAsync, useInterval } from '../lib/hooks';
 import { refreshNotifications } from '../lib/notifications';
-import { navigate } from '../lib/router';
+import { Link, navigate } from '../lib/router';
 import { openDirect, ReportDialog } from './Forum';
 
 interface Conversation { conversation_id: string; other_id: string; other_name: string; last_message: string; last_at: string | null; unread: number; blocked: boolean }
@@ -157,7 +157,7 @@ export function ContactPicker({ onPicked, compact }: { onPicked?: () => void; co
 
   if (data.loading && !data.data) return <Spinner />;
   if (data.error) return <ErrorBox message={data.error} onRetry={data.reload} />;
-  if (!classes.length) return <Empty title="Bạn chưa vào lớp nào">Vào lớp bằng mã lớp ở trang Tài khoản để nhắn tin với bạn cùng lớp và giáo viên.</Empty>;
+  if (!classes.length) return <Empty title="Bạn chưa vào lớp nào">Vào <Link to="/classes">Lớp của tôi</Link> và nhập mã lớp để nhắn tin với bạn cùng lớp và giáo viên.</Empty>;
   return (
     <div className={`cp ${compact ? 'cp-compact' : ''}`}>
       {classes.length > 0 && (

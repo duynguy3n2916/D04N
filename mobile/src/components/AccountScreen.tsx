@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert } from 'react-native';
 import { Text, TextInput } from './Text';
@@ -12,19 +13,9 @@ import { Avatar, Button, Card, ErrorBox, H2, Muted, Row, Screen, st, Tag } from 
 export function AccountScreen() {
   const { user, logout } = useAuth();
   const me = useAsync((signal) => api<User & { classes: ClassInfo[] }>('/ai/auth/me', { signal }), []);
-  const [code, setCode] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [showPw, setShowPw] = useState(false);
   const name = user?.display_name || user?.name || user?.user_id || '';
   const roleLabel = user?.role === 'student' ? 'Học sinh' : user?.role === 'teacher' ? 'Giáo viên' : 'Quản trị';
-
-  const join = async () => {
-    if (!code.trim()) return;
-    setBusy(true); setError(null);
-    try { await api('/ai/auth/join-class', { json: { code: code.trim() } }); setCode(''); me.reload(); }
-    catch (e) { setError(errorText(e)); } finally { setBusy(false); }
-  };
 
   return (
     <Screen onRefresh={me.reload} refreshing={me.loading && !!me.data}>
@@ -49,14 +40,7 @@ export function AccountScreen() {
           </Row>
         ))}
         {user?.role === 'student' && (
-          <>
-            <Text style={[st.label, { marginTop: 8 }]}>Vào lớp bằng mã</Text>
-            <Row>
-              <TextInput style={[st.input, { flex: 1 }]} value={code} onChangeText={setCode} autoCapitalize="characters" placeholder="Mã lớp giáo viên đưa" placeholderTextColor={C.muted} />
-              <Button small title="Vào lớp" onPress={join} busy={busy} />
-            </Row>
-            {error && <ErrorBox message={error} />}
-          </>
+          <Button icon="school-outline" title="Tham gia lớp / xem lớp của tôi" onPress={() => router.push('/classes')} style={{ marginTop: 6 }} />
         )}
       </Card>
       <Card>

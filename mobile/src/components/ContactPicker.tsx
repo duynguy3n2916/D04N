@@ -40,7 +40,7 @@ export function ContactPicker({ replace, header }: { replace?: boolean; header?:
 
   if (data.loading && !data.data) return <Spinner />;
   if (data.error) return <ErrorBox message={data.error} onRetry={data.reload} />;
-  if (!classes.length) return <Empty title="Bạn chưa vào lớp nào" icon="people-outline">Vào lớp bằng mã lớp ở tab Tôi để nhắn tin với bạn cùng lớp và giáo viên.</Empty>;
+  if (!classes.length) return <Empty title="Bạn chưa vào lớp nào" icon="people-outline">Vào tab Tôi → "Tham gia lớp" và nhập mã lớp để nhắn tin với bạn cùng lớp và giáo viên.</Empty>;
   return (
     <View style={{ gap: 12 }}>
       {header}

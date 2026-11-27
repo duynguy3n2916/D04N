@@ -5,6 +5,7 @@ import { Badge, Button, confirmDialog, ErrorBox, Field, useToast } from '../comp
 import { api, errorText, type ClassInfo, type User } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useAsync } from '../lib/hooks';
+import { Link } from '../lib/router';
 
 /** Phần "Tài khoản" trong trang Hồ sơ: thông tin cá nhân, lớp học, đổi mật khẩu, đăng xuất mọi thiết bị. */
 export function AccountSection() {
@@ -24,16 +25,7 @@ export function AccountSection() {
     } catch (err) { toast(errorText(err), 'error'); } finally { setSavingInfo(false); }
   };
 
-  // lớp
-  const [code, setCode] = useState('');
-  const [joining, setJoining] = useState(false);
-  const join = async (e: FormEvent) => {
-    e.preventDefault(); setJoining(true);
-    try {
-      const r = await api<{ class: ClassInfo; user: User }>('/ai/auth/join-class', { json: { code: code.trim() } });
-      setUser({ ...user!, ...r.user }); setCode(''); me.reload(); toast(`Đã vào lớp ${r.class.name}`, 'success');
-    } catch (err) { toast(errorText(err), 'error'); } finally { setJoining(false); }
-  };
+  // lớp (tham gia lớp bằng mã nằm ở trang Lớp của tôi)
   const leave = async (c: ClassInfo) => {
     if (!await confirmDialog(`Rời lớp ${c.name}? Bạn sẽ không thấy khóa học của lớp này nữa.`)) return;
     try { const u = await api<User>(`/ai/auth/leave-class/${encodeURIComponent(c.class_id)}`, { method: 'POST' }); setUser({ ...user!, ...u }); me.reload(); }
@@ -83,12 +75,7 @@ export function AccountSection() {
             {user?.role === 'student' && <Button size="sm" variant="ghost" onClick={() => leave(c)}>Rời lớp</Button>}
           </div>
         ))}
-        {user?.role === 'student' && (
-          <form className="row" onSubmit={join} style={{ alignItems: 'flex-end' }}>
-            <Field label="Vào lớp bằng mã"><input value={code} onChange={(e) => setCode(e.target.value)} maxLength={16} placeholder="VD: K7P2QM" style={{ textTransform: 'uppercase' }} /></Field>
-            <Button type="submit" variant="blue" loading={joining} disabled={code.trim().length < 4}>Vào lớp</Button>
-          </form>
-        )}
+        {user?.role === 'student' && <Link to="/classes" className="linkbtn" style={{ alignSelf: 'flex-start' }}>Quản lý lớp của tôi →</Link>}
       </div>
 
       <form className="card col" style={{ gap: 12 }} onSubmit={savePw}>

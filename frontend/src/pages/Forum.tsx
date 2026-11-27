@@ -8,7 +8,7 @@ import { api, errorText } from '../lib/api';
 import { isTeacher, useAuth } from '../lib/auth';
 import { useAsync } from '../lib/hooks';
 import { markForumSeen } from '../lib/notifications';
-import { navigate } from '../lib/router';
+import { Link, navigate } from '../lib/router';
 
 type Kind = 'question' | 'post' | 'announcement';
 type Sort = 'new' | 'top' | 'unanswered';
@@ -80,7 +80,7 @@ export function Forum({ threadId }: { threadId?: string }) {
     <div className="forum-page">
       <PageHeader title="Diễn đàn lớp" sub="Hỏi bài, chia sẻ tài liệu, thả tim và thảo luận cùng cả lớp."
         actions={<Button variant="ghost" size="sm" icon="chat" onClick={() => navigate('/messages')}>Tin nhắn</Button>} />
-      {!classes.length ? <Empty title="Bạn chưa vào lớp nào">Nhập mã lớp ở trang hồ sơ để tham gia diễn đàn.</Empty> : (
+      {!classes.length ? <Empty title="Bạn chưa vào lớp nào">Vào <Link to="/classes">Lớp của tôi</Link> và nhập mã lớp giáo viên đưa để tham gia diễn đàn.</Empty> : (
         <>
           {classes.length > 1 && (
             <div className="row" style={{ marginBottom: 14, alignItems: 'flex-end' }}>

@@ -11,6 +11,7 @@ import { Inbox } from './pages/Inbox';
 import { Messages } from './pages/Messages';
 import { ForceChangePassword, Login, ResetPassword } from './pages/Login';
 import { Profile, Settings } from './pages/Profile';
+import { MyClasses } from './pages/MyClasses';
 import { CourseEditor, Courses } from './pages/teach/Courses';
 import { Documents } from './pages/teach/Documents';
 import { Evaluation } from './pages/teach/Evaluation';
@@ -50,6 +51,7 @@ export function App() {
   else if (match('/flashcards', path)) page = <FlashcardHub />;
   else if (match('/flashcards/library/all', path)) page = <FlashcardLibrary />;
   else if (match('/profile', path)) page = <Profile />;
+  else if (match('/classes', path)) page = <MyClasses />;
   else if (match('/settings', path)) page = <Settings />;
   else if (match('/forum', path)) page = <Forum />;
   else if (match('/inbox', path)) page = <Inbox />;

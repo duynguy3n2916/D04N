@@ -98,7 +98,7 @@ export default function Learn() {
           <Pill label="Đã xong" active={filter === 'done'} onPress={() => setFilter('done')} count={count('done')} />
         </ScrollView>
       )}
-      {data.data && !courses.length && <Empty title="Chưa có khoá học">Bạn chưa được thêm vào lớp nào có khoá học. Nhập mã lớp ở tab Tôi.</Empty>}
+      {data.data && !courses.length && <Empty title="Chưa có khoá học">Bạn chưa được thêm vào lớp nào có khoá học. Vào tab Tôi → "Tham gia lớp" để nhập mã lớp.</Empty>}
       {shown.map((c) => {
         const st = state(c);
         return (

@@ -50,7 +50,10 @@ function navGroups(role: string | undefined): NavGroup[] {
     { title: 'Lớp học', items: [{ ...USERS_PAGE, label: 'Học sinh & lớp' }, RESULTS] },
     { title: 'Trao đổi', items: TALK },
   ];
-  return [{ items: STUDENT }];
+  return [
+    { title: 'Học tập', items: STUDENT.filter((n) => ['/learn', '/coach', '/flashcards', '/profile'].includes(n.to)) },
+    { title: 'Lớp học', items: [{ to: '/classes', label: 'Lớp của tôi', icon: 'school', match: '/classes' }, ...TALK] },
+  ];
 }
 
 export function AppShell({ path, children, aside }: { path: string; children: ReactNode; aside?: ReactNode }) {
