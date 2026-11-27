@@ -18,14 +18,17 @@ export function FlashcardBank() {
   const toast = useToast();
   const trees = useCourseTrees();
   const [scope, setScope] = useScope('flashcards');
-  const lesson = scope.lesson;
+  // Bài nhớ từ phiên trước có thể không còn thuộc khóa đang chọn: coi như chưa chọn bài.
+  const course = trees.data?.find((c) => c.course_id === scope.course);
+  const lesson = course?.lessons.some((l) => l.code === scope.lesson) ? scope.lesson : '';
   const [status, setStatus] = useState<St>('');
   const [q, setQ] = useState('');
   const [count, setCount] = useState(10);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<AiCard | null>(null);
+  // Đang xem "Tất cả bài trong khóa": chọn bài để AI soạn ngay cạnh nút, khỏi phải bấm sang cột trái.
+  const [pick, setPick] = useState('');
   // Thẻ gắn theo mã bài (lesson_code). API lấy theo từng bài, nên "Tất cả bài trong khóa" = gộp thẻ của mọi bài trong khóa.
-  const course = trees.data?.find((c) => c.course_id === scope.course);
   const codes = course ? course.lessons.map((l) => l.code).filter(Boolean) : [];
   const list = useAsync(async (s) => {
     if (!codes.length) return [] as AiCard[];
@@ -38,11 +41,16 @@ export function FlashcardBank() {
   const sel = useSelection(rows.map((c) => c.card_id));
   const n = (s: AiCard['status']) => all.filter((c) => c.status === s).length;
 
+  const choices = course ? course.lessons.filter((l) => l.code) : [];
+  const target = lesson || (choices.some((l) => l.code === pick) ? pick : choices[0]?.code || '');
   const generate = async () => {
+    if (!target) { toast(course ? 'Khóa này chưa có bài nào để soạn thẻ' : 'Chọn một khóa học trước', 'error'); return; }
     setBusy(true);
     try {
-      const r = await api<AiCard[]>(`/ai/lessons/${encodeURIComponent(lesson)}/flashcards/generate`, { json: { count } });
-      toast(`AI đã soạn ${r.length} thẻ nháp`, 'success'); setStatus('draft'); list.reload();
+      const r = await api<AiCard[]>(`/ai/lessons/${encodeURIComponent(target)}/flashcards/generate`, { json: { count } });
+      toast(`AI đã soạn ${r.length} thẻ nháp`, 'success'); setStatus('draft');
+      if (!lesson) setScope({ course: scope.course, lesson: target });
+      list.reload();
     } catch (e) { toast(errorText(e), 'error'); } finally { setBusy(false); }
   };
   const bulk = async (to: AiCard['status']) => {
@@ -54,11 +62,14 @@ export function FlashcardBank() {
   return (
     <>
       <PageHeader title="Thẻ ghi nhớ" sub="AI soạn thẻ hỏi–đáp từ bài đọc, slide và lời giảng. Học sinh chỉ ôn các thẻ bạn đã duyệt."
-        actions={<div className="row" style={{ gap: 8 }}>
+        actions={course && <div className="row" style={{ gap: 8 }}>
+          {!lesson && choices.length > 0 && <label className="m-select"><span className="sr-only">Bài</span>
+            <select value={target} onChange={(e) => setPick(e.target.value)} aria-label="Bài để AI soạn thẻ">{choices.map((l) => <option key={l.code} value={l.code}>{l.title}</option>)}</select>
+          </label>}
           <label className="m-select"><span className="sr-only">Số thẻ</span>
             <select value={count} onChange={(e) => setCount(Number(e.target.value))} aria-label="Số thẻ AI soạn">{[5, 10, 15, 20].map((v) => <option key={v} value={v}>{v} thẻ</option>)}</select>
           </label>
-          <Button icon="wand" loading={busy} disabled={!lesson} onClick={generate} title={lesson ? undefined : 'Chọn một bài ở bên trái trước'}>AI soạn thẻ</Button>
+          <Button icon="wand" loading={busy} disabled={busy} onClick={generate}>AI soạn thẻ</Button>
         </div>} />
       <CourseScope courses={trees.data} loading={trees.loading} error={trees.error} onRetry={trees.reload}
         scope={scope} onChange={setScope} unit="thẻ"
@@ -77,7 +88,7 @@ export function FlashcardBank() {
       {list.loading && !list.data && <Spinner />}
       {list.error && <ErrorBox message={list.error} onRetry={list.reload} />}
       {list.data && !all.length && <Empty title={lesson ? 'Bài này chưa có thẻ' : 'Khóa này chưa có thẻ'}>
-        {lesson ? 'Bấm “AI soạn thẻ”, AI sẽ soạn nháp từ học liệu của bài để bạn duyệt.' : 'Chọn một bài bên trái rồi bấm “AI soạn thẻ”.'}</Empty>}
+        {lesson ? 'Bấm “AI soạn thẻ”, AI sẽ soạn nháp từ học liệu của bài để bạn duyệt.' : 'Chọn bài ở góc trên rồi bấm “AI soạn thẻ”.'}</Empty>}
       {!!all.length && !rows.length && <Empty title="Không có thẻ nào khớp">Thử bỏ bớt bộ lọc hoặc từ khóa.</Empty>}
       {!!rows.length && (
         <div className="table-wrap">
