@@ -2,7 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { PageHeader } from '../components/AppShell';
 import { Icon } from '../components/Icon';
 import { Avatar } from '../components/Social';
-import { Button, confirmDialog, Empty, ErrorBox, Spinner, useToast } from '../components/ui';
+import { Badge, Button, confirmDialog, Empty, ErrorBox, Spinner, useToast } from '../components/ui';
 import { api, errorText, type ClassInfo, type User } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useAsync } from '../lib/hooks';
@@ -63,10 +63,14 @@ export function MyClasses() {
 function ClassCard({ c, me, onLeave }: { c: ClassInfo; me: string; onLeave: () => void }) {
   const toast = useToast();
   const [open, setOpen] = useState(false);
+  const [tag, setTag] = useState<'all' | 'teacher' | 'student'>('all');
   const members = useAsync((s) => api<Member[]>(`/ai/forum/classes/${encodeURIComponent(c.class_id)}/members`, { signal: s }), [c.class_id], `class-members/${c.class_id}`);
   const all = members.data || [];
-  const teachers = all.filter((m) => m.role === 'teacher');
-  const others = all.filter((m) => m.user_id !== me).sort((a, b) => (a.role === b.role ? a.name.localeCompare(b.name) : a.role === 'teacher' ? -1 : 1));
+  const isT = (m: Member) => m.role === 'teacher' || m.role === 'admin';
+  const teachers = all.filter(isT);
+  // bản thân đứng đầu, rồi giáo viên, rồi học sinh theo tên
+  const sorted = [...all].sort((a, b) => (a.user_id === me ? -1 : b.user_id === me ? 1 : isT(a) !== isT(b) ? (isT(a) ? -1 : 1) : a.name.localeCompare(b.name)));
+  const shown = sorted.filter((m) => tag === 'all' || (tag === 'teacher') === isT(m));
   return (
     <section className="card myclass">
       <div className="myclass-head">
@@ -90,14 +94,24 @@ function ClassCard({ c, me, onLeave }: { c: ClassInfo; me: string; onLeave: () =
       {open && (
         <div className="myclass-members">
           {members.error && <ErrorBox message={members.error} onRetry={members.reload} />}
-          {others.map((m) => (
+          {members.data && (
+            <div className="cp-tags" role="group" aria-label="Lọc thành viên">
+              {([['all', 'Tất cả', all.length], ['teacher', 'Giáo viên', teachers.length], ['student', 'Học sinh', all.length - teachers.length]] as const).map(([k, label, n]) => (
+                <button key={k} type="button" className={`pill ${tag === k ? 'pill-on' : ''}`} aria-pressed={tag === k} onClick={() => setTag(k)}>
+                  {label} <span className="cp-count">{n}</span>
+                </button>
+              ))}
+            </div>
+          )}
+          {shown.map((m) => (
             <div key={m.user_id} className="myclass-member">
               <Avatar name={m.name} id={m.user_id} size={32} />
-              <span className="grow" style={{ minWidth: 0 }}><strong>{m.name}</strong><span className="td-sub">{m.role === 'teacher' ? 'Giáo viên' : 'Học sinh'} · @{m.user_id}</span></span>
-              <Button size="sm" variant="ghost" icon="chat" onClick={() => openDirect(m.user_id, toast)}>Nhắn tin</Button>
+              <span className="grow" style={{ minWidth: 0 }}><strong>{m.name}</strong><span className="td-sub">{isT(m) ? 'Giáo viên' : 'Học sinh'} · @{m.user_id}</span></span>
+              {m.user_id === me ? <Badge tone="blue">Bạn</Badge>
+                : <Button size="sm" variant="ghost" icon="chat" onClick={() => openDirect(m.user_id, toast)}>Nhắn tin</Button>}
             </div>
           ))}
-          {members.data && !others.length && <p className="muted small">Lớp chưa có thành viên nào khác.</p>}
+          {members.data && !shown.length && <p className="muted small">Không có thành viên nào ở mục này.</p>}
         </div>
       )}
     </section>

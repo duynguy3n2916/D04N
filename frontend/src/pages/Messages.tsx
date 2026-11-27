@@ -170,7 +170,7 @@ export function ContactPicker({ onPicked, compact }: { onPicked?: () => void; co
         </div>
       )}
       <div className="cp-tags" role="group" aria-label="Lọc theo vai trò">
-        {([['all', 'Mọi người', inClass.length], ['teacher', 'Giáo viên', nTeacher], ['student', 'Học sinh', inClass.length - nTeacher]] as const).map(([k, label, n]) => (
+        {([['all', 'Tất cả', inClass.length], ['teacher', 'Giáo viên', nTeacher], ['student', 'Học sinh', inClass.length - nTeacher]] as const).map(([k, label, n]) => (
           <button key={k} type="button" className={`pill ${role === k ? 'pill-on' : ''}`} aria-pressed={role === k} onClick={() => setRole(k)}>
             {label} <span className="cp-count">{n}</span>
           </button>

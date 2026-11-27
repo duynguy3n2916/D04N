@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { Text, TextInput } from '../components/Text';
-import { Avatar, Button, Card, Empty, ErrorBox, H2, Muted, Row, Screen, Spinner, st } from '../components/ui';
+import { Avatar, Button, Card, Empty, ErrorBox, H2, Muted, Pill, Row, Screen, Spinner, st, Tag } from '../components/ui';
 import { api, errorText, type ClassInfo, type User } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useAsync } from '../lib/hooks';
@@ -65,8 +65,14 @@ function ClassCard({ c, onLeave }: { c: ClassInfo; onLeave: () => void }) {
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const members = useAsync((signal) => api<Member[]>(`/ai/forum/classes/${encodeURIComponent(c.class_id)}/members`, { signal }), [c.class_id]);
+  const [tag, setTag] = useState<'all' | 'teacher' | 'student'>('all');
   const all = members.data || [];
-  const teachers = all.filter((m) => m.role === 'teacher');
+  const isT = (m: Member) => m.role === 'teacher' || m.role === 'admin';
+  const teachers = all.filter(isT);
+  const me = user?.user_id;
+  // bản thân đứng đầu, rồi giáo viên, rồi học sinh theo tên
+  const shown = [...all].sort((a, b) => (a.user_id === me ? -1 : b.user_id === me ? 1 : isT(a) !== isT(b) ? (isT(a) ? -1 : 1) : a.name.localeCompare(b.name)))
+    .filter((m) => tag === 'all' || (tag === 'teacher') === isT(m));
   const dm = async (userId: string) => {
     try {
       const r = await api<{ conversation_id: string }>('/ai/messages/conversations', { json: { user_id: userId } });
@@ -91,14 +97,22 @@ function ClassCard({ c, onLeave }: { c: ClassInfo; onLeave: () => void }) {
         <Text style={{ color: C.brand, fontWeight: '700' }}>{open ? 'Ẩn thành viên' : `Xem thành viên${members.data ? ` (${all.length})` : ''}`}</Text>
       </Pressable>
       {open && members.error && <ErrorBox message={members.error} onRetry={members.reload} />}
-      {open && all.filter((m) => m.user_id !== user?.user_id).map((m) => (
+      {open && members.data && (
+        <Row style={{ flexWrap: 'wrap' }}>
+          <Pill label="Tất cả" count={all.length} active={tag === 'all'} onPress={() => setTag('all')} />
+          <Pill label="Giáo viên" count={teachers.length} active={tag === 'teacher'} onPress={() => setTag('teacher')} />
+          <Pill label="Học sinh" count={all.length - teachers.length} active={tag === 'student'} onPress={() => setTag('student')} />
+        </Row>
+      )}
+      {open && shown.map((m) => (
         <Row key={m.user_id} style={{ paddingVertical: 4 }}>
           <Avatar name={m.name} size={32} />
           <View style={{ flex: 1 }}>
             <Text style={{ color: C.ink, fontWeight: '700' }}>{m.name}</Text>
-            <Muted style={{ fontSize: 12 }}>{m.role === 'teacher' ? 'Giáo viên' : 'Học sinh'}</Muted>
+            <Muted style={{ fontSize: 12 }}>{isT(m) ? 'Giáo viên' : 'Học sinh'}</Muted>
           </View>
-          <Button small variant="ghost" icon="chatbubble-outline" title="Nhắn tin" onPress={() => dm(m.user_id)} />
+          {m.user_id === me ? <Tag tone="brand" label="Bạn" />
+            : <Button small variant="ghost" icon="chatbubble-outline" title="Nhắn tin" onPress={() => dm(m.user_id)} />}
         </Row>
       ))}
     </Card>

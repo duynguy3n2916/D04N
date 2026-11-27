@@ -52,7 +52,7 @@ export function ContactPicker({ replace, header }: { replace?: boolean; header?:
         ))}
       </ScrollView>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-        <Pill label="Mọi người" count={inClass.length} active={role === 'all'} onPress={() => setRole('all')} />
+        <Pill label="Tất cả" count={inClass.length} active={role === 'all'} onPress={() => setRole('all')} />
         <Pill label="Giáo viên" count={nTeacher} active={role === 'teacher'} onPress={() => setRole('teacher')} />
         <Pill label="Học sinh" count={inClass.length - nTeacher} active={role === 'student'} onPress={() => setRole('student')} />
       </ScrollView>
