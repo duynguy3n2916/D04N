@@ -13,7 +13,7 @@ export interface TutorContext {
   suggestions?: string[];
 }
 
-interface Msg { role: 'user' | 'assistant'; content: string; sources?: Source[]; hint?: boolean; refused?: boolean; quote?: string; error?: boolean }
+interface Msg { role: 'user' | 'assistant'; content: string; sources?: Source[]; hint?: boolean; refused?: boolean; quote?: string; error?: boolean; options?: string[] }
 
 function sourceText(s: Source) {
   if (s.source_type === 'video') return `${s.label} · tua tới ${fmtTime(s.start_time)}`;
@@ -87,7 +87,7 @@ export function TutorPanel({ lessonCode, context, quote, onClearQuote, onSource,
           setMsgs((m) => { const c = [...m]; const last = c[c.length - 1]; c[c.length - 1] = { ...last, content: last.content + d.text }; return c; });
         } else if (event === 'done') {
           const r = d as ChatResponse;
-          const fin: Msg = { role: 'assistant', content: r.answer, sources: r.sources, hint: r.hint_mode, refused: r.refused };
+          const fin: Msg = { role: 'assistant', content: r.answer, sources: r.sources, hint: r.hint_mode, refused: r.refused, options: r.clarify?.options };
           setMsgs((m) => (started ? [...m.slice(0, -1), fin] : [...m, fin]));
           started = true;
           // đổi convId sau khi xong (đổi sớm sẽ kích hoạt tải lại hội thoại giữa lúc đang stream)
@@ -160,6 +160,11 @@ export function TutorPanel({ lessonCode, context, quote, onClearQuote, onSource,
           <div key={i} className={`bubble-bot ${m.hint ? 'bubble-hint' : ''}`} style={m.error ? { borderColor: 'var(--red-line)', color: 'var(--red-text)' } : undefined}>
             {m.hint && <span className="bubble-kicker">Chế độ gợi ý · bạn đang làm bài</span>}
             <Markdown source={m.content} />
+            {!!m.options?.length && i === msgs.length - 1 && !busy && (
+              <div className="tutor-sugg" style={{ padding: '8px 0 0' }}>
+                {m.options.map((o) => <button key={o} className="chip" onClick={() => send(`Giải thích giúp mình phần «${o}»`)}>{o}</button>)}
+              </div>
+            )}
             {!!m.sources?.length && (
               <div className="src-chips">
                 {m.sources.map((s) => (

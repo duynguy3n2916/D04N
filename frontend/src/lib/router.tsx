@@ -24,6 +24,10 @@ window.addEventListener('hashchange', () => {
   const next = current();
   if (next === currentPath) return;
   const apply = () => { currentPath = next; listeners.forEach((l) => l()); };
+  // Đổi qua lại trong cùng một trang có danh sách bên cạnh (vd. giữa các cuộc trò chuyện trong Tin nhắn):
+  // đổi ngay, không chạy hiệu ứng chuyển trang (hiệu ứng làm cả trang mờ đi rồi trượt lên, trông như bị nhảy).
+  const section = (p: string) => p.split('?')[0].split('/')[1] || '';
+  if (section(next) === 'messages' && section(currentPath) === 'messages') { apply(); return; }
   const doc = document as Document & { startViewTransition?: (cb: () => void) => unknown };
   if (doc.startViewTransition && !reducedMotion() && document.visibilityState === 'visible') doc.startViewTransition(() => flushSync(apply));
   else apply();

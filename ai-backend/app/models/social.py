@@ -1,7 +1,7 @@
 """Mạng xã hội học tập của lớp: tương tác (thích), ảnh đính kèm, hộp thông báo, nhắn tin riêng giữa thành viên lớp."""
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.sql import func
 
@@ -69,9 +69,15 @@ class DirectMessage(Base):
     conversation_id = Column(UUID(as_uuid=True), ForeignKey("direct_conversations.id", ondelete="CASCADE"),
                              nullable=False, index=True)
     sender_id = Column(String(128), nullable=False)
-    body = Column(Text, nullable=False)
+    body = Column(Text, nullable=False)  # với tin đính kèm là chú thích (có thể rỗng)
     hidden = Column(Boolean, nullable=False, default=False)  # giáo viên ẩn sau khi xử lý báo cáo
     created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    # đính kèm: kind = text | image | video | audio (tin nhắn thoại); file nằm trong kho file (object_store)
+    kind = Column(String(16), nullable=True, server_default=text("'text'"))
+    file_key = Column(String(512), nullable=True)
+    mime = Column(String(64), nullable=True)
+    size_bytes = Column(Integer, nullable=True)
+    duration = Column(Float, nullable=True)  # giây, cho tin nhắn thoại / video
 
 
 class DirectRead(Base):

@@ -155,3 +155,62 @@ def test_mentioned_time_parsing():
     assert mentioned_time("phút 3 giây 20") == 200
     assert mentioned_time("giây 45 là gì") == 45
     assert mentioned_time("đóng gói là gì") is None
+
+
+def test_vague_and_exam_prep_detection():
+    from app.services.ai import guardrails as g
+    assert g.is_vague_question("giải thích lại đi") and g.is_vague_question("cái này là sao vậy?")
+    assert not g.is_vague_question("đa hình là gì") and not g.is_vague_question("em chưa hiểu phần kế thừa")
+    assert g.is_exam_prep("cần chuẩn bị gì cho bài kiểm tra") and g.is_exam_prep("mình đang yếu chỗ nào")
+    assert not g.is_exam_prep("đa hình là gì")
+
+
+def test_tutor_asks_back_on_vague_question(client, teacher, fake_llm):
+    from tests.test_flashcards import _add_reading_items, _lesson_with_bank
+    _lesson_with_bank(client, teacher, "tvg", n=1)
+    _add_reading_items(client, teacher, "course-tvg")
+    sv = token(client, "sv-tvg", "student", ["lop-a"])
+    n = len(fake_llm.calls)
+    d = client.post("/ai/chat", headers=sv, json={"question": "giải thích lại đi", "lesson_id": "lesson-tvg"}).json()
+    assert len(fake_llm.calls) == n  # không gọi LLM để trả lời đoán
+    assert d["clarify"] and d["clarify"]["options"] == ["Đọc 1"] and "Đọc 1" in d["answer"]
+    assert d["refused"] is False
+    # đã có hội thoại thì "giải thích lại" là câu nối tiếp hợp lệ
+    client.post("/ai/chat", headers=sv, json={"question": "đóng gói là gì", "lesson_id": "lesson-tvg",
+                                               "conversation_id": d["conversation_id"]})
+    d2 = client.post("/ai/chat", headers=sv, json={"question": "giải thích lại đi", "lesson_id": "lesson-tvg",
+                                                    "conversation_id": d["conversation_id"]}).json()
+    assert d2["clarify"] is None
+
+
+def test_tutor_exam_prep_uses_quiz_and_weak_data(client, teacher, fake_llm):
+    import uuid
+    from app.database import SessionLocal
+    from app.models.learning import QuizAnswerLog
+    from tests.test_flashcards import _lesson_with_bank
+    qids = _lesson_with_bank(client, teacher, "tex", n=1)
+    cid = next(c["course_id"] for c in client.get("/ai/courses", headers=teacher).json() if c["code"] == "course-tex")
+    lid = client.get(f"/ai/courses/{cid}", headers=teacher).json()["chapters"][0]["lessons"][0]["lesson_id"]
+    client.post(f"/ai/lessons/{lid}/items", headers=teacher, json={"type": "quiz", "title": "KT giữa kỳ", "count": 3, "pass_ratio": 0.6})
+    db = SessionLocal()
+    try:
+        db.add(QuizAnswerLog(student_id="sv-tex", item_id=uuid.uuid4(), question_id=uuid.UUID(qids[0]), correct=False))
+        db.commit()
+    finally:
+        db.close()
+    sv = token(client, "sv-tex", "student", ["lop-a"])
+    d = client.post("/ai/chat", headers=sv, json={"question": "cần chuẩn bị gì cho bài kiểm tra", "lesson_id": "lesson-tex"}).json()
+    sent = fake_llm.calls[-1]["user"]
+    assert "Dữ liệu bài kiểm tra" in sent and "KT giữa kỳ: 3 câu" in sent and "cần đạt 60%" in sent
+    assert "Câu hỏi giáo viên 1?" in sent and "Lựa chọn" not in sent  # có đề câu hay sai, không có đáp án
+    assert d["sources"] and d["refused"] is False
+
+
+def test_tutor_refusal_lists_lesson_parts(client, teacher, fake_llm):
+    from tests.test_flashcards import _add_reading_items, _lesson_with_bank
+    _lesson_with_bank(client, teacher, "trf", n=1)
+    _add_reading_items(client, teacher, "course-trf")
+    sv = token(client, "sv-trf", "student", ["lop-a"])
+    d = client.post("/ai/chat", headers=sv, json={"question": "Photosynthesis xyzzy lục lạp",
+                                                   "lesson_id": "lesson-trf"}).json()
+    assert d["refused"] is True and "chưa tìm thấy" in d["answer"] and "Đọc 1" in d["answer"]

@@ -26,6 +26,18 @@
     "plugins": [
       "expo-router",
       "expo-video",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Cho phép chọn ảnh và video để gửi trong tin nhắn."
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Cho phép dùng micro để gửi tin nhắn thoại."
+        }
+      ],
       "expo-secure-store",
       "expo-font",
       [

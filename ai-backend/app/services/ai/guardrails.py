@@ -5,6 +5,8 @@
 3. Không bịa: nhận ra câu từ chối khi học liệu không có thông tin (ngưỡng liên quan: RAG_MIN_SCORE ở retrieval).
 4. Công bằng khi kiểm tra: học sinh đang làm bài kiểm tra thì Tutor khóa hẳn, Trợ lý học tập tạm dừng.
 5. Giới hạn dùng: số lượt hỏi Tutor mỗi học sinh / bài / ngày.
+6. Hỏi lại khi mơ hồ: câu hỏi không nêu nội dung ("giải thích lại", "ôn gì") thì hỏi lại kèm các phần cụ thể
+   của bài thay vì trả lời chung chung; nhận ra câu hỏi về chuẩn bị bài kiểm tra để lấy dữ liệu thật.
 
 Các ngưỡng nằm trong app/config.py (nhóm "Guardrail / lưu trữ"); test: tests/test_guardrails.py.
 Những guardrail gắn chặt với luồng xử lý vẫn ở nơi dùng: chế độ gợi ý và lọc lộ đáp án (tutor.py),
@@ -63,6 +65,33 @@ _REFUSAL_PHRASES = ("chưa tìm thấy", "không tìm thấy", "không có thôn
 def is_refusal(answer: str) -> bool:
     a = (answer or "").lower()
     return any(p in a for p in _REFUSAL_PHRASES)
+
+
+_FILLER_WORDS = set("""
+giải thích lại cái này đó kia ấy là gì sao vậy thế nào mình em tôi tớ bạn ơi giúp với nhé nha nhá đi hiểu không
+chưa ko k hok phần đoạn bài chỗ nữa hơn rõ cho hỏi câu ôn tập học thêm được đc nói về có thể xíu chút tí nói
+làm ạ a à ừ ok vâng dạ còn thì mà và hay nên cần muốn biết xem coi trên dưới đây kỹ kĩ dễ hiểu ví dụ vd lần
+""".split())
+
+
+def content_words(text: str | None) -> list[str]:
+    """Các từ mang nội dung (bỏ từ đệm, đại từ, "giải thích", "cái này"...)."""
+    return [w for w in re.findall(r"\w+", (text or "").lower()) if w not in _FILLER_WORDS and not w.isdigit()]
+
+
+def is_vague_question(text: str | None) -> bool:
+    """Câu hỏi không có từ nội dung nào: "giải thích lại đi", "cái này là sao", "ôn gì"."""
+    return not content_words(text)
+
+
+_EXAM_PREP = re.compile(r"kiểm\s*tra|\bthi\b|bài\s*test|\bquiz\b|trắc\s*nghiệm|chuẩn\s*bị|ôn\s*(tập|thi|bài|gì|lại)"
+                        r"|điểm\s*yếu|đang\s*yếu|yếu\s*(chỗ|phần|ở|gì)|hay\s*sai",
+                        re.IGNORECASE)
+
+
+def is_exam_prep(text: str | None) -> bool:
+    """Học sinh hỏi nên ôn / chuẩn bị gì cho bài kiểm tra."""
+    return bool(_EXAM_PREP.search(text or ""))
 
 
 # ----------------------------------------------------------------------------

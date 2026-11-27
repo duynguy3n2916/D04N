@@ -147,6 +147,25 @@ export async function apiStream(path: string, json: unknown, onEvent: (event: st
   } finally { clearTimeout(timer); }
 }
 
+/** Gửi multipart (ảnh, video, ghi âm). Phần file trong FormData dạng { uri, name, type } như React Native yêu cầu. */
+export async function apiUpload<T = any>(path: string, form: FormData, timeoutMs = 180_000): Promise<T> {
+  if (!server) throw new ApiError(0, { detail: 'Chưa có địa chỉ máy chủ.' });
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  let res: Response;
+  try {
+    res = await fetch(server + path, { method: 'POST', headers, body: form, signal: ctrl.signal });
+  } catch {
+    throw new ApiError(0, { detail: `Không gửi được tệp tới máy chủ ${server}.` });
+  } finally { clearTimeout(timer); }
+  const data = await res.json().catch(() => null);
+  if (res.status === 401 && token) onUnauthorized?.(data?.error?.message);
+  if (!res.ok) throw new ApiError(res.status, data);
+  return data as T;
+}
+
 /** URL file media cho video (trình phát không gửi header được) — gắn access_token như bản web. */
 export function mediaUrl(path: string) {
   const sep = path.includes('?') ? '&' : '?';

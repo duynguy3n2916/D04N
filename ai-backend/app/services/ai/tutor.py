@@ -15,6 +15,7 @@ from app.core.security import Principal
 from app.core.utils import fmt_ts, normalize_text, strip_option_label, utcnow
 from app.models.conversation import AIConversation, AIMessage
 from app.models.documents import AIChunk, AIDocument
+from app.models.learning import ItemProgress, Lesson
 from app.services.ai import llm
 from app.services.ai.grading import correct_answer_text
 from app.services.ai import guardrails
@@ -41,6 +42,7 @@ REFUSAL = ("Mình chưa tìm thấy thông tin liên quan trong học liệu c�
 HINT_REDACTED = ("Câu hỏi kiểm tra đang diễn ra nên mình chưa thể nói đáp án. Gợi ý: hãy nhớ lại khái niệm chính "
                  "vừa được giảng ngay trước đó và loại dần các lựa chọn không phù hợp với định nghĩa.")
 MAX_GUARDED_QUESTIONS_IN_PROMPT = 10
+_ITEM_KIND = {"video": "Video", "slide": "Slide", "reading": "Bài đọc", "quiz": "Bài kiểm tra"}
 REFUSAL_MARK = "chưa tìm thấy thông tin"  # khớp câu từ chối trong prompt TUTOR_ANSWER
 
 # "phút 2:30", "ở 02:30", "1:02:03", "phút thứ 3", "phút 3 giây 20", "giây 45"
@@ -125,6 +127,58 @@ def _leaks_answer(answer: str, q) -> bool:
     return q.type == "multiple_choice" and len(body) > 12 and body in text
 
 
+def _lesson(db: Session, lesson_code: str | None) -> Lesson | None:
+    return db.query(Lesson).filter(Lesson.code == lesson_code).first() if lesson_code else None
+
+
+def lesson_parts(lesson: Lesson | None) -> list[str]:
+    """Các phần học (video, slide, bài đọc) của bài, để gợi ý khi cần hỏi lại."""
+    if lesson is None:
+        return []
+    return [f"{_ITEM_KIND.get(it.type, it.type)}: {it.title}" for it in lesson.items if it.type != "quiz"][:8]
+
+
+def clarify_message(lesson: Lesson | None, refused: bool = False) -> str:
+    """Câu hỏi lại cụ thể (kèm các phần của bài) thay cho câu trả lời chung chung."""
+    parts = lesson_parts(lesson)
+    head = REFUSAL if refused else "Bạn muốn mình giải thích phần nào? Bạn nêu rõ khái niệm hoặc đoạn đang chưa hiểu nhé."
+    if not parts:
+        return head
+    listing = "\n".join(f"- {p}" for p in parts)
+    tail = "Bạn hỏi về một phần trong số này, hoặc gõ đúng khái niệm cần hỏi nhé." if refused else \
+        "Ví dụ: \"giải thích lại khái niệm X trong video\" hoặc bôi đen đoạn chưa hiểu rồi hỏi."
+    return f"{head}\n\nBài «{lesson.title}» gồm:\n{listing}\n\n{tail}"
+
+
+def exam_brief(db: Session, user: Principal, lesson: Lesson | None) -> tuple[str, list[str]]:
+    """Dữ liệu thật cho câu hỏi "cần ôn gì cho bài kiểm tra": các bài kiểm tra của bài (số câu, điểm đạt, lịch,
+    điểm cao nhất) và các câu học sinh hay sai (chỉ đề, không đáp án). Trả về (khối văn bản, truy vấn để tìm học liệu)."""
+    if lesson is None:
+        return "", []
+    from app.services.ai.coach import weak_questions  # tránh import vòng
+    from app.services.courses import learning
+    lines, queries = [], []
+    for it in lesson.items:
+        if it.type != "quiz":
+            continue
+        m = it.meta or {}
+        prog = db.query(ItemProgress).filter(ItemProgress.student_id == user.user_id, ItemProgress.item_id == it.id).first()
+        best = f"{round(prog.score * 100)}%" if prog and prog.score is not None else "chưa làm"
+        when = {"not_yet": f"chưa mở (mở lúc {m.get('open_at')})", "closed": "đã đóng"}.get(learning.quiz_window_state(it), "đang mở")
+        lines.append(f"- {it.title}: {m.get('count', 5)} câu lấy từ ngân hàng {learning._quiz_pool_size(db, it)} câu của bài, "
+                     f"cần đạt {round(float(m.get('pass_ratio', 0.8)) * 100)}%, {when}"
+                     + (f", hạn {m['close_at']}" if m.get("close_at") else "") + f"; điểm cao nhất của bạn: {best}")
+    weak = weak_questions(db, user, {lesson.code: lesson})[:6]
+    if weak:
+        lines.append("Các câu bạn hay sai trong bài này (chỉ đề, không có đáp án):")
+        lines += [f"- {w['question']} (sai {w['times_wrong']} lần)" for w in weak if w.get("question")]
+        queries += [w["question"] for w in weak[:3] if w.get("question")]
+    queries += [it.title for it in lesson.items if it.type != "quiz"][:3]
+    if not lines:
+        return "", queries
+    return "Dữ liệu bài kiểm tra của bài «" + lesson.title + "» (từ hệ thống):\n" + "\n".join(lines), queries
+
+
 @dataclass
 class TurnPlan:
     """Mọi thứ đã quyết định trước khi gọi LLM cho một lượt hỏi (dùng chung cho trả lời thường và streaming)."""
@@ -139,8 +193,10 @@ class TurnPlan:
     history: list[dict]
     meta: dict
     transcript_block: dict | None
-    prompt: object | None = None  # None -> từ chối, không gọi LLM
+    prompt: object | None = None  # None -> từ chối hoặc hỏi lại, không gọi LLM
     user_content: str = ""
+    canned: str | None = None  # câu trả lời dựng sẵn (hỏi lại / từ chối kèm các phần của bài)
+    clarify: dict | None = None
     chunk_ids: list[str] = field(default_factory=list)
 
 
@@ -169,8 +225,35 @@ def prepare_turn(db: Session, user: Principal, *, question: str, conversation_id
     asked_time = mentioned_time(question) if video_id else None
 
     history = _history(db, conv)
+    lesson = _lesson(db, lesson_id)
+    meta = {"hint_mode": hint_mode, "request_id": get_request_id()}
+    has_focus = (video_id is not None and video_time is not None) or asked_time is not None \
+        or bool(selected_text) or focus_document_id is not None
+    if not hint_mode and not history and not has_focus and guardrails.is_vague_question(question):
+        # Câu hỏi không nêu nội dung và không có gì để bám (chưa có hội thoại, không đang xem video/slide):
+        # hỏi lại kèm các phần cụ thể của bài, không đoán bừa.
+        meta["clarify"] = True
+        plan = TurnPlan(conv=conv, question=question, lesson_id=lesson_id, video_id=video_id, video_time=video_time,
+                        hint_mode=False, guarded=[], sources=[], history=history, meta=meta, transcript_block=None)
+        plan.canned = clarify_message(lesson)
+        plan.clarify = {"question": plan.canned.split("\n")[0], "options": [p.split(": ", 1)[-1] for p in lesson_parts(lesson)][:6]}
+        return plan
+
     scope = RetrievalScope.for_user(user, course_id=course_id, class_id=class_id, lesson_id=lesson_id)
     chunks = retrieve(db, question, scope, top_k=top_k)
+    brief = ""
+    if not hint_mode and guardrails.is_exam_prep(question):
+        # "Cần chuẩn bị gì cho bài kiểm tra": câu hỏi không chứa khái niệm nên tự nó ít khi tìm được học liệu.
+        # Lấy dữ liệu thật (bài kiểm tra, câu hay sai) rồi tìm học liệu theo đúng các câu/phần đó.
+        brief, queries = exam_brief(db, user, lesson)
+        seen = {c["chunk_id"] for c in chunks}
+        for q in queries:
+            for c in retrieve(db, q, scope, top_k=2):
+                if c["chunk_id"] not in seen:
+                    seen.add(c["chunk_id"])
+                    chunks.append(c)
+        chunks = chunks[:max(top_k or settings.rag_top_k, 6)]
+        meta["exam_prep"] = bool(brief)
     follow_up = contextual_query(question, history)
     if follow_up != question:
         # Câu hỏi nối tiếp: truy xuất thêm với câu đã ghép ngữ cảnh rồi hợp nhất RRF; danh sách của câu hiện tại
@@ -218,7 +301,6 @@ def prepare_turn(db: Session, user: Principal, *, question: str, conversation_id
             focus_ids = {f["chunk_id"] for f in focus}
             chunks = focus + [c for c in chunks if c["chunk_id"] not in focus_ids]
 
-    meta = {"hint_mode": hint_mode, "request_id": get_request_id()}
     if selected_text and not chunks and not transcript_block:
         # Đoạn bôi đen do client gửi lên nên KHÔNG được dùng làm học liệu (sẽ lách được cơ chế từ chối).
         # Dùng nó để truy xuất lại; vẫn phải qua ngưỡng điểm và phạm vi quyền như câu hỏi thường.
@@ -228,6 +310,7 @@ def prepare_turn(db: Session, user: Principal, *, question: str, conversation_id
                     transcript_block=transcript_block)
     if not chunks and not transcript_block:
         meta["refused"] = True
+        plan.canned = clarify_message(lesson, refused=True)
         return plan
 
     context, plan.sources = build_context(chunks, transcript_block)
@@ -241,6 +324,8 @@ def prepare_turn(db: Session, user: Principal, *, question: str, conversation_id
         user_content += f"Học sinh hỏi về mốc {fmt_ts(asked_time)} trong video.\n"
     if video_id and (video_time is not None or asked_time is not None):
         user_content += "\n"
+    if brief:
+        user_content += f"{brief}\n\n"
     if selected_text:
         user_content += f"Học sinh đang hỏi về đoạn sau trong bài:\n«{selected_text[:2000]}»\n\n"
     user_content += f"Câu hỏi của học sinh: {question}"
@@ -257,7 +342,7 @@ def finish_turn(db: Session, user: Principal, plan: TurnPlan, raw_answer: str | 
     """Guardrail đầu ra + lưu hai tin nhắn + kết quả trả về client."""
     meta = plan.meta
     if plan.prompt is None:
-        answer = REFUSAL
+        answer = plan.canned or REFUSAL
     else:
         answer = (raw_answer or "").strip() or REFUSAL
         if plan.hint_mode and any(_leaks_answer(answer, q) for q in plan.guarded):
@@ -286,6 +371,7 @@ def finish_turn(db: Session, user: Principal, plan: TurnPlan, raw_answer: str | 
         "hint_mode": plan.hint_mode,
         "video_question_active": plan.hint_mode,
         "refused": bool(meta.get("refused")),
+        "clarify": plan.clarify,
         "redacted": meta.get("guardrail") == "answer_redacted",
         "transcript_context": plan.transcript_block["content"] if plan.transcript_block else None,
         "model": res.model if res else None,
@@ -310,7 +396,8 @@ def ask_stream(db: Session, user: Principal, plan: TurnPlan) -> Iterator[dict]:
     Ở hint mode KHÔNG phát từng phần: phải có đủ câu trả lời mới kiểm tra được lộ đáp án, nên chỉ gửi ở `done`.
     """
     yield {"event": "meta", "data": {"conversation_id": str(plan.conv.id), "sources": plan.sources,
-                                     "hint_mode": plan.hint_mode, "refused": plan.prompt is None}}
+                                     "hint_mode": plan.hint_mode, "refused": bool(plan.meta.get("refused")),
+                                     "clarify": plan.clarify}}
     res = None
     text = None
     if plan.prompt is not None:

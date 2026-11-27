@@ -173,7 +173,7 @@ def ensure_vector_index(conn) -> None:
 
 
 # Tăng số này khi sửa backfill / logic migrate mà không đổi model, để lần chạy sau migrate lại đầy đủ.
-MIGRATION_REV = 1
+MIGRATION_REV = 2
 STATE_DDL = ("CREATE TABLE IF NOT EXISTS app_schema_state "
              "(key varchar(64) PRIMARY KEY, value text NOT NULL, updated_at timestamptz NOT NULL DEFAULT now())")
 

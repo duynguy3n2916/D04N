@@ -179,7 +179,7 @@ export interface Source {
   document_title?: string; page?: number | null; start_time?: number | null; end_time?: number | null;
 }
 export interface TutorQuota { used: number; limit: number; remaining: number; resets_at: string }
-export interface ChatResponse { answer: string; sources: Source[]; conversation_id: string; hint_mode: boolean; refused: boolean; quota?: TutorQuota | null }
+export interface ChatResponse { answer: string; sources: Source[]; conversation_id: string; hint_mode: boolean; refused: boolean; quota?: TutorQuota | null; clarify?: { question: string; options: string[] } | null }
 export interface TranscriptSegment { start_time: number; end_time: number; text: string }
 export interface Job { job_id: string; job_type: string; status: 'queued' | 'running' | 'succeeded' | 'failed'; progress: number | null; message: string | null; result: any; error: string | null }
 

@@ -13,6 +13,19 @@ from app.models.social import DirectMessage, UserNotification
 log = logging.getLogger("app.retention")
 
 
+def _delete_files(keys: list[str]) -> None:
+    """Xóa ảnh / video / tin nhắn thoại của tin nhắn riêng đã hết hạn khỏi kho file (lỗi thì bỏ qua)."""
+    if not keys:
+        return
+    from app.services.media.object_store import get_store
+    store = get_store()
+    for k in keys:
+        try:
+            store.delete(k)
+        except Exception:  # noqa: BLE001
+            log.warning("retention_delete_failed", extra={"extra_fields": {"key": k}})
+
+
 def purge_expired(db: Session) -> dict:
     """Xóa tin nhắn / hội thoại / log LLM cũ hơn thời hạn. Giá trị 0 nghĩa là giữ mãi."""
     out = {"messages": 0, "conversations": 0, "llm_calls": 0, "direct_messages": 0, "notifications": 0}
@@ -26,8 +39,11 @@ def purge_expired(db: Session) -> dict:
                                 .delete(synchronize_session=False))
     if settings.chat_retention_days > 0:  # tin nhắn riêng và thông báo dùng cùng thời hạn với hội thoại Tutor
         cutoff = utcnow() - timedelta(days=settings.chat_retention_days)
+        old_files = [k for (k,) in db.query(DirectMessage.file_key).filter(DirectMessage.created_at < cutoff,
+                                                                         DirectMessage.file_key.isnot(None)).all()]
         out["direct_messages"] = (db.query(DirectMessage).filter(DirectMessage.created_at < cutoff)
                                   .delete(synchronize_session=False))
+        _delete_files(old_files)
         out["notifications"] = (db.query(UserNotification).filter(UserNotification.created_at < cutoff)
                                 .delete(synchronize_session=False))
     if settings.llm_log_retention_days > 0:

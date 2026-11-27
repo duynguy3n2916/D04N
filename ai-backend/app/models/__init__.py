@@ -1,5 +1,5 @@
 from app.models.accounts import ClassRoom, User
-from app.models.coach import CoachConversation, CoachMessage
+from app.models.coach import CoachConversation, CoachMessage, CoachPracticeQuiz
 from app.models.conversation import AIConversation, AIMessage
 from app.models.documents import AIChunk, AIDocument
 from app.models.evaluation import AIEvaluation, EvalResult, EvalSample
@@ -15,7 +15,7 @@ __all__ = [
     "AIDocument", "AIChunk",
     "VideoTranscript", "TranscriptSegment",
     "AIConversation", "AIMessage",
-    "CoachConversation", "CoachMessage",
+    "CoachConversation", "CoachMessage", "CoachPracticeQuiz",
     "VideoQuestion", "AIInteraction", "AIGeneration", "QuestionBankItem",
     "VideoSession", "SessionTransition",
     "AIEvaluation", "EvalSample", "EvalResult",

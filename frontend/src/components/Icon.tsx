@@ -59,6 +59,8 @@ const P: Record<string, string> = {
   megaphone: 'M3 10v4h4l7 4V6L7 10zM17 9a4 4 0 0 1 0 6',
   pin: 'M9 4h6l-1 6 3 3H7l3-3zM12 13v8',
   tag: 'M3 12V4h8l10 10-8 8zM7.5 8.5h.01',
+  image: 'M4 5h16v14H4zM4 16l4.5-4.5 3.5 3.5 2.5-2.5L20 18M15.5 9.5h.01',
+  mic: 'M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3zM5 11a7 7 0 0 0 14 0M12 18v3',
 };
 
 const FILLED: Record<string, string> = {
@@ -67,6 +69,7 @@ const FILLED: Record<string, string> = {
   pause: 'M6 5h4v14H6zM14 5h4v14h-4z',
   star: 'M12 2.8l2.8 5.9 6.4.8-4.7 4.4 1.2 6.4L12 17.2 6.3 20.3l1.2-6.4L2.8 9.5l6.4-.8z',
   sparkle: 'M12 2l1.8 5.2L19 9l-5.2 1.8L12 16l-1.8-5.2L5 9l5.2-1.8zM19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9z',
+  stopFill: 'M7 7h10v10H7z',
   trophy: 'M7 3h10v6a5 5 0 0 1-10 0zM5 4H2v2a4 4 0 0 0 5 3.9M19 4h3v2a4 4 0 0 1-5 3.9M10 14h4v4h3v3H7v-3h3z',
 };
 
