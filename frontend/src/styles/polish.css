@@ -67,7 +67,6 @@
 .sidenav-top .sidenav-logo { min-width: 0; }
 .sidenav-toggle { flex: none; width: 34px; height: 34px; color: var(--t-muted, var(--muted)); }
 .sidenav-toggle:hover { color: var(--brand); background: var(--brand-soft); }
-.sidenav { transition: flex-basis .2s ease, width .2s ease, padding .2s ease; }
 @media (min-width: 901px) {
   .shell-compact .sidenav-top { flex-direction: column; gap: 4px; }
 }
@@ -601,41 +600,43 @@ html::-webkit-scrollbar, .sidenav::-webkit-scrollbar { display: none; }
 .cc-course-option { padding: 8px 12px; font-weight: 500; }
 .cc-course-option svg { color: var(--brand); }
 
-/* ===== Thu / mở menu trái không làm nhảy chữ =====
-   Trước đây khi thu gọn, chữ bị display:none và các mục chuyển sang canh giữa ngay lập tức, còn khi mở rộng thì chữ hiện ra
-   lúc menu còn hẹp nên bị xuống dòng rồi mới dàn ra. Giờ chữ luôn ở một dòng, chỉ mờ dần; biểu tượng giữ nguyên vị trí;
-   tiêu đề nhóm giữ chiều cao nên các mục không bị đẩy lên xuống. */
+/* ===== Thu / mở menu trái không làm tràn / nhảy chữ =====
+   Menu đổi bề rộng ngay lập tức (không co giãn dần), nên chữ không bị lộ ra từng phần hay xuống dòng trong lúc chuyển.
+   Khi thu gọn: chữ ẩn ngay. Khi mở rộng: menu đã đủ rộng rồi chữ mới hiện (mờ nhẹ vào).
+   Chữ luôn một dòng, biểu tượng giữ nguyên vị trí, tiêu đề nhóm giữ chiều cao nên các mục không bị đẩy lên xuống. */
 @media (min-width: 901px) {
-  .sidenav { overflow-x: hidden; transition: flex-basis .22s ease, width .22s ease; }
-  .sidenav-group .nav-item, .user-chip { white-space: nowrap; overflow: hidden; transition: padding .22s ease, background .2s, color .2s; }
+  .sidenav, .shell-compact .sidenav { overflow-x: hidden; transition: none; }
+  .sidenav-group .nav-item, .user-chip { white-space: nowrap; overflow: hidden; transition: background .2s, color .2s; }
+  .sidenav-group .nav-item:hover { transform: none; }
   .sidenav-group .nav-item > span:not(.nav-badge), .user-chip .sidenav-user-text, .sidenav-title, .sidenav-logo .logo-text {
-    transition: opacity .16s ease .06s; }
-  .sidenav-group .nav-item > span:not(.nav-badge) { min-width: 0; overflow: hidden; text-overflow: clip; }
+    animation: sn-label-in .14s ease both; }
+  .sidenav-group .nav-item > span:not(.nav-badge) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
   .sidenav-title { white-space: nowrap; overflow: hidden; }
-  .sidenav-logo { transition: padding .22s ease; }
   .sidenav-top { position: relative; }
 
   .shell-compact .sidenav { flex: 0 0 76px; width: 76px; padding-left: 14px; padding-right: 14px; align-items: stretch; gap: 8px; }
   .shell-compact .sidenav-top { flex-direction: row; justify-content: flex-start; gap: 6px; }
   .shell-compact .sidenav-logo { padding: 6px 7px; margin: 0 0 6px; }
-  .shell-compact .sidenav-logo .logo-text { display: inline; opacity: 0; transition-delay: 0s; transition-duration: .08s; }
+  .shell-compact .sidenav-logo .logo-text { display: none; }
   .shell-compact .sidenav-toggle { position: absolute; left: 7px; top: 6px; opacity: 0; }
   .shell-compact .sidenav-top:hover .sidenav-toggle, .shell-compact .sidenav-toggle:focus-visible { opacity: 1; background: var(--brand-soft); }
   .shell-compact .sidenav-top:hover .logo-mark, .shell-compact .sidenav-top:focus-within .logo-mark { opacity: 0; }
   .logo-mark { transition: opacity .12s; }
   .sidenav-toggle { transition: opacity .12s, background .15s, color .15s; }
 
-  .shell-compact .sidenav-title { display: block; opacity: 0; transition-delay: 0s; transition-duration: .08s; }
+  /* tiêu đề nhóm: giữ chỗ, chữ ẩn */
+  .shell-compact .sidenav-title { display: block; visibility: hidden; animation: none; }
   .shell-compact .sidenav-group { align-items: stretch; width: auto; }
   .shell-compact .sidenav-group + .sidenav-group { border-top: 0; padding-top: 0; }
   .shell-compact .nav-item { position: relative; justify-content: flex-start; width: auto; padding: 0 13px; gap: 14px; }
-  .shell-compact .nav-item > span:not(.nav-badge) { display: inline; opacity: 0; transition-delay: 0s; transition-duration: .08s; }
+  .shell-compact .nav-item > span:not(.nav-badge) { display: none; }
   .shell-compact .nav-badge { position: absolute; top: 3px; left: 28px; right: auto; }
 
   .shell-compact .sidenav-user { flex-direction: row; width: auto; align-items: stretch; }
   .shell-compact .user-chip { justify-content: flex-start; width: 100%; margin: 0; padding: 8px 5px; }
-  .shell-compact .sidenav-user-text { display: flex; opacity: 0; transition-delay: 0s; transition-duration: .08s; }
+  .shell-compact .sidenav-user-text { display: none; }
 }
+@keyframes sn-label-in { from { opacity: 0; } }
 
 /* ---------- Thẻ của tôi: khóa học → bộ thẻ → thẻ ---------- */
 .mf-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
