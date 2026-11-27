@@ -108,11 +108,15 @@ def review(db: Session, user: Principal, card_id, rating: str) -> dict:
 
 
 def generate(db: Session, user: Principal, count: int, lesson_code: str | None, text: str | None,
-             deck: str | None) -> list[dict]:
-    """AI soạn thẻ từ học liệu một bài học (học sinh xem được) hoặc từ ghi chú/chủ đề học sinh tự nhập."""
+             deck: str | None, grounded: tuple[str, list[dict]] | None = None) -> list[dict]:
+    """AI soạn thẻ từ học liệu một bài học (học sinh xem được) hoặc từ ghi chú/chủ đề học sinh tự nhập.
+    grounded=(context, sources): học liệu đã truy xuất theo chủ đề (Trợ lý dùng để thẻ bám đúng học liệu của khóa)."""
     _check_quota(db, user, count)
     sources: list[dict] = []
-    if lesson_code:
+    if grounded is not None:
+        context, sources = grounded
+        topic = f"chủ đề «{(text or '').strip()[:200]}» (chỉ dùng phần học liệu nói về chủ đề này)"
+    elif lesson_code:
         lesson = lesson_by_code(db, user, lesson_code)
         context, sources = lesson_context(db, lesson)
         topic = f"bài {lesson.title}"

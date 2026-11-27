@@ -818,6 +818,28 @@ i.ln-mid { background: var(--brand-line); }
 .cc-action { display: inline-flex; align-items: center; gap: 6px; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--brand-line);
   background: #fff; color: var(--brand-strong); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .cc-action:hover { background: var(--brand); border-color: var(--brand); color: #fff; }
+.cc-action:disabled { opacity: .55; cursor: default; background: #fff; color: var(--brand-strong); border-color: var(--brand-line); }
+/* Trợ lý hỏi lại: các lựa chọn bấm được */
+.cc-clarify { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 4px; }
+.cc-clarify-opt { padding: 8px 14px; border-radius: 12px; border: 1px solid var(--line); background: #fff; color: var(--ink); font: inherit;
+  font-size: 14px; font-weight: 500; cursor: pointer; text-align: left; }
+.cc-clarify-opt:hover { border-color: var(--brand-line); background: var(--brand-soft); color: var(--brand-strong); }
+.cc-course-empty { font-size: 13px; color: var(--muted); align-self: center; }
+/* Quiz luyện tập ngay trong khung chat */
+.cc-quiz { margin: 12px 0 6px; border: 1px solid var(--line); border-radius: 18px; padding: 14px 16px; background: #fff; display: flex; flex-direction: column; gap: 14px; }
+.cc-quiz-loading { color: var(--muted); font-size: 14px; }
+.cc-quiz-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cc-quiz-head strong { font-size: 15px; font-weight: 600; }
+.cc-quiz-head span { font-size: 13px; color: var(--muted); }
+.cc-quiz-q { display: flex; flex-direction: column; gap: 8px; }
+.cc-quiz-stem { margin: 0; font-weight: 600; font-size: 15px; }
+.cc-quiz .opts { gap: 8px; }
+.cc-quiz-opt.opt { min-height: 44px; font-size: 15px; font-weight: 500; padding: 8px 12px; border-width: 1.5px; border-radius: 12px; box-shadow: none; }
+.cc-quiz-opt .opt-key { flex-basis: 26px; height: 26px; font-size: 13px; }
+.cc-quiz-exp { font-size: 14px; line-height: 1.5; padding: 10px 12px; border-radius: 12px; background: var(--red-soft); color: var(--red-text); }
+.cc-quiz-exp-ok { background: var(--ok-soft); color: var(--ok-text); }
+.cc-quiz-src { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.cc-quiz-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); }
 .cc-tools { display: flex; gap: 4px; margin-left: -6px; min-height: 28px; }
 .cc-tools button { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent;
   color: var(--muted); font: inherit; font-size: 13px; font-weight: 500; cursor: pointer; opacity: 0; transition: opacity .15s; }

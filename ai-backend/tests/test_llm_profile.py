@@ -56,5 +56,6 @@ def test_gateway_passes_task_profile(client, teacher, fake_llm):
     from tests.test_flashcards import _lesson_with_bank
     _lesson_with_bank(client, teacher, "prof", n=1)
     sv = token(client, "sv-prof", "student", ["lop-a"])
-    assert client.post("/ai/coach/chat", headers=sv, json={"message": "ôn gì?"}).status_code == 200
+    assert client.post("/ai/coach/chat", headers=sv, json={"message": "ôn gì?", "course_id": next(
+        c["course_id"] for c in client.get("/ai/learn/courses", headers=sv).json() if c["code"] == "course-prof")}).status_code == 200
     assert fake_llm.calls[-1]["profile"] == llm.task_profile("coach")

@@ -9,16 +9,19 @@ import { Muted } from '../../components/ui';
 import { api, apiStream, errorText, fmtTime, type Source } from '../../lib/api';
 import { C } from '../../lib/theme';
 
-interface CoachAction { type: 'item' | 'flashcards'; label: string; item_id?: string; lesson_id?: string; lesson_code?: string }
-interface CoachResult { answer: string; sources: Source[]; actions: CoachAction[]; steps?: { tool: string }[] }
+interface CoachAction { type: 'item' | 'flashcards' | 'my_flashcards' | 'practice_quiz'; label: string; item_id?: string; lesson_id?: string; lesson_code?: string; quiz_id?: string }
+interface CoachResult { answer: string; sources: Source[]; actions: CoachAction[]; steps?: { tool: string }[]; clarify?: { question: string; options: string[] } | null }
+interface PracticeRow { chosen: number | null; correct_index: number; correct: boolean; explanation: string; sources: Source[] }
+interface Practice { quiz_id: string; topic: string; questions: { index: number; question: string; options: string[] }[]; result: { correct: number; total: number; questions: PracticeRow[] } | null }
 type CoachResponse = CoachResult & { conversation: { id: string; title: string } };
 interface Msg { role: 'user' | 'assistant'; content: string; res?: CoachResult | null; error?: boolean }
 
-const SUGGESTIONS = ['Mình đang yếu phần nào?', 'Mình nên ôn gì cho bài kiểm tra sắp tới?', 'Lập kế hoạch học 30 phút hôm nay giúp mình', 'Đưa các câu mình hay sai vào thẻ ôn'];
+const SUGGESTIONS = ['Mình đang yếu phần nào?', 'Mình nên ôn gì cho bài kiểm tra sắp tới?', 'Lập kế hoạch học 30 phút hôm nay giúp mình', 'Tạo cho mình một quiz luyện tập 5 câu'];
 // Trạng thái thân thiện lúc trợ lý đang làm việc; không cho người dùng thấy tên công cụ nội bộ.
 const BUSY_TEXT: Record<string, string> = {
   get_progress: 'Đang xem tiến độ của bạn', get_weak_points: 'Đang tìm phần bạn còn yếu', get_due_flashcards: 'Đang xem thẻ cần ôn',
   search_materials: 'Đang tìm trong học liệu', get_practice_quiz: 'Đang tìm bài luyện tập', queue_flashcards: 'Đang chuẩn bị thẻ ôn',
+  create_my_flashcards: 'Đang soạn thẻ ghi nhớ cho bạn', create_practice_quiz: 'Đang soạn quiz luyện tập', ask_clarification: 'Đang hỏi lại cho rõ',
 };
 const busyText = (tool?: string) => (tool && BUSY_TEXT[tool]) || 'Đang soạn câu trả lời';
 const MAX_SOURCES = 5;
@@ -68,6 +71,69 @@ function SourceFold({ sources }: { sources: Source[] }) {
     </View>
   );
 }
+/** Quiz luyện tập ngay trong khung chat: chọn đáp án, nộp một lần, rồi xem đúng/sai và lời giải. */
+function PracticeQuiz({ quizId }: { quizId: string }) {
+  const [quiz, setQuiz] = useState<Practice | null>(null);
+  const [picked, setPicked] = useState<Record<number, number>>({});
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState('');
+  useEffect(() => { api<Practice>(`/ai/coach/practice/${quizId}`).then(setQuiz).catch((e) => setErr(errorText(e))); }, [quizId]);
+  if (err) return <Text style={{ color: C.wrong }}>{err}</Text>;
+  if (!quiz) return <ActivityIndicator color={C.brand} />;
+  const result = quiz.result;
+  const answered = Object.keys(picked).length;
+  const submit = async () => {
+    setSending(true);
+    try { setQuiz(await api<Practice>(`/ai/coach/practice/${quizId}/submit`, { method: 'POST', json: { answers: picked } })); }
+    catch (e) { setErr(errorText(e)); }
+    finally { setSending(false); }
+  };
+  return (
+    <View style={{ gap: 12, padding: 14, borderRadius: 18, borderWidth: 1, borderColor: C.line, backgroundColor: C.card }}>
+      <View style={{ gap: 2 }}>
+        <Text style={{ fontWeight: '700', fontSize: 15 }}>Quiz luyện tập: {quiz.topic}</Text>
+        <Muted style={{ fontSize: 13 }}>{result ? `Đúng ${result.correct}/${result.total}` : `${quiz.questions.length} câu · không tính điểm`}</Muted>
+      </View>
+      {quiz.questions.map((q) => {
+        const row = result?.questions[q.index];
+        const chosen = row ? row.chosen : picked[q.index];
+        return (
+          <View key={q.index} style={{ gap: 6 }}>
+            <Text style={{ fontWeight: '600', fontSize: 15 }}>{q.index + 1}. {q.question}</Text>
+            {q.options.map((o, k) => {
+              const ok = !!row && k === row.correct_index;
+              const bad = !!row && k === chosen && !ok;
+              const sel = !row && k === chosen;
+              return (
+                <Pressable key={k} disabled={!!row} onPress={() => setPicked((p) => ({ ...p, [q.index]: k }))}
+                  style={{ padding: 10, borderRadius: 12, borderWidth: 1.5, opacity: row && !ok && !bad ? 0.55 : 1,
+                    borderColor: ok ? C.okLine : bad ? C.wrong : sel ? C.brand : C.line,
+                    backgroundColor: ok ? C.okSoft : bad ? C.wrongSoft : sel ? C.brandSoft : C.card }}>
+                  <Text style={{ fontSize: 15, color: ok ? C.okText : bad ? C.wrong : C.ink }}>{String.fromCharCode(65 + k)}. {o.replace(/^\s*[A-H][.)]\s*/, '')}</Text>
+                </Pressable>
+              );
+            })}
+            {row && (
+              <View style={{ padding: 10, borderRadius: 12, backgroundColor: row.correct ? C.okSoft : C.wrongSoft, gap: 4 }}>
+                <Text style={{ fontSize: 14, color: row.correct ? C.okText : C.wrong }}>
+                  <Text style={{ fontWeight: '700', color: row.correct ? C.okText : C.wrong }}>{row.correct ? 'Đúng. ' : row.chosen === null ? 'Chưa trả lời. ' : 'Chưa đúng. '}</Text>{row.explanation}
+                </Text>
+                {row.sources.map((s, j) => <Muted key={j} style={{ fontSize: 12 }}>{sourceText(s)}</Muted>)}
+              </View>
+            )}
+          </View>
+        );
+      })}
+      {!result && (
+        <Pressable onPress={submit} disabled={sending || !answered}
+          style={{ alignSelf: 'flex-end', paddingVertical: 10, paddingHorizontal: 18, borderRadius: 999, backgroundColor: C.brand, opacity: sending || !answered ? 0.5 : 1 }}>
+          <Text style={{ color: C.white, fontWeight: '700' }}>{sending ? 'Đang chấm…' : `Nộp bài (${answered}/${quiz.questions.length})`}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
 const THINKING = ['Đang xem tiến độ của bạn', 'Đang tìm các câu bạn hay sai', 'Đang lập kế hoạch ôn'];
 
 function sourceText(s: Source) {
@@ -170,6 +236,16 @@ export default function CoachChat() {
               <Text style={{ fontWeight: '700', fontSize: 14 }}>Trợ lý</Text>
             </View>
             {m.error ? <Text style={{ color: C.wrong }}>{m.content}</Text> : <Markdown text={m.content} />}
+            {!m.error && i === msgs.length - 1 && !busy && !!m.res?.clarify?.options?.length && (
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {m.res.clarify.options.map((o) => (
+                  <Pressable key={o} onPress={() => send(o)} style={({ pressed }) => ({ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1, borderColor: C.line, backgroundColor: pressed ? C.wash : C.card })}>
+                    <Text style={{ fontSize: 14 }}>{o}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
+            {(m.res?.actions || []).filter((a) => a.type === 'practice_quiz' && a.quiz_id).map((a) => <PracticeQuiz key={a.quiz_id} quizId={a.quiz_id!} />)}
             {compactActions(m.res?.actions).length > 0 && (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {compactActions(m.res?.actions).map((a) => (

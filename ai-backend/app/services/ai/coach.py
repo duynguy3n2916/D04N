@@ -8,7 +8,13 @@ Nguyên tắc an toàn (do code kiểm soát, không phó mặc cho prompt):
 - Tool chỉ đọc dữ liệu của chính học sinh và học liệu thuộc lớp của học sinh. Hai tool ghi:
   queue_flashcards đưa thẻ (câu đã duyệt) vào lịch ôn của chính học sinh đó;
   create_my_flashcards nhờ AI soạn thẻ mới vào "Thẻ của tôi" (thẻ riêng, chỉ học sinh đó thấy).
+  create_practice_quiz soạn quiz luyện tập (tối đa 10 câu) làm ngay trong chat, đáp án giữ ở server.
 - Không tool nào trả đáp án câu hỏi kiểm tra. Đang làm dở bài kiểm tra thì agent không chạy.
+- Mỗi lượt gắn với MỘT khóa học sinh chọn; tool và tìm học liệu chỉ trong khóa đó.
+- Hỏi lại khi mơ hồ: tool ask_clarification kết thúc lượt bằng một câu hỏi kèm lựa chọn để học sinh bấm.
+  Tạo thẻ / tạo quiz với chủ đề không rõ, hoặc chủ đề không có trong học liệu của khóa, thì tool từ chối
+  (không tạo bừa) để model hỏi lại hoặc nói rõ là không tìm thấy.
+- Nhãn nguồn [S9] mà model tự bịa (không có trong kết quả tool) bị gỡ khỏi câu trả lời.
 """
 import json
 import logging
@@ -55,6 +61,7 @@ class RunState:
         self.course = course  # khóa học học sinh chọn để ôn; None = mọi khóa
         self.sources: list[dict] = []
         self.actions: list[dict] = []
+        self.clarify: dict | None = None
         self._action_keys: set = set()
 
     def add_source(self, chunk: dict) -> str:
@@ -68,7 +75,7 @@ class RunState:
         return label
 
     def add_action(self, kind: str, label: str, **data) -> None:
-        key = (kind, data.get("item_id") or data.get("lesson_code"))
+        key = (kind, data.get("item_id") or data.get("lesson_code") or data.get("quiz_id"))
         if key in self._action_keys:
             return
         self._action_keys.add(key)
@@ -139,9 +146,8 @@ def tool_get_progress(db: Session, user: Principal, args: dict, state: RunState)
             "daily_goal_xp": stats["daily_goal_xp"]}
 
 
-def tool_get_weak_points(db: Session, user: Principal, args: dict, state: RunState) -> dict:
-    lesson = _lesson_or_error(db, user, args.get("lesson_code"), state)
-    limit = max(1, min(int(args.get("limit") or 8), 20))
+def weak_questions(db: Session, user: Principal, visible: dict, lesson: Lesson | None = None) -> list[dict]:
+    """Các câu kiểm tra học sinh hay sai (60 ngày) trong các bài `visible`, sai nhiều nhất trước. KHÔNG có đáp án."""
     since = utcnow() - timedelta(days=60)
     rows = (db.query(QuizAnswerLog.question_id, QuizAnswerLog.correct, QuizAnswerLog.created_at)
             .filter(QuizAnswerLog.student_id == user.user_id, QuizAnswerLog.created_at >= since)
@@ -153,8 +159,7 @@ def tool_get_weak_points(db: Session, user: Principal, args: dict, state: RunSta
         s["last_correct"] = bool(ok)
     weak_ids = [k for k, s in stat.items() if s["wrong"] and not (s["last_correct"] and s["right"] >= 2)]
     if not weak_ids:
-        return {"weak_questions": [], "note": "Chưa có câu nào làm sai trong 60 ngày qua."}
-    visible = _visible_lessons(db, user, state)
+        return []
     bank = db.query(QuestionBankItem).filter(QuestionBankItem.id.in_(weak_ids)).all()
     out = []
     for b in bank:
@@ -166,7 +171,39 @@ def tool_get_weak_points(db: Session, user: Principal, args: dict, state: RunSta
                     "question": (b.payload or {}).get("question"), "times_wrong": s["wrong"], "times_right": s["right"],
                     "last_attempt_correct": s["last_correct"]})
     out.sort(key=lambda x: (-x["times_wrong"], x["times_right"]))
-    return {"weak_questions": out[:limit], "total_weak": len(out)}
+    return out
+
+
+def tool_get_weak_points(db: Session, user: Principal, args: dict, state: RunState) -> dict:
+    from app.services.ai import practice_quiz
+    lesson = _lesson_or_error(db, user, args.get("lesson_code"), state)
+    limit = max(1, min(int(args.get("limit") or 8), 20))
+    visible = _visible_lessons(db, user, state)
+    out = weak_questions(db, user, visible, lesson)
+    course_id = str(state.course.id) if state.course is not None else None
+    practice = practice_quiz.recent_mistakes(db, user, course_id)
+    if not out and not practice:
+        return {"weak_questions": [], "practice_mistakes": [],
+                "note": "Chưa có câu nào làm sai trong 60 ngày qua, nên chưa xác định được điểm yếu cụ thể."}
+    by_lesson: dict[str, dict] = {}
+    for w in out:
+        b = by_lesson.setdefault(w["lesson_code"], {"lesson_code": w["lesson_code"], "lesson_title": w["lesson_title"],
+                                                    "weak_count": 0, "times_wrong": 0})
+        b["weak_count"] += 1
+        b["times_wrong"] += w["times_wrong"]
+    # Gắn sẵn đoạn học liệu để xem lại cho vài câu sai nhiều nhất: lời khuyên chỉ đúng chỗ, có nguồn.
+    for w in out[:3]:
+        if not w.get("question"):
+            continue
+        try:
+            hits = tool_search_materials(db, user, {"query": w["question"], "lesson_code": w["lesson_code"]}, state)["results"]
+        except AppError:
+            hits = []
+        if hits:
+            w["review"] = {"label": hits[0]["label"], "where": hits[0]["where"]}
+    return {"weak_questions": out[:limit], "total_weak": len(out),
+            "weak_by_lesson": sorted(by_lesson.values(), key=lambda b: -b["times_wrong"]),
+            "practice_mistakes": practice}
 
 
 def tool_get_due_flashcards(db: Session, user: Principal, args: dict, state: RunState) -> dict:
@@ -205,22 +242,35 @@ def tool_search_materials(db: Session, user: Principal, args: dict, state: RunSt
 
 def tool_get_practice_quiz(db: Session, user: Principal, args: dict, state: RunState) -> dict:
     lesson = _lesson_or_error(db, user, args.get("lesson_code"), state)
-    if lesson is None:
-        raise AppError(400, "INVALID_ARGS", "Cần lesson_code.")
-    status_of = learning._status_map(db, user, lesson.chapter.course)[2]
+    lessons = [lesson] if lesson is not None else list(_visible_lessons(db, user, state).values())
+    status_cache: dict = {}
     out = []
-    for it in lesson.items:
-        if it.type != "quiz":
-            continue
-        prog = db.query(ItemProgress).filter(ItemProgress.student_id == user.user_id, ItemProgress.item_id == it.id).first()
-        st = status_of.get(it.id)
-        window = learning.quiz_window_state(it)
-        out.append({"item_id": str(it.id), "title": it.title, "status": st, "window": window,
-                    "best_score": round(prog.score, 2) if prog and prog.score is not None else None,
-                    "pool_size": learning._quiz_pool_size(db, it)})
-        if st != "locked" and window == "open":
-            state.add_action("item", f"Làm bài: {it.title}", item_id=str(it.id), lesson_id=str(it.lesson_id))
-    note = "Bài kiểm tra ưu tiên lại các câu bạn hay sai." if out else "Bài này chưa có bài kiểm tra."
+    for ls in lessons:
+        course = ls.chapter.course
+        if course.id not in status_cache:
+            status_cache[course.id] = learning._status_map(db, user, course)[2]
+        status_of = status_cache[course.id]
+        for it in ls.items:
+            if it.type != "quiz":
+                continue
+            m = it.meta or {}
+            prog = db.query(ItemProgress).filter(ItemProgress.student_id == user.user_id, ItemProgress.item_id == it.id).first()
+            st = status_of.get(it.id)
+            window = learning.quiz_window_state(it)
+            out.append({"item_id": str(it.id), "title": it.title, "lesson_code": ls.code, "lesson_title": ls.title,
+                        "covers": [i.title for i in ls.items if i.type != "quiz"],
+                        "status": st, "window": window, "open_at": m.get("open_at"), "close_at": m.get("close_at"),
+                        "question_count": m.get("count", 5), "pass_ratio": m.get("pass_ratio", 0.8),
+                        "best_score": round(prog.score, 2) if prog and prog.score is not None else None,
+                        "passed": bool(prog and prog.status == "completed"),
+                        "pool_size": learning._quiz_pool_size(db, it)})
+            if lesson is not None and st != "locked" and window == "open":
+                state.add_action("item", f"Làm bài: {it.title}", item_id=str(it.id), lesson_id=str(it.lesson_id))
+    if not out:
+        return {"quizzes": [], "note": "Bài này chưa có bài kiểm tra." if lesson else "Khóa này chưa có bài kiểm tra nào."}
+    note = "Bài kiểm tra lấy câu từ ngân hàng câu đã duyệt của bài, ưu tiên lại các câu bạn hay sai."
+    if lesson is None and len(out) > 1:
+        note += " Có nhiều bài kiểm tra: nếu học sinh chưa nói rõ bài nào thì hỏi lại (ask_clarification)."
     return {"quizzes": out, "note": note}
 
 
@@ -249,20 +299,60 @@ def tool_queue_flashcards(db: Session, user: Principal, args: dict, state: RunSt
 
 def tool_create_my_flashcards(db: Session, user: Principal, args: dict, state: RunState) -> dict:
     from app.services.courses import my_flashcards
+    from app.services.ai import practice_quiz
     topic = str(args.get("topic") or "").strip()
     lesson = _lesson_or_error(db, user, args.get("lesson_code"), state)
-    if lesson is None and len(topic) < 3:
-        raise AppError(400, "INVALID_ARGS", "Cần lesson_code hoặc topic.")
+    if lesson is None and not guardrails.content_words(topic):
+        raise AppError(400, "TOPIC_VAGUE", "Chủ đề chưa rõ. Hãy hỏi lại học sinh muốn tạo thẻ về bài / khái niệm nào "
+                                           "(ask_clarification), đừng tự chọn.")
     try:
         count = max(1, min(10, int(args.get("count") or 5)))
     except (TypeError, ValueError):
         count = 5
+    grounded = None
+    if lesson is None:
+        # Thẻ theo chủ đề vẫn phải bám học liệu của khóa: không có căn cứ thì không tạo.
+        visible = _visible_lessons(db, user, state)
+        chunks = practice_quiz.find_course_material(db, user, topic, visible)
+        if not chunks:
+            return {"created": 0, "reason": "not_in_course",
+                    "note": f"Không tìm thấy học liệu về «{topic}» trong khóa nên không tạo thẻ.",
+                    "course_lessons": [f"{c}: {ls.title}" for c, ls in visible.items()][:20]}
+        from app.services.rag.retrieval import build_context
+        grounded = build_context(chunks)
     cards = my_flashcards.generate(db, user, count, lesson.code if lesson else None,
-                                   None if lesson else topic, None if lesson else topic[:120])
+                                   None if lesson else topic, None if lesson else topic[:120], grounded=grounded)
     if cards:
         state.add_action("my_flashcards", f"Xem {len(cards)} thẻ vừa tạo", deck=cards[0]["deck"])
     return {"created": len(cards), "deck": cards[0]["deck"] if cards else "",
             "cards": [{"front": c["front"], "back": c["back"]} for c in cards]}
+
+
+def tool_create_practice_quiz(db: Session, user: Principal, args: dict, state: RunState) -> dict:
+    from app.services.ai import practice_quiz
+    if state.course is None:
+        raise AppError(400, "COURSE_REQUIRED", "Học sinh chưa chọn khóa học.")
+    lesson = _lesson_or_error(db, user, args.get("lesson_code"), state)
+    topic = str(args.get("topic") or "").strip() or (lesson.title if lesson else "")
+    try:
+        count = int(args.get("count") or 5)
+    except (TypeError, ValueError):
+        count = 5
+    res = practice_quiz.create(db, user, state.course, _visible_lessons(db, user, state), topic, count,
+                               lesson.code if lesson else None)
+    if res.get("created"):
+        state.add_action("practice_quiz", f"Làm quiz luyện tập: {res['topic']} ({res['count']} câu)",
+                         quiz_id=res["quiz_id"], count=res["count"], topic=res["topic"])
+    return res
+
+
+def tool_ask_clarification(db: Session, user: Principal, args: dict, state: RunState) -> dict:
+    question = re.sub(r"\s+", " ", str(args.get("question") or "")).strip()[:300]
+    options = [re.sub(r"\s+", " ", str(o)).strip()[:120] for o in (args.get("options") or []) if str(o).strip()][:5]
+    if not question:
+        raise AppError(400, "INVALID_ARGS", "Thiếu question.")
+    state.clarify = {"question": question, "options": options}
+    return {"ok": True}
 
 
 _LESSON_ARG = {"type": "string", "description": "Mã bài học (lesson_code), ví dụ lesson-oop-01. Bỏ trống = mọi bài."}
@@ -281,9 +371,10 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
          {"type": "object", "properties": {"query": {"type": "string", "description": "Khái niệm / chủ đề cần tìm"},
                                            "lesson_code": _LESSON_ARG},
           "required": ["query"], "additionalProperties": False}, tool_search_materials),
-    Tool("get_practice_quiz", "Các bài kiểm tra của một bài học, trạng thái mở khóa và điểm cao nhất, để gợi ý làm bài luyện tập.",
-         {"type": "object", "properties": {"lesson_code": _LESSON_ARG}, "required": ["lesson_code"],
-          "additionalProperties": False}, tool_get_practice_quiz),
+    Tool("get_practice_quiz", "Các bài kiểm tra chính thức (của một bài, hoặc cả khóa nếu bỏ trống lesson_code): bài kiểm tra "
+         "bao phủ phần học nào, số câu, điểm cần đạt, lịch mở/đóng, trạng thái và điểm cao nhất của học sinh.",
+         {"type": "object", "properties": {"lesson_code": _LESSON_ARG}, "additionalProperties": False},
+         tool_get_practice_quiz),
     Tool("queue_flashcards", "Đưa các câu hay sai (question_id lấy từ get_weak_points) vào lịch ôn thẻ ngay hôm nay của học sinh.",
          {"type": "object", "properties": {"question_ids": {"type": "array", "items": {"type": "string"}, "maxItems": 30}},
           "required": ["question_ids"], "additionalProperties": False}, tool_queue_flashcards, writes=True),
@@ -292,6 +383,17 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
                                            "topic": {"type": "string", "description": "Chủ đề/khái niệm khi không soạn theo bài."},
                                            "count": {"type": "integer", "minimum": 1, "maximum": 10}},
           "additionalProperties": False}, tool_create_my_flashcards, writes=True),
+    Tool("create_practice_quiz", "Soạn quiz luyện tập (tối đa 10 câu trắc nghiệm) về một chủ đề trong khóa để học sinh làm ngay "
+         "trong khung chat. Chỉ tạo được khi học liệu của khóa có nói về chủ đề đó; không tính vào điểm bài kiểm tra.",
+         {"type": "object", "properties": {"topic": {"type": "string", "description": "Chủ đề / khái niệm cụ thể học sinh muốn luyện."},
+                                           "lesson_code": {"type": "string", "description": "Mã bài học nếu học sinh chọn một bài."},
+                                           "count": {"type": "integer", "minimum": 1, "maximum": 10}},
+          "additionalProperties": False}, tool_create_practice_quiz, writes=True),
+    Tool("ask_clarification", "Hỏi lại học sinh khi yêu cầu mơ hồ (bài kiểm tra nào, bài/chủ đề nào, yếu phần nào...). "
+         "Kết thúc lượt: question hiện cho học sinh, options (2-5 lựa chọn cụ thể lấy từ dữ liệu tool) hiện thành nút bấm.",
+         {"type": "object", "properties": {"question": {"type": "string"},
+                                           "options": {"type": "array", "items": {"type": "string"}, "maxItems": 5}},
+          "required": ["question"], "additionalProperties": False}, tool_ask_clarification),
 ]}
 
 
@@ -399,12 +501,16 @@ def ask_events(db: Session, user: Principal, message: str, history: list[dict] |
             steps.append(info)
             yield {"event": "step", "data": info}
             messages.append({"role": "tool", "tool_call_id": c["id"], "content": _clip(result)})
+        if state.clarify is not None:  # hỏi lại học sinh: dừng lượt, chờ học sinh trả lời
+            answer = state.clarify["question"]
+            break
     if not answer:
         answer = "Mình chưa lập được kế hoạch lúc này. Bạn thử hỏi cụ thể hơn, ví dụ: \"Mình nên ôn gì cho bài kiểm tra chương 1?\""
+    answer = strip_unknown_labels(answer, {s["label"] for s in state.sources})
     used = set(_labels_in(answer))
     yield {"event": "result", "data": {
         "answer": answer, "steps": steps, "sources": [s for s in state.sources if s["label"] in used] or state.sources,
-        "actions": state.actions, "guarded": False, "stopped": stopped, "llm_calls": calls}}
+        "actions": state.actions, "guarded": False, "stopped": stopped, "llm_calls": calls, "clarify": state.clarify}}
 
 
 def ask(db: Session, user: Principal, message: str, history: list[dict] | None = None, course=None) -> dict:
@@ -419,11 +525,16 @@ def _labels_in(text: str) -> list[str]:
     return re.findall(r"\[(S\d+)\]", text or "")
 
 
+def strip_unknown_labels(text: str, known: set[str]) -> str:
+    """Gỡ nhãn nguồn model tự bịa (không có trong kết quả tool): câu trả lời không được dẫn nguồn không tồn tại."""
+    return re.sub(r"\s?\[(S\d+)\]", lambda m: m.group(0) if m.group(1) in known else "", text or "")
+
+
 # ----------------------------------------------------------------------------
 # Lịch sử trò chuyện (lưu DB để xem lại và chat tiếp)
 # ----------------------------------------------------------------------------
 
-_RESULT_KEYS = ("steps", "sources", "actions", "guarded", "stopped")
+_RESULT_KEYS = ("steps", "sources", "actions", "guarded", "stopped", "clarify")
 
 
 def _title_from(message: str) -> str:
@@ -451,6 +562,12 @@ def prepare_chat(db: Session, user: Principal, message: str, conversation_id=Non
     if conv is not None and not course_id:
         course_id = conv.course_id
     course = resolve_course(db, user, course_id)
+    if course is None:
+        # Trợ lý luôn gắn với một khóa để trả lời đúng dữ liệu của khóa đó. Chỉ có một khóa thì chọn sẵn.
+        courses = learning.visible_courses(db, user)
+        if len(courses) != 1:
+            raise AppError(400, "COURSE_REQUIRED", "Hãy chọn khóa học bạn muốn ôn trước khi hỏi Trợ lý.")
+        course = courses[0]
     message = guardrails.clean_user_text(message or "")
     if conv is not None:
         history = [{"role": m.role, "content": m.content} for m in conv.messages]

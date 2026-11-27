@@ -26,12 +26,14 @@ export default function CoachList() {
   const courses = useAsync((signal) => api<{ course_id: string; title: string }[]>('/ai/learn/courses', { signal }), []);
   // khóa học đang ôn: trợ lý chỉ xem tiến độ và tìm học liệu trong khóa này
   const [course, setCourse] = useState('');
-  useEffect(() => { if (courses.data?.length === 1) setCourse(courses.data[0].course_id); }, [courses.data]);
+  // Trợ lý luôn ôn trong MỘT khóa: chọn sẵn khóa đầu tiên
+  useEffect(() => { if (courses.data?.length && !courses.data.some((c) => c.course_id === course)) setCourse(courses.data[0].course_id); }, [courses.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const courseTitle = courses.data?.find((c) => c.course_id === course)?.title;
   const first = useRef(true);
   useFocusEffect(useCallback(() => { if (first.current) { first.current = false; return; } list.reload(); }, [list.reload]));
   const name = (user?.display_name || user?.name || '').replace(/\([^)]*\)/g, '').trim().split(/\s+/).pop();
   const ask = (q?: string) => {
+    if (!course) { Alert.alert('Chọn khóa học', courses.data?.length ? 'Hãy chọn khóa học muốn ôn trước khi hỏi Trợ lý.' : 'Bạn chưa tham gia khóa học nào.'); return; }
     const qs = [q && `q=${encodeURIComponent(q)}`, course && `course=${encodeURIComponent(course)}`].filter(Boolean).join('&');
     router.push(`/coach/new${qs ? `?${qs}` : ''}`);
   };
@@ -52,13 +54,12 @@ export default function CoachList() {
         <View style={{ gap: 6 }}>
           <Text style={{ color: C.muted, fontSize: 13 }}>Ôn khóa học</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-            <Pill label="Tất cả khóa" active={!course} onPress={() => setCourse('')} />
             {courses.data.map((c) => <Pill key={c.course_id} label={c.title} active={course === c.course_id} onPress={() => setCourse(c.course_id)} />)}
           </ScrollView>
         </View>
       )}
       <Pressable onPress={() => ask()} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: C.card, borderRadius: 24, borderWidth: 1.5, borderColor: C.brandTint, padding: 8, paddingLeft: 18, ...shadow }}>
-        <Text style={{ flex: 1, color: C.muted, fontSize: 15 }}>{courseTitle ? `Hỏi về khóa ${courseTitle}…` : 'Hỏi trợ lý, ví dụ: Mai kiểm tra chương 1, giúp mình ôn'}</Text>
+        <Text style={{ flex: 1, color: C.muted, fontSize: 15 }}>{courseTitle ? `Hỏi về khóa ${courseTitle}…` : 'Chọn khóa học để bắt đầu'}</Text>
         <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: C.brand, alignItems: 'center', justifyContent: 'center' }}>
           <Ionicons name="arrow-forward" size={20} color={C.white} />
         </View>

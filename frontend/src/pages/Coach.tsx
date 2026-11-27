@@ -7,8 +7,12 @@ import { useAuth } from '../lib/auth';
 import { navigate } from '../lib/router';
 
 interface CoachStep { tool: string; arguments: string; ok: boolean; writes: boolean }
-interface CoachAction { type: 'item' | 'flashcards' | 'my_flashcards'; label: string; item_id?: string; lesson_id?: string; lesson_code?: string }
-interface CoachResult { answer: string; steps: CoachStep[]; sources: Source[]; actions: CoachAction[]; guarded: boolean; stopped: string | null }
+interface CoachAction { type: 'item' | 'flashcards' | 'my_flashcards' | 'practice_quiz'; label: string; item_id?: string; lesson_id?: string; lesson_code?: string; quiz_id?: string }
+interface Clarify { question: string; options: string[] }
+interface CoachResult { answer: string; steps: CoachStep[]; sources: Source[]; actions: CoachAction[]; guarded: boolean; stopped: string | null; clarify?: Clarify | null }
+interface PracticeQ { index: number; question: string; options: string[] }
+interface PracticeRow { index: number; chosen: number | null; correct_index: number; correct: boolean; explanation: string; sources: Source[] }
+interface Practice { quiz_id: string; topic: string; questions: PracticeQ[]; submitted: boolean; result: { correct: number; total: number; questions: PracticeRow[] } | null }
 interface ConvSummary { id: string; title: string; course_id?: string | null; created_at: string; updated_at: string }
 interface CourseLite { course_id: string; title: string }
 interface ChatResponse extends CoachResult { llm_calls: number; conversation: ConvSummary }
@@ -26,6 +30,8 @@ const BUSY_TEXT: Record<string, string> = {
   get_practice_quiz: 'Đang tìm bài luyện tập',
   queue_flashcards: 'Đang chuẩn bị thẻ ôn',
   create_my_flashcards: 'Đang soạn thẻ ghi nhớ cho bạn',
+  create_practice_quiz: 'Đang soạn quiz luyện tập',
+  ask_clarification: 'Đang hỏi lại cho rõ',
 };
 const busyText = (tool?: string) => (tool && BUSY_TEXT[tool]) || 'Đang soạn câu trả lời';
 const MAX_SOURCES = 5;
@@ -66,16 +72,89 @@ const SUGGESTIONS: { icon: IconName; title: string; text: string }[] = [
   { icon: 'list', title: 'Ôn cho bài kiểm tra', text: 'Mình nên ôn gì cho bài kiểm tra sắp tới?' },
   { icon: 'chart', title: 'Tìm phần còn yếu', text: 'Mình đang yếu phần nào?' },
   { icon: 'clock', title: 'Kế hoạch 30 phút', text: 'Lập kế hoạch học 30 phút hôm nay giúp mình' },
-  { icon: 'copy', title: 'Đưa câu sai vào thẻ ôn', text: 'Đưa các câu mình hay sai vào thẻ ôn' },
+  { icon: 'check', title: 'Luyện quiz theo chủ đề', text: 'Tạo cho mình một quiz luyện tập 5 câu' },
 ];
 const THINKING = ['Đang xem tiến độ của bạn', 'Đang tìm các câu bạn hay sai', 'Đang lập kế hoạch ôn'];
-const ALL_COURSES: CourseLite = { course_id: '', title: 'Tất cả khóa học' };
+const optionText = (o: string) => o.replace(/^\s*[A-H][.)]\s*/, '');
+
+/** Quiz luyện tập ngay trong khung chat: chọn đáp án, nộp một lần, rồi xem đúng/sai + lời giải + nguồn. */
+function PracticeQuiz({ quizId, openSource }: { quizId: string; openSource: (s: Source) => void }) {
+  const toast = useToast();
+  const [quiz, setQuiz] = useState<Practice | null>(null);
+  const [picked, setPicked] = useState<Record<number, number>>({});
+  const [sending, setSending] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    api<Practice>(`/ai/coach/practice/${quizId}`).then((q) => { if (alive) setQuiz(q); }).catch((e) => toast(errorText(e), 'error'));
+    return () => { alive = false; };
+  }, [quizId]);
+  if (!quiz) return <div className="cc-quiz cc-quiz-loading">Đang tải quiz…</div>;
+  const result = quiz.result;
+  const answered = Object.keys(picked).length;
+  const submit = async () => {
+    setSending(true);
+    try { setQuiz(await api<Practice>(`/ai/coach/practice/${quizId}/submit`, { method: 'POST', json: { answers: picked } })); }
+    catch (e) { toast(errorText(e), 'error'); }
+    finally { setSending(false); }
+  };
+  return (
+    <div className="cc-quiz">
+      <div className="cc-quiz-head">
+        <strong>Quiz luyện tập: {quiz.topic}</strong>
+        <span>{result ? `Đúng ${result.correct}/${result.total}` : `${quiz.questions.length} câu · không tính điểm`}</span>
+      </div>
+      {quiz.questions.map((q) => {
+        const row = result?.questions[q.index];
+        const chosen = row ? row.chosen : picked[q.index];
+        return (
+          <div key={q.index} className="cc-quiz-q">
+            <p className="cc-quiz-stem">{q.index + 1}. {q.question}</p>
+            <div className="opts">
+              {q.options.map((o, k) => {
+                const cls = row ? (k === row.correct_index ? 'opt-ok' : k === chosen ? 'opt-bad' : 'opt-dim') : k === chosen ? 'opt-sel' : '';
+                return (
+                  <button key={k} type="button" className={`opt cc-quiz-opt ${cls}`} disabled={!!row}
+                    onClick={() => setPicked((p) => ({ ...p, [q.index]: k }))}>
+                    <span className="opt-key">{String.fromCharCode(65 + k)}</span>{optionText(o)}
+                  </button>
+                );
+              })}
+            </div>
+            {row && (
+              <div className={`cc-quiz-exp ${row.correct ? 'cc-quiz-exp-ok' : ''}`}>
+                <strong>{row.correct ? 'Đúng.' : row.chosen === null ? 'Chưa trả lời.' : 'Chưa đúng.'}</strong> {row.explanation}
+                {row.sources.length > 0 && (
+                  <span className="cc-quiz-src">
+                    {row.sources.map((s) => (
+                      <button key={s.label} type="button" className="src" onClick={() => openSource(s)} title={s.display}>
+                        <Icon name={s.source_type === 'video' ? 'play' : s.page ? 'slide' : 'book'} size={13} /><span>{sourceText(s)}</span>
+                      </button>
+                    ))}
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {!result && (
+        <div className="cc-quiz-foot">
+          <span>{answered}/{quiz.questions.length} câu đã chọn</span>
+          <button type="button" className="cc-action cc-quiz-submit" onClick={submit} disabled={sending || answered === 0}>
+            {sending ? 'Đang chấm…' : 'Nộp bài'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function CoachCoursePicker({ courses, value, onChange, disabled, title }: {
   courses: CourseLite[]; value: string; onChange: (id: string) => void; disabled: boolean; title: string;
 }) {
-  const options = [ALL_COURSES, ...courses];
+  const options = courses;
   const selectedIndex = Math.max(0, options.findIndex((course) => course.course_id === value));
+  const selected = options.find((course) => course.course_id === value);
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const open = !disabled && activeIndex !== null;
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -139,15 +218,15 @@ function CoachCoursePicker({ courses, value, onChange, disabled, title }: {
         onClick={(event) => { event.currentTarget.focus(); setActiveIndex(open ? null : selectedIndex); }}
         onBlur={() => setActiveIndex(null)} onKeyDown={onKeyDown}>
         <Icon name="book" size={16} />
-        <span>{options[selectedIndex].title}</span>
+        <span>{selected ? selected.title : 'Chọn khóa học'}</span>
         <Icon name="chevronDown" size={14} className="cc-course-caret" />
       </button>
       <div id={listId} className="cc-course-menu" role="listbox" aria-label="Khóa học đang ôn" hidden={!open}>
         {options.map((course, index) => (
           <div key={course.course_id} id={`${listId}-${index}`} className={`cc-course-option${index === activeIndex ? ' cc-course-active' : ''}`}
-            role="option" aria-selected={index === selectedIndex} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(index)}>
+            role="option" aria-selected={course.course_id === value} onMouseDown={(event) => event.preventDefault()} onClick={() => choose(index)}>
             <span>{course.title}</span>
-            {index === selectedIndex && <Icon name="check" size={16} />}
+            {course.course_id === value && <Icon name="check" size={16} />}
           </div>
         ))}
       </div>
@@ -200,13 +279,14 @@ export function Coach({ conversationId }: { conversationId?: string }) {
   useEffect(() => {
     api<CourseLite[]>('/ai/learn/courses').then((cs) => {
       setCourses(cs);
-      // khóa đã nhớ không còn trong danh sách -> về "tất cả", chỉ có 1 khóa -> chọn sẵn khóa đó
-      setCourseId((cur) => (cur && cs.some((c) => c.course_id === cur) ? cur : cs.length === 1 ? cs[0].course_id : ''));
+      // Trợ lý luôn ôn trong MỘT khóa: khóa đã nhớ không còn thì chọn sẵn khóa đầu tiên
+      setCourseId((cur) => (cur && cs.some((c) => c.course_id === cur) ? cur : cs[0]?.course_id || ''));
     }).catch(() => setCourses([]));
   }, []);
   useEffect(() => { storage.set(COURSE_KEY, courseId || null); }, [courseId]);
   // mở cuộc trò chuyện cũ: hiện đúng khóa học của cuộc đó
-  useEffect(() => { if (active) setCourseId(active.course_id || ''); }, [active?.id]);
+  useEffect(() => { if (active?.course_id) setCourseId(active.course_id); }, [active?.id]);
+  const courseLocked = !!conversationId && !!active?.course_id; // cuộc cũ chưa gắn khóa thì vẫn chọn được
 
   useEffect(() => {
     api<ConvSummary[]>('/ai/coach/conversations').then(setConvs).catch((e) => { setConvs([]); toast(errorText(e), 'error'); });
@@ -253,6 +333,7 @@ export function Coach({ conversationId }: { conversationId?: string }) {
   const send = async (raw?: string, retry = false) => {
     const message = (raw ?? text).trim();
     if (!message || busy) return;
+    if (!courseId) { toast('Hãy chọn khóa học muốn ôn trước khi hỏi.', 'error'); return; }
     setMsgs((m) => retry ? [...m.slice(0, -1)] : [...m, { role: 'user', content: message }]);
     if (!retry) setText('');
     setBusy(true);
@@ -357,10 +438,11 @@ export function Coach({ conversationId }: { conversationId?: string }) {
         placeholder={empty ? 'Hỏi trợ lý học tập bất cứ điều gì…' : 'Nhắn tiếp cho trợ lý…'} autoFocus />
       <div className="cc-composer-row">
         {courses.length > 0 && (
-          <CoachCoursePicker courses={courses} value={courseId} onChange={setCourseId} disabled={!!conversationId || busy}
-            title={conversationId ? 'Khóa học của cuộc trò chuyện này' : 'Trợ lý chỉ ôn trong khóa học bạn chọn'} />
+          <CoachCoursePicker courses={courses} value={courseId} onChange={setCourseId} disabled={courseLocked || busy}
+            title={courseLocked ? 'Khóa học của cuộc trò chuyện này' : 'Trợ lý chỉ ôn trong khóa học bạn chọn'} />
         )}
-        <button type="submit" className="cc-send" aria-label="Gửi" disabled={busy || !text.trim()}>
+        {courses.length === 0 && <span className="cc-course-empty">Bạn chưa tham gia khóa học nào</span>}
+        <button type="submit" className="cc-send" aria-label="Gửi" disabled={busy || !text.trim() || !courseId}>
           <Icon name="arrowUp" size={18} stroke={2.6} />
         </button>
       </div>
@@ -403,11 +485,21 @@ export function Coach({ conversationId }: { conversationId?: string }) {
                   if (m.role === 'user') return <div key={i} className="cc-msg cc-msg-user"><div className="cc-bubble">{m.content}</div></div>;
                   const sources = uniqueSources(m.res?.sources);
                   const actions = compactActions(m.res?.actions);
+                  const practice = (m.res?.actions || []).filter((a) => a.type === 'practice_quiz' && a.quiz_id);
+                  const clarify = !m.error && i === msgs.length - 1 && !busy ? m.res?.clarify : null;
                   return (
                   <div key={i} className={`cc-msg cc-msg-bot ${m.error ? 'cc-msg-error' : ''} ${m.res?.guarded ? 'cc-msg-guard' : ''}`}>
                     <span className="cc-avatar" aria-hidden="true"><Icon name={m.error ? 'x' : 'sparkle'} size={16} /></span>
                     <div className="cc-body">
                       {m.error ? <p>{m.content}</p> : <Markdown source={m.content} />}
+                      {clarify && clarify.options.length > 0 && (
+                        <div className="cc-clarify" role="group" aria-label="Chọn một câu trả lời">
+                          {clarify.options.map((o) => (
+                            <button key={o} type="button" className="cc-clarify-opt" onClick={() => send(o)}>{o}</button>
+                          ))}
+                        </div>
+                      )}
+                      {practice.map((a) => <PracticeQuiz key={a.quiz_id} quizId={a.quiz_id!} openSource={openSource} />)}
                       {actions.length > 0 && (
                         <div className="cc-actions">
                           {actions.map((a) => (

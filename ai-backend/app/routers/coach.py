@@ -73,3 +73,22 @@ def coach_delete(conversation_id: str, user: Principal = Depends(get_current_use
 def coach_tools(user: Principal = Depends(get_current_user)):
     """Danh sách tool của agent (hiển thị minh bạch cho người dùng và phục vụ báo cáo)."""
     return [{"name": t.name, "description": t.description, "writes": t.writes} for t in coach.TOOLS.values()]
+
+
+class PracticeSubmit(BaseModel):
+    answers: dict[str, int] = Field(default_factory=dict)
+
+
+@router.get("/coach/practice/{quiz_id}")
+def coach_practice(quiz_id: str, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Quiz luyện tập Trợ lý đã soạn (chưa nộp: chỉ có đề, không có đáp án)."""
+    from app.services.ai import practice_quiz
+    return practice_quiz.get(db, user, quiz_id)
+
+
+@router.post("/coach/practice/{quiz_id}/submit")
+def coach_practice_submit(quiz_id: str, req: PracticeSubmit, user: Principal = Depends(get_current_user),
+                          db: Session = Depends(get_db)):
+    """Nộp quiz luyện tập (một lần): trả đúng/sai từng câu, lời giải và nguồn học liệu."""
+    from app.services.ai import practice_quiz
+    return practice_quiz.submit(db, user, quiz_id, req.answers)
