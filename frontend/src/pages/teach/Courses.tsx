@@ -291,7 +291,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
                   {ch.lessons.map((ls) => (
                     <div key={ls.lesson_id}>
                       <button type="button" className={`ce-node ce-lesson ${on('lesson', ls.lesson_id) ? 'on' : ''}`} onClick={() => setSel({ kind: 'lesson', id: ls.lesson_id })}>
-                        <span className="ce-lesson-text"><span className="ol-code">{ls.code}</span><span>{ls.title}</span></span><span className="ce-n">{ls.items.length}</span></button>
+                        <span className="ce-lesson-text"><span>{ls.title}</span></span><span className="ce-n">{ls.items.length}</span></button>
                       {(on('lesson', ls.lesson_id) || ls.items.some((x) => on('item', x.item_id))) && ls.items.map((it) => (
                         <button key={it.item_id} type="button" className={`ce-node ce-item ${on('item', it.item_id) ? 'on' : ''}`} onClick={() => setSel({ kind: 'item', id: it.item_id })}>
                           <Icon name={TYPE_ICON[it.type]} size={15} />{it.title}</button>

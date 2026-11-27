@@ -659,7 +659,6 @@ a.oi:hover { background: var(--brand-soft); color: var(--ink); }
 .ce-course { color: var(--muted); }
 .ce-chapter { font-weight: 600; font-size: 13px; text-transform: uppercase; letter-spacing: .4px; color: var(--muted); }
 .ce-chapter .ol-code { width: auto; }
-.ce-lesson .ol-code { width: 26px; flex: none; }
 .ce-item { padding-left: 44px; font-weight: 400; font-size: 14px; color: var(--muted); min-height: 34px; }
 .ce-item svg { flex: none; }
 .ce-n { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted); }

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { PageHeader } from '../../components/AppShell';
-import { BulkBar, Check, Drawer, FilterPills, KpiRow, SearchBox, StatusTag, Toolbar, useSelection } from '../../components/Manage';
-import { Button, Empty, ErrorBox, Field, Spinner, useToast } from '../../components/ui';
+import { BulkBar, Check, Drawer, FilterPills, SearchBox, StatusTag, Toolbar, useSelection } from '../../components/Manage';
+import { Button, Empty, ErrorBox, Field, Modal, Spinner, useToast } from '../../components/ui';
 import { api, errorText } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { CourseScope, useCourseTrees, useScope } from '../../components/CourseScope';
@@ -27,8 +27,9 @@ export function FlashcardBank() {
   const [count, setCount] = useState(10);
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState<AiCard | null>(null);
-  // Đang xem "Tất cả bài trong khóa": chọn bài để AI soạn ngay cạnh nút, khỏi phải bấm sang cột trái.
+  // Chọn bài đích khi yêu cầu AI soạn từ màn hình tổng hợp của cả khóa.
   const [pick, setPick] = useState('');
+  const [targetOpen, setTargetOpen] = useState(false);
   // Thẻ gắn theo mã bài (lesson_code). API lấy theo từng bài, nên "Tất cả bài trong khóa" = gộp thẻ của mọi bài trong khóa.
   const codes = course ? course.lessons.map((l) => l.code).filter(Boolean) : [];
   const list = useAsync(async (s) => {
@@ -51,6 +52,7 @@ export function FlashcardBank() {
       const r = await api<AiCard[]>(`/ai/lessons/${encodeURIComponent(target)}/flashcards/generate`, { json: { count } });
       toast(`AI đã soạn ${r.length} thẻ nháp`, 'success'); setStatus('draft');
       if (!lesson) setScope({ course: scope.course, lesson: target });
+      setTargetOpen(false);
       list.reload();
     } catch (e) { toast(errorText(e), 'error'); } finally { setBusy(false); }
   };
@@ -64,19 +66,14 @@ export function FlashcardBank() {
     <>
       <PageHeader title="Thẻ ghi nhớ" sub="AI soạn thẻ hỏi–đáp từ bài đọc, slide và lời giảng. Học sinh chỉ ôn các thẻ bạn đã duyệt."
         actions={course && <div className="row" style={{ gap: 8 }}>
-          {!lesson && choices.length > 0 && <Select variant="pill" value={target} onChange={(v) => setPick(v)} aria-label="Bài để AI soạn thẻ">{choices.map((l) => <option key={l.code} value={l.code}>{l.title}</option>)}</Select>}
           <Select variant="pill" value={count} onChange={(v) => setCount(Number(v))} aria-label="Số thẻ AI soạn">{[5, 10, 15, 20].map((v) => <option key={v} value={v}>{v} thẻ</option>)}</Select>
-          <Button icon="wand" loading={busy} disabled={busy} onClick={generate}>AI soạn thẻ</Button>
+          <Button icon="wand" loading={busy} disabled={busy || !choices.length} onClick={() => lesson ? generate() : setTargetOpen(true)}>AI soạn thẻ</Button>
         </div>} />
       <CourseScope courses={trees.data} loading={trees.loading} error={trees.error} onRetry={trees.reload}
         scope={scope} onChange={setScope} unit="thẻ"
+        compactLessons
         countLesson={(l) => (course?.lessons.includes(l) && list.data ? inCourse.filter((c) => c.lesson_code === l.code).length : null)}
         countCourse={(c) => (c.course_id === course?.course_id && list.data ? inCourse.length : null)}>
-      {list.data && <KpiRow items={[
-        { label: lesson ? 'Thẻ của bài' : 'Thẻ trong khóa', value: all.length },
-        { label: 'Chờ duyệt', value: n('draft'), brand: true },
-        { label: 'Đã duyệt', value: n('approved'), hint: 'học sinh đang ôn' },
-      ]} />}
       <Toolbar>
         <SearchBox value={q} onChange={setQ} placeholder="Tìm thẻ…" />
         <FilterPills<St> label="Trạng thái" value={status} onChange={setStatus}
@@ -85,7 +82,7 @@ export function FlashcardBank() {
       {list.loading && !list.data && <Spinner />}
       {list.error && <ErrorBox message={list.error} onRetry={list.reload} />}
       {list.data && !all.length && <Empty title={lesson ? 'Bài này chưa có thẻ' : 'Khóa này chưa có thẻ'}>
-        {lesson ? 'Bấm “AI soạn thẻ”, AI sẽ soạn nháp từ học liệu của bài để bạn duyệt.' : 'Chọn bài ở góc trên rồi bấm “AI soạn thẻ”.'}</Empty>}
+        {lesson ? 'Bấm “AI soạn thẻ”, AI sẽ soạn nháp từ học liệu của bài để bạn duyệt.' : 'Chọn bài trong bộ chọn phía trên rồi bấm “AI soạn thẻ”.'}</Empty>}
       {!!all.length && !rows.length && <Empty title="Không có thẻ nào khớp">Thử bỏ bớt bộ lọc hoặc từ khóa.</Empty>}
       {!!rows.length && (
         <div className="table-wrap">
@@ -112,6 +109,22 @@ export function FlashcardBank() {
         <Button size="sm" icon="check" onClick={() => bulk('approved')}>Duyệt</Button>
         <Button size="sm" variant="ghost" onClick={() => bulk('rejected')}>Từ chối</Button>
       </BulkBar>
+      <Modal open={targetOpen} onClose={() => setTargetOpen(false)} title="AI soạn thẻ" dismissable={!busy}>
+        <form className="modal-body" onSubmit={(e) => { e.preventDefault(); void generate(); }}>
+          <p className="muted small" style={{ margin: 0 }}>Chọn bài học để AI tạo thẻ nháp từ học liệu của bài.</p>
+          <Field label="Bài học">
+            <Select variant="field" value={target} onChange={setPick} searchable={choices.length > 10} aria-label="Bài học để soạn thẻ">
+              {course?.chapters.map((ch, i) => <optgroup key={`${ch.title}-${i}`} label={ch.title}>
+                {ch.lessons.filter((l) => l.code).map((l) => <option key={l.lesson_id} value={l.code}>{l.title}</option>)}
+              </optgroup>)}
+            </Select>
+          </Field>
+          <div className="row" style={{ justifyContent: 'flex-end' }}>
+            <Button type="button" variant="ghost" disabled={busy} onClick={() => setTargetOpen(false)}>Hủy</Button>
+            <Button type="submit" icon="wand" loading={busy} disabled={!target}>Soạn thẻ</Button>
+          </div>
+        </form>
+      </Modal>
       {editing && <CardDrawer key={editing.card_id} card={editing} onClose={() => setEditing(null)} onChanged={() => { setEditing(null); list.reload(); }} />}
     </>
   );

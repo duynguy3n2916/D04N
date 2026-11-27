@@ -6,14 +6,13 @@ import { useAsync } from '../../lib/hooks';
 import { ManualCreateDialog } from '../../components/ManualCreateDialog';
 import { CourseScope, UNASSIGNED, knownLesson, scopeLessons, useCourseTrees, useScope } from '../../components/CourseScope';
 import { Icon } from '../../components/Icon';
-import { BulkBar, Check, FilterPills, KpiRow, PillSelect, SearchBox, StatusTag, Toolbar, useSelection } from '../../components/Manage';
+import { BulkBar, Check, FilterPills, PillSelect, SearchBox, StatusTag, Toolbar, useSelection } from '../../components/Manage';
 import { Select } from '../../components/Select';
 
 interface BankItem {
   item_id: string; generation_id: string | null; status: string; edited: boolean; lesson_id: string | null; created_at: string;
   question: string; type: string; difficulty: string; options?: string[] | null; correct_answer?: string; correct_index?: number | null; explanation?: string; sources?: string[];
 }
-interface Stats { reviewed: number; approved: number; approved_without_edit: number; approved_with_edit: number; rejected: number; pending: number; acceptance_rate: number | null }
 interface TeachingSource { document_id: string; title: string; kind: 'video' | 'reading' | 'slide' | 'document' }
 const SOURCE_KIND = { video: 'Video', reading: 'Bài đọc', slide: 'Slide', document: 'Tài liệu' };
 
@@ -76,7 +75,6 @@ export function QuestionBank() {
   const [srcF, setSrcF] = useState('');
 
   const bank = useAsync((s) => api<BankItem[]>('/ai/teacher/question-bank', { signal: s }), [], 'teach/qbank');
-  const stats = useAsync((s) => api<Stats>('/ai/teacher/stats', { signal: s }), [], 'teach/qstats');
 
   useEffect(() => {
     const focusId = getUrlParams().get('focus');
@@ -99,11 +97,10 @@ export function QuestionBank() {
   const [exportOpen, setExportOpen] = useState(false);
 
   const setSt = async (it: BankItem, st: string) => {
-    try { await api(`/ai/question-bank/${it.item_id}`, { method: 'PATCH', json: { status: st } }); bank.reload(); stats.reload(); } catch (e) { toast(errorText(e), 'error'); }
+    try { await api(`/ai/question-bank/${it.item_id}`, { method: 'PATCH', json: { status: st } }); bank.reload(); } catch (e) { toast(errorText(e), 'error'); }
   };
 
 
-  const st = stats.data;
   const everything = bank.data || [];
   // câu hỏi thuộc bài nào: theo mã bài của câu hỏi (lesson_id = mã bài, vd. BH-000011)
   const inScope = scopeLessons(trees.data, scope);
@@ -121,7 +118,7 @@ export function QuestionBank() {
     let ok = 0;
     for (const id of ids) { try { await api(`/ai/question-bank/${id}`, { method: 'PATCH', json: { status: to } }); ok++; } catch { /* bỏ qua */ } }
     toast(`${to === 'approved' ? 'Đã duyệt' : 'Đã từ chối'} ${ok}/${ids.length} câu`, ok === ids.length ? 'success' : 'error');
-    sel.clear(); bank.reload(); stats.reload();
+    sel.clear(); bank.reload();
   };
   return (
     <>
@@ -135,14 +132,9 @@ export function QuestionBank() {
         } />
       <CourseScope courses={trees.data} loading={trees.loading || bank.loading} error={trees.error || bank.error} onRetry={() => { trees.reload(); bank.reload(); }}
         scope={scope} onChange={setScope} unit="câu hỏi"
+        compactLessons
         countLesson={(l) => everything.filter((q) => q.lesson_id === l.code).length}
         unassigned={everything.filter((q) => !knownLesson(trees.data, q.lesson_id)).length}>
-      {st && <KpiRow items={[
-        { label: 'Câu hỏi', value: scoped.length },
-        { label: 'Chờ duyệt', value: nSt('draft'), brand: true },
-        { label: 'Đã duyệt', value: nSt('approved') },
-        { label: 'Tỉ lệ chấp nhận', value: st.acceptance_rate != null ? `${Math.round(st.acceptance_rate * 100)}%` : '—', hint: `${st.approved_without_edit} câu không cần sửa` },
-      ]} />}
       <Toolbar>
         <SearchBox value={q_} onChange={setQ} placeholder="Tìm câu hỏi…" />
         <FilterPills label="Trạng thái" value={status} onChange={setStatus}
@@ -207,10 +199,10 @@ export function QuestionBank() {
         <Button size="sm" icon="check" onClick={() => bulk('approved')}>Duyệt</Button>
         <Button size="sm" variant="ghost" onClick={() => bulk('rejected')}>Từ chối</Button>
       </BulkBar>
-      {genOpen && <GenerateDialog defaultLesson={lesson} onClose={() => setGenOpen(false)} onDone={(code) => { setGenOpen(false); setLesson(code); setStatus('draft'); bank.reload(); stats.reload(); }} />}
+      {genOpen && <GenerateDialog defaultLesson={lesson} onClose={() => setGenOpen(false)} onDone={(code) => { setGenOpen(false); setLesson(code); setStatus('draft'); bank.reload(); }} />}
       {exportOpen && <ExportDialog defaultLesson={lesson} onClose={() => setExportOpen(false)} />}
-      {edit && <BankEditor item={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); bank.reload(); stats.reload(); }} />}
-      {createOpen && <ManualCreateDialog defaultLesson={lesson} onClose={() => setCreateOpen(false)} onSaved={() => { setCreateOpen(false); bank.reload(); stats.reload(); toast('Đã tạo và duyệt câu hỏi mới', 'success'); }} />}
+      {edit && <BankEditor item={edit} onClose={() => setEdit(null)} onSaved={() => { setEdit(null); bank.reload(); }} />}
+      {createOpen && <ManualCreateDialog defaultLesson={lesson} onClose={() => setCreateOpen(false)} onSaved={() => { setCreateOpen(false); bank.reload(); toast('Đã tạo và duyệt câu hỏi mới', 'success'); }} />}
     </>
   );
 }

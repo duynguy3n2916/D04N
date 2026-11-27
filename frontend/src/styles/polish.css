@@ -395,9 +395,8 @@ b, strong { font-weight: 600; }
 .oi-chip { min-width: 70px; padding: 2px 8px; font-size: 12px; }
 .pill { padding-top: 5px; padding-bottom: 5px; font-size: 13px; }
 
-/* Cây khóa học (giáo viên): mã bài dài BH-000001 nằm dòng riêng trên tên bài, không đè chữ */
+/* Cây khóa học (giáo viên) */
 .ce-lesson-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-.ce-lesson .ol-code { width: auto; font-size: 11px; letter-spacing: .2px; }
 
 /* Khung video / slide gọn (2026-11-26): khung + tên mục + phần bên dưới cùng một bề rộng,
    vừa một màn hình để thấy được tên mục và các nút mà không phải cuộn */
@@ -570,6 +569,10 @@ html::-webkit-scrollbar, .sidenav::-webkit-scrollbar { display: none; }
 /* dạng nhỏ (menu cài đặt phụ đề trong trình phát) */
 .dd-compact { min-width: 110px; min-height: 34px; padding: 4px 8px 4px 12px; border: 1.5px solid var(--line); border-radius: 10px; font-size: 14px; font-weight: 500; }
 .dd-compact.open, .dd-compact:focus-visible { border-color: var(--brand); }
+
+.cs-lesson-select { width: min(340px, 42vw); min-width: 120px; min-height: 30px; padding: 3px 6px 3px 9px; border: 0; border-radius: 8px; background: transparent; color: var(--brand-strong); font-size: 14px; font-weight: 600; }
+.cs-lesson-select:hover:not(:disabled), .cs-lesson-select.open, .cs-lesson-select:focus-visible { border: 0; background: var(--brand-soft); }
+@media (max-width: 640px) { .cs-lesson-select { width: min(240px, 45vw); } }
 
 /* danh sách nổi */
 .dd-pop { position: fixed; z-index: 500; display: flex; flex-direction: column; min-width: 180px; overflow: hidden;

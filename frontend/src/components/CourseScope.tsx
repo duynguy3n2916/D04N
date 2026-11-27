@@ -3,6 +3,7 @@ import { api } from '../lib/api';
 import { useAsync } from '../lib/hooks';
 import { Icon } from './Icon';
 import { ErrorBox, Spinner } from './ui';
+import { Select } from './Select';
 
 /** Phạm vi đang xem ở các trang giáo viên: một khóa học (hoặc nhóm "Chưa gắn bài") và có thể một bài. */
 export interface Scope { course: string; lesson: string }
@@ -63,10 +64,11 @@ export function knownLesson(courses: ScopeCourse[] | null, code: string | null |
  * Khung chọn từng bước: (1) lưới khóa học → (2) chương/bài bên trái, nội dung bên phải.
  * Trang chỉ hiện nội dung (children) khi đã chọn khóa, để không đổ hết mọi thứ ra cùng lúc.
  */
-export function CourseScope({ courses, loading, error, onRetry, scope, onChange, unit, countLesson, countCourse, unassigned = 0, children }: {
+export function CourseScope({ courses, loading, error, onRetry, scope, onChange, unit, countLesson, countCourse, unassigned = 0, compactLessons = false, children }: {
   courses: ScopeCourse[] | null; loading: boolean; error: string | null; onRetry: () => void;
   scope: Scope; onChange: (s: Scope) => void; unit: string;
-  countLesson: (l: ScopeLesson) => number | null; countCourse?: (c: ScopeCourse) => number | null; unassigned?: number; children: ReactNode;
+  countLesson: (l: ScopeLesson) => number | null; countCourse?: (c: ScopeCourse) => number | null; unassigned?: number;
+  compactLessons?: boolean; children: ReactNode;
 }) {
   if (error && !courses) return <ErrorBox message={error} onRetry={onRetry} />;
   if (loading && !courses) return <Spinner />;
@@ -81,7 +83,18 @@ export function CourseScope({ courses, loading, error, onRetry, scope, onChange,
     <nav className="cs-crumbs" aria-label="Phạm vi">
       <button type="button" onClick={() => onChange({ course: '', lesson: '' })} disabled={!course && !none}>Tất cả khóa học</button>
       {(course || none) && <><Icon name="chevronRight" size={14} /><button type="button" onClick={() => onChange({ course: scope.course, lesson: '' })} disabled={!lesson}>{none ? 'Chưa gắn bài' : course!.title}</button></>}
-      {lesson && <><Icon name="chevronRight" size={14} /><span>{lesson.title}</span></>}
+      {lesson && !compactLessons && <><Icon name="chevronRight" size={14} /><span>{lesson.title}</span></>}
+      {compactLessons && course && <>
+        <Icon name="chevronRight" size={14} />
+        <Select className="cs-lesson-select" variant="compact" value={scope.lesson || '__all__'} searchable
+          onChange={(value) => onChange({ course: scope.course, lesson: value === '__all__' ? '' : value })}
+          aria-label="Chọn bài học">
+          <option value="__all__">Tất cả bài trong khóa</option>
+          {course.chapters.map((ch, i) => <optgroup key={`${ch.title}-${i}`} label={ch.title}>
+            {ch.lessons.filter((l) => l.code).map((l) => <option key={l.lesson_id} value={l.code}>{l.title}</option>)}
+          </optgroup>)}
+        </Select>
+      </>}
     </nav>
   );
 
@@ -112,6 +125,10 @@ export function CourseScope({ courses, loading, error, onRetry, scope, onChange,
   }
 
   if (none) return <>{crumbs}{children}</>;
+
+  if (compactLessons) {
+    return <>{crumbs}<section className="cs-main">{children}</section></>;
+  }
 
   return (
     <>

@@ -72,6 +72,7 @@ export function Videos() {
         actions={<Button icon="upload" onClick={() => { setDropped(null); setOpen(true); }}>Thêm video</Button>} />
       <CourseScope courses={trees.data} loading={trees.loading || list.loading} error={trees.error || list.error} onRetry={() => { trees.reload(); list.reload(); }}
         scope={scope} onChange={setScope} unit="video"
+        compactLessons
         countLesson={(l) => l.videoIds.filter((id) => known.has(id)).length}
         countCourse={(c) => [...c.videoIds].filter((id) => known.has(id)).length}
         unassigned={everything.filter((v) => !inAnyLesson.has(v.video_id)).length}>

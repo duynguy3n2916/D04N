@@ -80,6 +80,7 @@ export function Documents() {
       {progress && <div className="notice" aria-live="polite" style={{ marginBottom: 14 }}>{progress}</div>}
       <CourseScope courses={trees.data} loading={trees.loading || docs.loading} error={trees.error || docs.error} onRetry={() => { trees.reload(); docs.reload(); }}
         scope={scope} onChange={setScope} unit="học liệu"
+        compactLessons
         countLesson={(l) => everything.filter((d) => d.lesson_id === l.code).length}
         unassigned={everything.filter((d) => !knownLesson(trees.data, d.lesson_id)).length}>
       <Toolbar>
