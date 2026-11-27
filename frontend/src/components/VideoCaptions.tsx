@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from 'react';
 import { storage, type TranscriptSegment } from '../lib/api';
+import { Select } from './Select';
 
 const SIZES = [75, 100, 125, 150, 200];
 const COLORS = ['#ffffff', '#ffeb3b', '#00ffff'];
@@ -49,19 +50,19 @@ export function CaptionSettings({ preferences, available }: { preferences: Capti
         <input type="checkbox" checked={enabled} disabled={!available} onChange={(e) => setEnabled(e.target.checked)} />
       </label>
       <label className="menu-row"><span>Cỡ chữ</span>
-        <select value={appearance.size} onChange={(e) => setAppearance({ ...appearance, size: Number(e.target.value) })}>
+        <Select variant="compact" value={appearance.size} onChange={(v) => setAppearance({ ...appearance, size: Number(v) })}>
           {SIZES.map((size) => <option key={size} value={size}>{size}%</option>)}
-        </select>
+        </Select>
       </label>
       <label className="menu-row"><span>Màu chữ</span>
-        <select value={appearance.color} onChange={(e) => setAppearance({ ...appearance, color: e.target.value })}>
+        <Select variant="compact" value={appearance.color} onChange={(v) => setAppearance({ ...appearance, color: v })}>
           <option value="#ffffff">Trắng</option><option value="#ffeb3b">Vàng</option><option value="#00ffff">Xanh lam</option>
-        </select>
+        </Select>
       </label>
       <label className="menu-row"><span>Độ đậm nền</span>
-        <select value={appearance.opacity} onChange={(e) => setAppearance({ ...appearance, opacity: Number(e.target.value) })}>
+        <Select variant="compact" value={appearance.opacity} onChange={(v) => setAppearance({ ...appearance, opacity: Number(v) })}>
           {OPACITIES.map((opacity) => <option key={opacity} value={opacity}>{opacity * 100}%</option>)}
-        </select>
+        </Select>
       </label>
       <div className="caption-preview"><VideoCaption text="Ví dụ phụ đề trong video" preferences={{ ...preferences, enabled: true }} /></div>
       <button type="button" className="pill" onClick={() => setAppearance(DEFAULTS)}>Khôi phục mặc định</button>

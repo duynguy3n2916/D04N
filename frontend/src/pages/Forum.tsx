@@ -10,6 +10,7 @@ import { useAsync } from '../lib/hooks';
 import { markForumSeen } from '../lib/notifications';
 import { Link, navigate } from '../lib/router';
 import { MessageBody, type Message as DmMessage } from './Messages';
+import { Select } from '../components/Select';
 
 type Kind = 'question' | 'post' | 'announcement';
 type Sort = 'new' | 'top' | 'unanswered';
@@ -86,9 +87,9 @@ export function Forum({ threadId }: { threadId?: string }) {
           {classes.length > 1 && (
             <div className="row" style={{ marginBottom: 14, alignItems: 'flex-end' }}>
               <Field label="Lớp">
-                <select value={cid} onChange={(e) => setClassId(e.target.value)}>
+                <Select value={cid} onChange={(v) => setClassId(v)}>
                   {classes.map((c) => <option key={c.class_id} value={c.class_id}>{c.name ? `${c.class_id} · ${c.name}` : c.class_id}</option>)}
-                </select>
+                </Select>
               </Field>
             </div>
           )}
@@ -138,15 +139,15 @@ function Feed({ classId, moderator }: { classId: string; moderator: boolean }) {
           <div className="sn-tabs" role="tablist" aria-label="Sắp xếp">
             {SORTS.map((s) => <button key={s.id} role="tab" aria-selected={sort === s.id} className={sort === s.id ? 'on' : ''} onClick={() => setSort(s.id)}>{s.label}</button>)}
           </div>
-          <select className="forum-select" value={kind} onChange={(e) => setKind(e.target.value as Kind | '')} aria-label="Loại bài">
+          <Select variant="pill" value={kind} onChange={(v) => setKind(v as Kind | '')} aria-label="Loại bài">
             <option value="">Mọi loại bài</option>
             {(['question', 'post', 'announcement'] as const).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
-          </select>
+          </Select>
           {!!lessons.data?.length && (
-            <select className="forum-select" value={lesson} onChange={(e) => setLesson(e.target.value)} aria-label="Bài học">
+            <Select variant="pill" value={lesson} onChange={(v) => setLesson(v)} aria-label="Bài học">
               <option value="">Mọi bài học</option>
               {lessons.data.map((l) => <option key={l.code} value={l.code}>{l.course_title ? `${l.title} · ${l.course_title}` : l.title}</option>)}
-            </select>
+            </Select>
           )}
           <label className="sn-search forum-search">
             <Icon name="search" size={17} />
@@ -278,10 +279,10 @@ function Composer({ classId, moderator, members, lessons, onPosted }: {
         </label>
         {lessons.length > 0 && (
           <label className="sn-inline"><Icon name="book" size={16} /><span className="sr-only">Gắn bài học</span>
-            <select className="input" value={lesson} onChange={(e) => setLesson(e.target.value)}>
+            <Select value={lesson} onChange={(v) => setLesson(v)}>
               <option value="">Không gắn bài học</option>
               {lessons.map((l) => <option key={l.code} value={l.code}>{l.course_title} · {l.title}</option>)}
-            </select>
+            </Select>
           </label>
         )}
       </div>

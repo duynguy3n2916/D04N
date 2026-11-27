@@ -7,6 +7,7 @@ import { ManualCreateDialog } from '../../components/ManualCreateDialog';
 import { CourseScope, UNASSIGNED, knownLesson, scopeLessons, useCourseTrees, useScope } from '../../components/CourseScope';
 import { Icon } from '../../components/Icon';
 import { BulkBar, Check, FilterPills, KpiRow, PillSelect, SearchBox, StatusTag, Toolbar, useSelection } from '../../components/Manage';
+import { Select } from '../../components/Select';
 
 interface BankItem {
   item_id: string; generation_id: string | null; status: string; edited: boolean; lesson_id: string | null; created_at: string;
@@ -34,7 +35,7 @@ export function LessonSelect({ value, onChange, allowAll }: { value: string; onC
   const known = !value || (lessons.data || []).some((l) => l.code === value);
   return (
     <>
-      <select value={value} onChange={(e) => onChange(e.target.value)} disabled={lessons.loading && !lessons.data}>
+      <Select value={value} onChange={(v) => onChange(v)} disabled={lessons.loading && !lessons.data}>
         {allowAll ? <option value="">Tất cả bài</option>
           : <option value="">{lessons.loading && !lessons.data ? 'Đang tải danh sách bài…' : '— Chọn bài học —'}</option>}
         {!known && <option value={value}>{value}</option>}
@@ -43,7 +44,7 @@ export function LessonSelect({ value, onChange, allowAll }: { value: string; onC
             {ls.map((l) => <option key={l.code} value={l.code}>{l.title}</option>)}
           </optgroup>
         ))}
-      </select>
+      </Select>
       {lessons.error && <span className="small" style={{ color: 'var(--red-text)' }}>Không tải được danh sách bài: {lessons.error} <button type="button" className="linkbtn" onClick={lessons.reload}>Thử lại</button></span>}
       {lessons.data && !lessons.data.length && <span className="small muted">Chưa có bài học nào. Tạo khóa học và bài học ở mục Khóa học trước.</span>}
     </>
@@ -316,9 +317,9 @@ function BankEditor({ item, onClose, onSaved }: { item: BankItem; onClose: () =>
         {f.options.length === 0 && <Field label="Đáp án"><textarea value={f.correct_answer} onChange={(e) => setF({ ...f, correct_answer: e.target.value })} /></Field>}
         <div className="form-grid">
           <Field label="Độ khó">
-            <select value={f.difficulty} onChange={(e) => setF({ ...f, difficulty: e.target.value })}>
+            <Select value={f.difficulty} onChange={(v) => setF({ ...f, difficulty: v })}>
               <option value="easy">Dễ</option><option value="medium">Vừa</option><option value="hard">Khó</option>
-            </select>
+            </Select>
           </Field>
         </div>
         <Field label="Giải thích"><textarea value={f.explanation} onChange={(e) => setF({ ...f, explanation: e.target.value })} /></Field>
@@ -367,9 +368,9 @@ function ExportDialog({ defaultLesson, onClose }: { defaultLesson: string; onClo
         <Field label="Bài học" hint="Chỉ lấy các câu đã duyệt của bài."><LessonSelect value={lesson} onChange={setLesson} /></Field>
         <div className="form-grid">
           <Field label="Số mã đề" hint="Nhiều mã đề: xáo thứ tự câu và lựa chọn.">
-            <select value={variants} onChange={(e) => setVariants(Number(e.target.value))}>
+            <Select value={variants} onChange={(v) => setVariants(Number(v))}>
               {[1, 2, 3, 4].map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
+            </Select>
           </Field>
           <Field label="Thời gian (phút)"><input type="number" min={0} max={300} value={duration} onChange={(e) => setDuration(Number(e.target.value))} /></Field>
         </div>

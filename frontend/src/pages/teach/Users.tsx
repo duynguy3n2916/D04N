@@ -8,6 +8,7 @@ import { useAuth } from '../../lib/auth';
 import { Avatar } from '../../components/Social';
 import { FilterPills, PillSelect, SearchBox, StatusTag, Toolbar } from '../../components/Manage';
 import { useAsync } from '../../lib/hooks';
+import { Select } from '../../components/Select';
 
 interface UserRow {
   user_id: string; name: string; display_name: string | null; email: string | null; role: Role; class_ids: string[];
@@ -296,9 +297,9 @@ function UserDialog({ row, classes, defaultClass, onClose, onSaved }: {
           <Field label="Email (tùy chọn)"><input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
           {admin && (
             <Field label="Vai trò">
-              <select value={f.role} disabled={row?.user_id === user?.user_id} onChange={(e) => setF({ ...f, role: e.target.value as Role })}>
+              <Select value={f.role} disabled={row?.user_id === user?.user_id} onChange={(v) => setF({ ...f, role: v as Role })}>
                 <option value="student">Học sinh</option><option value="teacher">Giáo viên</option><option value="admin">Quản trị</option>
-              </select>
+              </Select>
             </Field>
           )}
         </div>
@@ -361,10 +362,10 @@ function ImportDialog({ classes, defaultClass, onClose }: { classes: ClassInfo[]
               <Button variant="ghost" onClick={() => setText(SAMPLE_CSV)}>Dùng mẫu</Button>
               <span style={{ flex: 1 }} />
               <Field label="Lớp mặc định (dòng không ghi lớp)">
-                <select value={cls} onChange={(e) => setCls(e.target.value)}>
+                <Select value={cls} onChange={(v) => setCls(v)}>
                   <option value="">— Không —</option>
                   {classes.map((c) => <option key={c.class_id} value={c.class_id}>{c.class_id} · {c.name}</option>)}
-                </select>
+                </Select>
               </Field>
             </div>
             <textarea className="input" style={{ minHeight: 220, fontFamily: 'var(--mono)', fontSize: 13 }} value={text} onChange={(e) => setText(e.target.value)}
