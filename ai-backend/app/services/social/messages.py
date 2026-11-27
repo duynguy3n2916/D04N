@@ -18,6 +18,19 @@ from app.models.social import DirectBlock, DirectConversation, DirectMessage, Di
 
 MAX_BODY = 2000
 
+# đính kèm: loại -> (đuôi file cho phép, dung lượng tối đa MB)
+ATTACH_RULES = {
+    "image": (("png", "jpg", "jpeg", "webp", "gif"), 10),
+    "video": (("mp4", "webm", "mov", "m4v"), 50),
+    "audio": (("webm", "ogg", "m4a", "mp4", "mp3", "wav", "aac", "caf"), 10),
+}
+_MIME = {
+    "image": {"jpg": "image/jpeg", "jpeg": "image/jpeg"},
+    "video": {"mov": "video/quicktime", "m4v": "video/mp4"},
+    "audio": {"m4a": "audio/mp4", "mp4": "audio/mp4", "mp3": "audio/mpeg", "aac": "audio/aac", "caf": "audio/x-caf"},
+}
+PREVIEW = {"image": "📷 Ảnh", "video": "🎬 Video", "audio": "🎤 Tin nhắn thoại"}
+
 
 def _iso(dt) -> str | None:
     return dt.isoformat() if dt else None
@@ -42,6 +55,27 @@ def _conv_for(db: Session, user: Principal, conversation_id) -> DirectConversati
 
 def _other(c: DirectConversation, me: str) -> str:
     return c.user_b if c.user_a == me else c.user_a
+
+
+def _kind(m: DirectMessage) -> str:
+    return m.kind or "text"
+
+
+def _preview(m: DirectMessage, me: str) -> str:
+    """Dòng xem trước ở danh sách hội thoại, kiểu "Bạn: 📷 Ảnh"."""
+    k = _kind(m)
+    text = m.body if k == "text" else (PREVIEW.get(k, "Tệp") + (f" {m.body}" if m.body else ""))
+    return ("Bạn: " if m.sender_id == me else "") + (text or "")[:120]
+
+
+def _message_out(m: DirectMessage, me: str) -> dict:
+    k = _kind(m)
+    out = {"message_id": str(m.id), "sender_id": m.sender_id, "mine": m.sender_id == me,
+           "body": "(Tin nhắn đã bị ẩn)" if m.hidden else m.body, "hidden": bool(m.hidden),
+           "kind": "text" if m.hidden else k, "created_at": _iso(m.created_at)}
+    if k != "text" and not m.hidden:
+        out.update(url=f"/ai/messages/files/{m.id}", mime=m.mime, duration=m.duration, size_bytes=m.size_bytes)
+    return out
 
 
 def start(db: Session, user: Principal, other_id: str) -> dict:
@@ -108,7 +142,7 @@ def list_conversations(db: Session, user: Principal) -> list[dict]:
         oid = _other(c, user.user_id)
         u = users.get(oid)
         out.append({"conversation_id": str(c.id), "other_id": oid, "other_name": (u.display_name if u else None) or oid,
-                    "last_message": (last.body[:120] if last else ""), "last_at": _iso(last.created_at if last else c.created_at),
+                    "last_message": (_preview(last, user.user_id) if last else ""), "last_at": _iso(last.created_at if last else c.created_at),
                     "unread": _unread(db, c, user.user_id), "blocked": _blocked(db, user.user_id, oid)})
     return out
 
@@ -130,23 +164,28 @@ def get_messages(db: Session, user: Principal, conversation_id, limit: int = 100
     _mark_read(db, c, user.user_id)
     oid = _other(c, user.user_id)
     other = db.get(User, oid)
+    # người kia đọc tới đâu: để hiện "Đã xem" dưới tin cuối của mình như các app chat
+    other_read = db.query(DirectRead.read_at).filter(DirectRead.conversation_id == c.id, DirectRead.user_id == oid).scalar()
     return {"conversation_id": str(c.id), "other_id": oid, "other_name": (other.display_name if other else None) or oid,
             "blocked": _blocked(db, user.user_id, oid),
             "blocked_by_me": db.query(DirectBlock.id).filter(DirectBlock.blocker_id == user.user_id,
                                                              DirectBlock.blocked_id == oid).first() is not None,
-            "messages": [{"message_id": str(m.id), "sender_id": m.sender_id, "mine": m.sender_id == user.user_id,
-                          "body": "(Tin nhắn đã bị ẩn)" if m.hidden else m.body, "hidden": bool(m.hidden),
-                          "created_at": _iso(m.created_at)} for m in rows]}
+            "other_read_at": _iso(other_read),
+            "messages": [_message_out(m, user.user_id) for m in rows]}
 
 
-def send(db: Session, user: Principal, conversation_id, body: str) -> dict:
-    c = _conv_for(db, user, conversation_id)
+def _check_can_send(db: Session, user: Principal, c: DirectConversation) -> None:
     oid = _other(c, user.user_id)
     if _blocked(db, user.user_id, oid):
         raise AppError(403, "BLOCKED", "Không thể nhắn tin với người này.")
     other = db.get(User, oid)
     if other is None or not other.is_active or _shared_class(user, other) is None:
         raise AppError(403, "NOT_CLASSMATE", "Hai người không còn chung lớp nên không nhắn tin được.")
+
+
+def send(db: Session, user: Principal, conversation_id, body: str) -> dict:
+    c = _conv_for(db, user, conversation_id)
+    _check_can_send(db, user, c)
     text = (body or "").strip()
     if not text:
         raise AppError(400, "EMPTY", "Tin nhắn không được để trống.")
@@ -158,6 +197,47 @@ def send(db: Session, user: Principal, conversation_id, body: str) -> dict:
     db.commit()
     db.refresh(m)
     return {"message_id": str(m.id), "created_at": _iso(m.created_at)}
+
+
+def send_file(db: Session, user: Principal, conversation_id, file, kind: str, body: str | None = None,
+              duration: float | None = None) -> dict:
+    """Gửi ảnh, video hoặc tin nhắn thoại (kèm chú thích tùy chọn). File lưu trong kho file, chỉ hai người xem được."""
+    from app.services.media.storage import safe_extension, save_upload
+    if kind not in ATTACH_RULES:
+        raise AppError(400, "INVALID_KIND", "kind phải là image, video hoặc audio.")
+    c = _conv_for(db, user, conversation_id)
+    _check_can_send(db, user, c)
+    text = (body or "").strip()
+    if len(text) > MAX_BODY:
+        raise AppError(400, "TOO_LONG", f"Tin nhắn tối đa {MAX_BODY} ký tự.")
+    exts, max_mb = ATTACH_RULES[kind]
+    ext = safe_extension(file.filename, exts)
+    key, _, size = save_upload(file, "messages", ext, max_mb)
+    mime = _MIME[kind].get(ext) or f"{kind}/{ext}"
+    dur = float(duration) if duration is not None and 0 <= float(duration) < 24 * 3600 else None
+    m = DirectMessage(conversation_id=c.id, sender_id=user.user_id, body=text, kind=kind, file_key=key, mime=mime,
+                      size_bytes=size, duration=dur)
+    db.add(m)
+    c.last_message_at = func.now()
+    db.commit()
+    db.refresh(m)
+    return _message_out(m, user.user_id)
+
+
+def get_file(db: Session, user: Principal, message_id) -> DirectMessage:
+    """Hai người trong hội thoại xem được file; giáo viên của lớp chỉ xem được file của tin đang bị báo cáo."""
+    m = db.get(DirectMessage, message_id)
+    if m is None or not m.file_key:
+        raise AppError(404, "NOT_FOUND", "Không tìm thấy tệp.")
+    c = db.get(DirectConversation, m.conversation_id)
+    if c is not None and user.user_id in (c.user_a, c.user_b):
+        if m.hidden:
+            raise AppError(404, "NOT_FOUND", "Không tìm thấy tệp.")
+        return m
+    if c is not None and _is_moderator(user, c.class_id) and db.query(DirectReport.id).filter(
+            DirectReport.message_id == m.id).first() is not None:
+        return m
+    raise AppError(404, "NOT_FOUND", "Không tìm thấy tệp.")
 
 
 def set_block(db: Session, user: Principal, other_id: str, blocked: bool) -> dict:
@@ -207,7 +287,8 @@ def list_reports(db: Session, user: Principal, class_id: str) -> list[dict]:
             .order_by(DirectReport.created_at.desc()).limit(200).all())
     ids = {m.sender_id for _, m in rows} | {r.reporter_id for r, _ in rows}
     names = {u.user_id: u.display_name or u.user_id for u in db.query(User).filter(User.user_id.in_(list(ids))).all()} if ids else {}
-    return [{"report_id": str(r.id), "message_id": str(m.id), "body": m.body, "sender_id": m.sender_id,
+    return [{"report_id": str(r.id), "message_id": str(m.id), "body": m.body, "kind": _kind(m),
+             "url": f"/ai/messages/files/{m.id}" if m.file_key else None, "mime": m.mime, "sender_id": m.sender_id,
              "sender_name": names.get(m.sender_id, m.sender_id), "reporter_name": names.get(r.reporter_id, r.reporter_id),
              "reason": r.reason, "created_at": _iso(r.created_at)} for r, m in rows]
 

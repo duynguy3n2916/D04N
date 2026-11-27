@@ -1,8 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.core.security import Principal, get_current_user
+from app.core.security import Principal, get_current_user, get_user_for_media
 from app.core.utils import parse_uuid
 from app.database import get_db
 from app.services.social import messages
@@ -56,6 +56,23 @@ def get_messages(conversation_id: str, user: Principal = Depends(get_current_use
 @router.post("/conversations/{conversation_id}", status_code=201)
 def send(conversation_id: str, req: SendIn, user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
     return messages.send(db, user, parse_uuid(conversation_id, "conversation_id"), req.body)
+
+
+@router.post("/conversations/{conversation_id}/files", status_code=201)
+def send_file(conversation_id: str, file: UploadFile = File(...), kind: str = Form(..., pattern="^(image|video|audio)$"),
+              body: str | None = Form(None, max_length=2000), duration: float | None = Form(None),
+              user: Principal = Depends(get_current_user), db: Session = Depends(get_db)):
+    """Gửi ảnh (tối đa 10 MB), video (50 MB) hoặc tin nhắn thoại (10 MB), có thể kèm chú thích."""
+    return messages.send_file(db, user, parse_uuid(conversation_id, "conversation_id"), file, kind, body, duration)
+
+
+@router.get("/files/{message_id}")
+def get_file(message_id: str, request: Request, user: Principal = Depends(get_user_for_media),
+             db: Session = Depends(get_db)):
+    from app.services.media.object_store import get_store
+    m = messages.get_file(db, user, parse_uuid(message_id, "message_id"))
+    return get_store().response(m.file_key, request, media_type=m.mime or "application/octet-stream",
+                                cache_control="private, max-age=86400")
 
 
 @router.post("/blocks")

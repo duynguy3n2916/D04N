@@ -9,6 +9,7 @@ import { isTeacher, useAuth } from '../lib/auth';
 import { useAsync } from '../lib/hooks';
 import { markForumSeen } from '../lib/notifications';
 import { Link, navigate } from '../lib/router';
+import { MessageBody, type Message as DmMessage } from './Messages';
 
 type Kind = 'question' | 'post' | 'announcement';
 type Sort = 'new' | 'top' | 'unanswered';
@@ -28,7 +29,7 @@ interface Report {
   report_id: string; thread_id: string; reply_id: string | null; thread_title: string; kind: 'thread' | 'reply';
   excerpt: string; author_name: string; reporter_name: string; reason: string; hidden: boolean; created_at: string | null;
 }
-interface DmReport { report_id: string; message_id: string; body: string; sender_name: string; reporter_name: string; reason: string; created_at: string | null }
+interface DmReport { report_id: string; message_id: string; body: string; kind?: DmMessage['kind']; url?: string | null; sender_name: string; reporter_name: string; reason: string; created_at: string | null }
 type ReportTarget = { thread_id?: string; reply_id?: string };
 
 const KIND_LABEL: Record<Kind, string> = { question: 'Câu hỏi', post: 'Chia sẻ', announcement: 'Thông báo' };
@@ -344,7 +345,8 @@ function DmReportsPanel({ classId }: { classId: string }) {
         <div key={r.report_id} className="col" style={{ gap: 4, borderTop: '2px solid var(--line)', paddingTop: 8 }}>
           <span className="small"><b>{r.reporter_name}</b> báo cáo tin nhắn của <b>{r.sender_name}</b> · {timeAgo(r.created_at)}</span>
           <span className="small">Lý do: {r.reason}</span>
-          <span className="muted small">“{r.body.slice(0, 200)}{r.body.length > 200 ? '…' : ''}”</span>
+          {r.kind && r.kind !== 'text' && r.url && <div className="dm-report-media"><MessageBody m={{ message_id: r.message_id, sender_id: '', mine: false, body: '', hidden: false, kind: r.kind, url: r.url, created_at: null }} /></div>}
+          {r.body && <span className="muted small">“{r.body.slice(0, 200)}{r.body.length > 200 ? '…' : ''}”</span>}
           <div className="row" style={{ gap: 8 }}>
             <Button size="sm" variant="red" onClick={() => resolve(r, 'hide')}>Ẩn tin nhắn</Button>
             <Button size="sm" variant="ghost" onClick={() => resolve(r, 'dismiss')}>Bỏ qua</Button>

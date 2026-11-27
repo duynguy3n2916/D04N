@@ -149,6 +149,50 @@ def test_direct_messages_block_report(client, teacher):
     assert client.post(f"/ai/messages/conversations/{cid}", headers=a, json={"body": "ok"}).status_code == 201
 
 
+def test_direct_message_attachments(client):
+    a = token(client, "dmf-a", "student", ["lop-dmf"])
+    b = token(client, "dmf-b", "student", ["lop-dmf"])
+    gv = token(client, "dmf-gv", "teacher", ["lop-dmf"])
+    stranger = token(client, "dmf-x", "student", ["lop-dmf"])
+    cid = client.post("/ai/messages/conversations", headers=a, json={"user_id": "dmf-b"}).json()["conversation_id"]
+    url = f"/ai/messages/conversations/{cid}/files"
+
+    img = client.post(url, headers=a, data={"kind": "image", "body": "Bài 3 đây"},
+                      files={"file": ("bai3.png", io.BytesIO(PNG), "image/png")})
+    assert img.status_code == 201, img.text
+    assert img.json()["kind"] == "image" and img.json()["url"].startswith("/ai/messages/files/")
+    voice = client.post(url, headers=b, data={"kind": "audio", "duration": "3.4"},
+                        files={"file": ("tin-nhan-thoai.webm", io.BytesIO(b"\x1aE\xdf\xa3voice"), "audio/webm")})
+    assert voice.status_code == 201 and voice.json()["duration"] == 3.4 and voice.json()["mime"] == "audio/webm"
+    vid = client.post(url, headers=a, data={"kind": "video"}, files={"file": ("clip.mov", io.BytesIO(b"\0\0\0\x14ftypqt"), "video/quicktime")})
+    assert vid.status_code == 201 and vid.json()["mime"] == "video/quicktime"
+    # sai loại / sai đuôi bị từ chối
+    assert client.post(url, headers=a, data={"kind": "image"}, files={"file": ("x.exe", io.BytesIO(b"MZ"), "x")}).status_code == 400
+    assert client.post(url, headers=a, data={"kind": "file"}, files={"file": ("a.png", io.BytesIO(PNG), "image/png")}).status_code == 422
+
+    client.get(f"/ai/messages/conversations/{cid}", headers=a)  # a mở hội thoại
+    msgs = client.get(f"/ai/messages/conversations/{cid}", headers=b).json()
+    kinds = [(m["kind"], m["body"]) for m in msgs["messages"]]
+    assert kinds == [("image", "Bài 3 đây"), ("audio", ""), ("video", "")]
+    assert msgs["other_read_at"]  # a đã mở hội thoại nên b thấy "Đã xem" dưới tin của mình
+    lst = client.get("/ai/messages/conversations", headers=a).json()
+    assert lst[0]["last_message"] == "Bạn: 🎬 Video"
+    file_url = msgs["messages"][0]["url"]
+    r = client.get(file_url, headers=b)
+    assert r.status_code == 200 and r.content == PNG and r.headers["content-type"].startswith("image/png")
+    # người ngoài hội thoại và giáo viên (khi chưa có báo cáo) không xem được file
+    assert client.get(file_url, headers=stranger).status_code == 404
+    assert client.get(file_url, headers=gv).status_code == 404
+    client.post(f"/ai/messages/{msgs['messages'][0]['message_id']}/report", headers=b, json={"reason": "Ảnh không phù hợp"})
+    reps = client.get("/ai/messages/reports/lop-dmf", headers=gv).json()
+    assert reps[0]["kind"] == "image" and reps[0]["url"] == file_url
+    assert client.get(file_url, headers=gv).status_code == 200
+
+    # bị chặn thì không gửi file được
+    client.post("/ai/messages/blocks", headers=b, json={"user_id": "dmf-a", "blocked": True})
+    assert client.post(url, headers=a, data={"kind": "image"}, files={"file": ("a.png", io.BytesIO(PNG), "image/png")}).status_code == 403
+
+
 def test_lesson_tags_on_posts(client):
     gv = token(client, "sn-gv4", "teacher", ["lop-sn4"])
     a = token(client, "sn-i", "student", ["lop-sn4"])

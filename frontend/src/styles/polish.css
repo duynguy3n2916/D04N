@@ -460,3 +460,86 @@ html::-webkit-scrollbar, .sidenav::-webkit-scrollbar { display: none; }
   .nav-item { padding-top: 6px; padding-bottom: 6px; }
   .sidenav-title { padding-top: 4px; }
 }
+
+/* ===== Tin nhắn kiểu app chat (2026-11-27): gom cụm bong bóng, mốc giờ, "Đã xem", ảnh / video / tin nhắn thoại ===== */
+.dm-chat { justify-content: flex-start; }
+.dm-chat-inner { position: relative; }
+.dm-chat-head { min-height: 66px; }
+.dm-avatar-ph { width: 40px; height: 40px; border-radius: 50%; background: var(--bg-soft); flex: none; }
+.dm-messages { gap: 0; padding: 16px 18px 10px; overscroll-behavior: contain; }
+.dm-loading { flex: 1; display: grid; place-items: center; }
+.dm-intro { display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; padding: 18px 0 22px; margin-top: auto; }
+.dm-intro strong { font-size: 17px; }
+.dm-stamp { align-self: center; font-size: 12px; color: var(--muted); margin: 14px 0 8px; font-weight: 500; }
+.dm-row { display: flex; align-items: flex-end; gap: 8px; max-width: 78%; margin-top: 2px; }
+.dm-row.first { margin-top: 10px; }
+.dm-row.mine { align-self: flex-end; flex-direction: row-reverse; }
+.dm-row-av { width: 28px; flex: none; }
+.dm-col { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.dm-row.mine .dm-col { align-items: flex-end; }
+/* góc bong bóng: các tin liền nhau của cùng một người dính vào nhau như Messenger */
+.dm-row .dm-bubble { border-radius: 20px 20px 20px 6px; }
+.dm-row:not(.mine):not(.first) .dm-bubble { border-top-left-radius: 6px; }
+.dm-row:not(.mine).last .dm-bubble { border-bottom-left-radius: 20px; }
+.dm-row:not(.mine).first:not(.last) .dm-bubble { border-bottom-left-radius: 6px; }
+.dm-row.mine .dm-bubble { border-radius: 20px 6px 6px 20px; }
+.dm-row.mine.first .dm-bubble { border-top-right-radius: 20px; }
+.dm-row.mine.last .dm-bubble { border-bottom-right-radius: 20px; }
+.dm-row.mine.first.last .dm-bubble { border-radius: 20px; }
+.dm-row:not(.mine).first.last .dm-bubble { border-radius: 20px; }
+.dm-bubble { line-height: 1.45; padding: 8px 14px; }
+.dm-act { opacity: 0; align-self: center; border: 0; background: transparent; color: var(--muted); width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; cursor: pointer; flex: none; transition: opacity .12s; }
+.dm-row:hover .dm-act, .dm-act:focus-visible { opacity: 1; }
+.dm-act:hover { background: var(--bg-soft); color: var(--red); }
+.dm-status { align-self: flex-end; font-size: 12px; color: var(--muted); margin: 3px 2px 0; }
+.dm-pending { opacity: .75; }
+.dm-pending .dm-status { margin-top: 2px; }
+.dm-err { color: var(--red-text); }
+/* ảnh / video */
+.dm-media { display: block; padding: 0; border: 0; background: var(--bg-soft); border-radius: 18px; overflow: hidden; max-width: min(320px, 100%); cursor: zoom-in; }
+.dm-media img { display: block; max-width: 100%; max-height: 340px; object-fit: cover; }
+.dm-video { cursor: auto; max-height: 360px; background: #000; }
+.dm-report-media .dm-media { max-width: 220px; }
+.dm-report-media .dm-media img { max-height: 200px; }
+.dm-lightbox { position: fixed; inset: 0; z-index: 1000; background: rgba(10, 14, 12, .88); display: grid; place-items: center; padding: 24px; cursor: zoom-out; animation: fx-fade-late .15s ease both; }
+.dm-lightbox img { max-width: 100%; max-height: 100%; border-radius: 10px; cursor: auto; box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+.dm-lightbox-x { position: absolute; top: 16px; right: 16px; width: 44px; height: 44px; border-radius: 50%; border: 0; background: rgba(255,255,255,.14); color: #fff; display: grid; place-items: center; cursor: pointer; }
+.dm-lightbox-x:hover { background: rgba(255,255,255,.26); }
+/* tin nhắn thoại */
+.dm-voice { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 8px; border-radius: 22px; background: #fff; min-width: 210px; color: var(--ink); }
+.dm-voice.mine { background: var(--brand); color: #fff; }
+.dm-voice-play { width: 34px; height: 34px; border-radius: 50%; border: 0; display: grid; place-items: center; cursor: pointer; background: var(--brand); color: #fff; flex: none; }
+.dm-voice.mine .dm-voice-play { background: #fff; color: var(--brand); }
+.dm-wave { flex: 1; height: 28px; display: flex; align-items: center; gap: 2px; cursor: pointer; min-width: 110px; }
+.dm-wave span { flex: 1; min-width: 2px; border-radius: 2px; background: currentColor; opacity: .3; }
+.dm-wave span.on { opacity: 1; }
+.dm-voice-time { font-size: 13px; font-variant-numeric: tabular-nums; flex: none; min-width: 34px; text-align: right; }
+/* ô soạn tin */
+.dm-compose { gap: 4px; align-items: flex-end; padding: 10px 12px; }
+.dm-cbtn { width: 40px; height: 40px; border-radius: 50%; border: 0; background: transparent; color: var(--brand); display: grid; place-items: center; cursor: pointer; flex: none; margin-bottom: 3px; }
+.dm-cbtn:hover:not(:disabled) { background: var(--brand-soft); }
+.dm-cbtn:disabled { opacity: .4; cursor: default; }
+.dm-field { flex: 1; min-width: 0; background: var(--bg-soft); border-radius: 22px; display: flex; flex-direction: column; margin: 0 4px; }
+.dm-field textarea, .dm-compose .dm-field textarea.input { border: 0; outline: 0; background: transparent; resize: none; width: 100%; font: inherit; color: inherit; line-height: 1.4; padding: 11px 16px; min-height: 44px; max-height: 150px; display: block; box-shadow: none; }
+.dm-drafts { display: flex; gap: 8px; padding: 10px 12px 2px; overflow-x: auto; }
+.dm-draft { position: relative; width: 64px; height: 64px; border-radius: 12px; overflow: hidden; flex: none; background: var(--line); }
+.dm-draft img, .dm-draft video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.dm-draft > button { position: absolute; top: 4px; right: 4px; width: 20px; height: 20px; border-radius: 50%; border: 0; background: rgba(0,0,0,.6); color: #fff; display: grid; place-items: center; cursor: pointer; padding: 0; }
+.dm-draft-tag { position: absolute; left: 4px; bottom: 4px; width: 20px; height: 20px; border-radius: 50%; background: rgba(0,0,0,.6); color: #fff; display: grid; place-items: center; }
+.dm-draft-add { border: 2px dashed var(--line); background: transparent; color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+.dm-send { width: 44px; height: 44px; border-radius: 50%; border: 0; background: var(--brand); color: #fff; display: grid; place-items: center; cursor: pointer; flex: none; transition: transform .1s, opacity .15s; }
+.dm-send:hover:not(:disabled) { background: var(--brand-hover); }
+.dm-send:active:not(:disabled) { transform: scale(.92); }
+.dm-send:disabled { opacity: .35; cursor: default; }
+.dm-recording { align-items: center; }
+.dm-rec-bar { flex: 1; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 16px; border-radius: 22px; background: var(--red-soft); color: var(--red-text); margin: 0 4px; font-size: 14px; }
+.dm-rec-bar b { font-variant-numeric: tabular-nums; }
+.dm-rec-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--red); animation: dm-pulse 1s ease-in-out infinite; }
+@keyframes dm-pulse { 50% { opacity: .25; } }
+.dm-recording .dm-cbtn { color: var(--red); margin: 0; }
+.dm-drop { position: absolute; inset: 8px; border: 3px dashed var(--brand); border-radius: 18px; background: color-mix(in srgb, var(--brand-soft) 92%, transparent); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--brand-strong); pointer-events: none; z-index: 5; }
+@media (max-width: 760px) {
+  .dm-row { max-width: 86%; }
+  .dm-act { opacity: .6; }
+  .dm-messages { padding: 12px 10px 8px; }
+}
