@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PageHeader } from '../../components/AppShell';
 import { Icon } from '../../components/Icon';
 import { activeCaption, CaptionSettings, useVideoCaptions, VideoCaption } from '../../components/VideoCaptions';
@@ -217,20 +217,80 @@ export function VideoDetail({ videoId }: { videoId: string }) {
   const qs = useAsync((s) => api<TQuestion[]>(`/ai/videos/${encodeURIComponent(videoId)}/questions/manage`, { signal: s }), [videoId]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const playerRef = useRef<HTMLDivElement>(null);
+  const workspaceMainRef = useRef<HTMLDivElement>(null);
+  const workspaceSideRef = useRef<HTMLDivElement>(null);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+  const questionContentRef = useRef<HTMLDivElement>(null);
   const captionPreferences = useVideoCaptions();
   const [captionMenu, setCaptionMenu] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [now, setNow] = useState(0);
+  const [mediaDuration, setMediaDuration] = useState(0);
+  const [workspaceMode, setWorkspaceMode] = useState<'watch' | 'edit'>('watch');
   const [tab, setTab] = useState<'questions' | 'transcript'>('questions');
+  const [questionFilter, setQuestionFilter] = useState<'all' | 'draft' | 'approved' | 'rejected'>('all');
+  const [focusQuestionId, setFocusQuestionId] = useState<string | null>(null);
   const [job, setJob] = useState<string | null>(null);
   const [editQ, setEditQ] = useState<TQuestion | 'new' | null>(null);
   const [gen, setGen] = useState(false);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [suggestionNotice, setSuggestionNotice] = useState<string | null>(null);
   const handledJob = useRef<string | null>(null);
+  const didAutoScroll = useRef(false);
 
   const v = info.data;
   const src = v?.has_file ? mediaUrl(`/ai/media/videos/${encodeURIComponent(videoId)}/file`) : v?.source_url || null;
+  const duration = v?.duration_seconds || mediaDuration;
+  const questions = qs.data || [];
+  const visibleQuestions = questionFilter === 'all' ? questions : questions.filter((q) => q.status === questionFilter);
   const seek = (t: number) => { const el = videoRef.current; if (el) { el.currentTime = t; setNow(t); el.play().catch(() => {}); } };
   const currentCaption = activeCaption(tr.data?.segments || [], now);
+  const scrollToVideo = () => {
+    const main = workspaceMainRef.current;
+    if (!main) return;
+    const start = window.scrollY;
+    const target = Math.max(0, start + main.getBoundingClientRect().top - 8);
+    const distance = target - start;
+    if (Math.abs(distance) < 2) return;
+    const startedAt = performance.now();
+    const durationMs = 1100;
+    const animate = (now: number) => {
+      const progress = Math.min(1, (now - startedAt) / durationMs);
+      const eased = progress < 0.5 ? 4 * progress * progress * progress : 1 - Math.pow(-2 * progress + 2, 3) / 2;
+      window.scrollTo(0, start + distance * eased);
+      if (progress < 1) window.requestAnimationFrame(animate);
+    };
+    window.requestAnimationFrame(animate);
+  };
+  useLayoutEffect(() => {
+    const main = workspaceMainRef.current;
+    const side = workspaceSideRef.current;
+    if (!main || !side) return;
+    const syncHeight = () => {
+      if (workspaceMode !== 'watch' || window.matchMedia('(max-width: 700px)').matches) {
+        side.style.removeProperty('height');
+        return;
+      }
+      side.style.height = `${main.getBoundingClientRect().height}px`;
+    };
+    const observer = new ResizeObserver(syncHeight);
+    observer.observe(main);
+    window.addEventListener('resize', syncHeight);
+    syncHeight();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', syncHeight);
+      side.style.removeProperty('height');
+    };
+  }, [workspaceMode, src, duration]);
+  useEffect(() => {
+    if (!focusQuestionId || tab !== 'questions' || editQ || createOpen || !qs.data) return;
+    const cards = questionContentRef.current?.querySelectorAll<HTMLElement>('[data-question-id]');
+    const card = cards && Array.from(cards).find((item) => item.dataset.questionId === focusQuestionId);
+    if (!card) return;
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setFocusQuestionId(null);
+  }, [focusQuestionId, tab, editQ, createOpen, questionFilter, qs.data]);
   const fullscreen = () => {
     const action = document.fullscreenElement ? document.exitFullscreen() : playerRef.current?.requestFullscreen();
     action?.catch(() => toast('Trình duyệt không cho bật toàn màn hình', 'error'));
@@ -241,13 +301,28 @@ export function VideoDetail({ videoId }: { videoId: string }) {
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
   useEffect(() => { setNow(0); setCaptionMenu(false); }, [videoId]);
+  useEffect(() => {
+    setWorkspaceMode('watch');
+    setTab('questions');
+    setCreateOpen(false);
+    setEditQ(null);
+    didAutoScroll.current = false;
+  }, [videoId]);
+  useEffect(() => {
+    if (info.loading || didAutoScroll.current) return;
+    const frame = window.requestAnimationFrame(() => {
+      if (didAutoScroll.current) return;
+      didAutoScroll.current = true;
+      scrollToVideo();
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [videoId, info.loading]);
 
   useEffect(() => {
     const j = transcriptionJob.data;
     if (!j) return;
     if (j.status === 'queued' || j.status === 'running') {
       setJob(`Đang phiên âm… ${j.progress != null ? Math.round(j.progress * 100) + '%' : ''} ${j.message || ''}`);
-      setTab('transcript');
       const timer = window.setTimeout(transcriptionJob.reload, 1500);
       return () => window.clearTimeout(timer);
     }
@@ -255,10 +330,9 @@ export function VideoDetail({ videoId }: { videoId: string }) {
     handledJob.current = j.job_id;
     if (j.status === 'succeeded') {
       setJob(null);
-      tr.reload(); info.reload(); setTab('transcript');
+      tr.reload(); info.reload();
     } else {
       setJob(`Phiên âm lỗi: ${j.error || j.message || 'Không rõ nguyên nhân'}`);
-      setTab('transcript');
     }
   }, [transcriptionJob.data]);
 
@@ -266,6 +340,7 @@ export function VideoDetail({ videoId }: { videoId: string }) {
     try {
       await api<{ job_id: string }>(`/ai/media/videos/${encodeURIComponent(videoId)}/transcribe`, { method: 'POST' });
       setJob('Đang phiên âm…');
+      setTab('transcript');
       transcriptionJob.reload();
     } catch (e) { setJob(null); toast(errorText(e), 'error'); }
   };
@@ -274,35 +349,38 @@ export function VideoDetail({ videoId }: { videoId: string }) {
     setGen(true);
     try {
       await api(`/ai/videos/${encodeURIComponent(videoId)}/generate-question`, { json: { timestamp: Math.floor(now), use_lesson_context: false } });
-      toast(`AI đã soạn câu hỏi nháp tại ${fmtTime(now)}`, 'success'); qs.reload();
+      toast(`AI đã soạn câu hỏi nháp tại ${fmtTime(now)}`, 'success');
+      setTab('questions'); setCreateOpen(false); setQuestionFilter('draft'); setSuggestionNotice(null); qs.reload();
     } catch (e) { toast(errorText(e), 'error'); } finally { setGen(false); }
   };
   const suggest = async () => {
     setGen(true);
     try {
       const r = await api<{ suggestions: { time: string; concept: string }[]; warnings?: string[] }>(`/ai/videos/${encodeURIComponent(videoId)}/suggest-timestamps`, { json: { max_suggestions: 3 } });
-      toast(r.suggestions.length ? `Đề xuất ${r.suggestions.length} mốc: ${r.suggestions.map((s) => s.time).join(', ')}` : 'Không tìm được mốc phù hợp', 'success');
-      qs.reload();
+      const summary = r.suggestions.length ? `AI đã đề xuất ${r.suggestions.length} câu tại ${r.suggestions.map((s) => s.time).join(', ')}.` : 'AI chưa tìm được mốc phù hợp.';
+      setSuggestionNotice([summary, ...(r.warnings || [])].join(' '));
+      toast(r.suggestions.length ? `Đã tạo ${r.suggestions.length} câu nháp từ video` : 'Không tìm được mốc phù hợp', r.suggestions.length ? 'success' : 'error');
+      setTab('questions'); setCreateOpen(false); setQuestionFilter('draft'); qs.reload();
     } catch (e) { toast(errorText(e), 'error'); } finally { setGen(false); }
   };
   const setStatus = async (q: TQuestion, status: string) => {
-    try { await api(`/ai/video-questions/${q.question_id}`, { method: 'PATCH', json: { status } }); qs.reload(); info.reload(); } catch (e) { toast(errorText(e), 'error'); }
+    try { await api(`/ai/video-questions/${q.question_id}`, { method: 'PATCH', json: { status } }); setQuestionFilter('all'); qs.reload(); info.reload(); } catch (e) { toast(errorText(e), 'error'); }
   };
   const archive = async (q: TQuestion) => {
     if (!await confirmDialog('Xóa câu hỏi này?', { danger: true, okLabel: 'Xóa' })) return;
-    try { await api(`/ai/video-questions/${q.question_id}`, { method: 'DELETE' }); qs.reload(); } catch (e) { toast(errorText(e), 'error'); }
+    try { await api(`/ai/video-questions/${q.question_id}`, { method: 'DELETE' }); setQuestionFilter('all'); qs.reload(); } catch (e) { toast(errorText(e), 'error'); }
   };
 
   return (
     <>
       <div className="row" style={{ marginBottom: 8 }}><Link to="/teach/videos" className="muted small" style={{ fontWeight: 600 }}>← Tất cả video</Link></div>
-      <PageHeader title={v?.title || videoId} sub={`${videoId}${v?.duration_seconds ? ` · ${fmtTime(v.duration_seconds)}` : ''}`}
+      <PageHeader title={v?.title || videoId} sub={videoId}
         actions={<Button variant="red" icon="trash" onClick={async () => {
           if (await confirmDeleteVideo({ video_id: videoId, title: v?.title || videoId }, toast)) navigate('/teach/videos');
         }}>Xóa video</Button>} />
       {info.error && <ErrorBox message={info.error} onRetry={info.reload} />}
-      <div className="split">
-        <div className="main">
+      <div ref={workspaceRef} className={`split video-editor-workspace ${workspaceMode === 'watch' ? 'watch-mode' : 'edit-mode'}`}>
+        <div className="main" ref={workspaceMainRef}>
           {src ? (
             <div className="teacher-player" ref={playerRef} onKeyDown={(e) => {
               if ((e.target as HTMLElement).closest('button, input, select')) return;
@@ -310,7 +388,12 @@ export function VideoDetail({ videoId }: { videoId: string }) {
               if (e.key === 'Escape') setCaptionMenu(false);
             }}>
               <div className="teacher-video-stage">
-                <video ref={videoRef} src={src} controls controlsList="nofullscreen" playsInline
+                <video ref={videoRef} src={src} controls controlsList="nofullscreen" playsInline onLoadedMetadata={(e) => setMediaDuration(e.currentTarget.duration)}
+                  onClick={(e) => {
+                    const video = e.currentTarget;
+                    if (e.clientY >= video.getBoundingClientRect().bottom - 48) return;
+                    if (video.paused) video.play().catch(() => {}); else video.pause();
+                  }}
                   onTimeUpdate={(e) => setNow(e.currentTarget.currentTime)} onSeeked={(e) => setNow(e.currentTarget.currentTime)} />
                 <VideoCaption text={currentCaption?.text} preferences={captionPreferences} />
               </div>
@@ -331,34 +414,68 @@ export function VideoDetail({ videoId }: { videoId: string }) {
               </div>}
             </div>
           ) : info.loading ? <Spinner /> : <Empty title="Video chưa có file">Tải file lên ở trang danh sách (cùng mã video).</Empty>}
-          <div className="card col" style={{ gap: 10 }}>
-            <div className="row" style={{ justifyContent: 'space-between' }}>
-              <strong>Đang ở {fmtTime(now)}</strong>
-              <div className="row">
-                <Button size="sm" variant="blue" icon="wand" loading={gen} disabled={!tr.data} onClick={generateAt}>AI soạn câu hỏi tại đây</Button>
-                <Button size="sm" variant="ghost" icon="plus" onClick={() => setEditQ('new')}>Tự soạn câu hỏi</Button>
-                <Button size="sm" variant="ghost" icon="sparkle" loading={gen} disabled={!tr.data} onClick={suggest}>AI đề xuất mốc</Button>
-              </div>
-            </div>
-            <p className="muted small" style={{ fontWeight: 600 }}>
-              {tr.data ? 'AI soạn câu hỏi tại đây chỉ dùng lời giảng của video đang xem. Muốn kết hợp slide hoặc bài đọc, chọn nguồn ở mục Câu hỏi.'
-                : !tr.loading ? 'Cần có phụ đề trước khi AI soạn câu hỏi.' : 'Đang tải phụ đề…'}
-            </p>
-            {tr.error && <ErrorBox message={tr.error} onRetry={tr.reload} />}
-          </div>
+          {src && duration > 0 && <TeacherTimeline duration={duration} now={now} segments={tr.data?.segments || []} questions={qs.data || []}
+            onSeek={(time, kind, questionId) => {
+              if (kind === 'subtitle') setTab('transcript');
+              else { setTab('questions'); setQuestionFilter('all'); setCreateOpen(false); if (questionId) setFocusQuestionId(questionId); }
+              seek(time);
+            }} />}
         </div>
-        <div className="side">
-          <div className="seg" role="tablist" style={{ alignSelf: 'flex-start' }}>
-            <button role="tab" aria-selected={tab === 'questions'} className={tab === 'questions' ? 'on' : ''} onClick={() => setTab('questions')}>Câu hỏi ({qs.data?.length ?? 0})</button>
-            <button role="tab" aria-selected={tab === 'transcript'} className={tab === 'transcript' ? 'on' : ''} onClick={() => setTab('transcript')}>Phụ đề</button>
+        <div className="side" ref={workspaceSideRef}>
+          <div className="teacher-panel-navigation">
+            <div className="video-panel-tabs" role="tablist" aria-label="Nội dung video">
+              <button role="tab" aria-selected={tab === 'questions'} className={tab === 'questions' ? 'on' : ''} onClick={() => { setTab('questions'); setCreateOpen(false); }}>Câu hỏi</button>
+              <button role="tab" aria-selected={tab === 'transcript'} className={tab === 'transcript' ? 'on' : ''} onClick={() => { setTab('transcript'); setCreateOpen(false); }}>Phụ đề</button>
+            </div>
+            <IconButton icon={workspaceMode === 'watch' ? 'zoomIn' : 'zoomOut'}
+              label={workspaceMode === 'watch' ? 'Phóng to khu vực thao tác' : 'Thu nhỏ khu vực thao tác'}
+              onClick={() => setWorkspaceMode((mode) => mode === 'watch' ? 'edit' : 'watch')} />
           </div>
-          {tab === 'questions' && (
-            <div className="col" style={{ gap: 12 }}>
+          {tab === 'questions' && !editQ && !createOpen && <>
+            <div className="teacher-panel-actions">
+              <span>Đang xem <strong>{fmtTime(now)}</strong></span>
+              <Button size="sm" icon="plus" onClick={() => setCreateOpen(true)}>Tạo câu hỏi</Button>
+            </div>
+          </>}
+          {tab === 'questions' && createOpen && !editQ && <section className="teacher-create-mode">
+            <div className="teacher-create-mode-head">
+              <div><strong>Tạo câu hỏi</strong><span>Chọn cách bạn muốn bắt đầu.</span></div>
+              <Button size="sm" variant="ghost" onClick={() => setCreateOpen(false)}>Quay lại danh sách</Button>
+            </div>
+            <div className="teacher-create-options">
+              <button type="button" className="teacher-create-option" onClick={() => { setCreateOpen(false); setEditQ('new'); }}>
+                <strong>Tự soạn tại mốc đang xem</strong><span>Bạn tự nhập câu hỏi và đáp án.</span>
+              </button>
+              <button type="button" className="teacher-create-option" disabled={!tr.data?.segments.length || gen} onClick={generateAt}>
+                <strong>AI soạn quanh mốc đang xem</strong><span>{tr.data?.segments.length ? 'Tạo một câu nháp dựa trên phụ đề đoạn này.' : 'Cần phụ đề video để AI hiểu nội dung.'}</span>
+              </button>
+              <button type="button" className="teacher-create-option" disabled={!tr.data?.segments.length || gen} onClick={suggest}>
+                <strong>AI tìm đoạn quan trọng</strong><span>{tr.data?.segments.length ? 'Tạo tối đa 3 câu nháp ở các mốc phù hợp.' : 'Cần phụ đề video để AI tìm mốc.'}</span>
+              </button>
+            </div>
+            {tr.error && <ErrorBox message={tr.error} onRetry={tr.reload} />}
+          </section>}
+          {tab === 'questions' && !createOpen && (
+            <div className="teacher-question-panel">
+              {!editQ && qs.data && <div className="teacher-question-filters" role="group" aria-label="Lọc câu hỏi theo trạng thái">
+                {([
+                  ['all', 'Tất cả', questions.length], ['draft', 'Câu nháp', questions.filter((q) => q.status === 'draft').length],
+                  ['approved', 'Đã duyệt', questions.filter((q) => q.status === 'approved').length], ['rejected', 'Từ chối', questions.filter((q) => q.status === 'rejected').length],
+                ] as const).map(([key, label, count]) => <button key={key} type="button" className={questionFilter === key ? 'on' : ''}
+                  aria-pressed={questionFilter === key} onClick={() => setQuestionFilter(key)}>{label}<span>{count}</span></button>)}
+              </div>}
+              <div ref={questionContentRef} className="col teacher-question-content" style={{ gap: 12 }}>
+              {editQ ? <QuestionEditor inline videoId={videoId} q={editQ === 'new' ? null : editQ} defaultTime={now} maxDuration={duration} onPreview={seek}
+                onClose={() => setEditQ(null)} onSaved={() => { setEditQ(null); setQuestionFilter('all'); qs.reload(); info.reload(); }} /> : <>
+              {suggestionNotice && <div className="video-suggestion-notice" role="status">{suggestionNotice}</div>}
               {qs.loading && !qs.data && <Spinner />}
               {qs.error && <ErrorBox message={qs.error} onRetry={qs.reload} />}
-              {qs.data && !qs.data.length && <Empty title="Chưa có câu hỏi">Tua tới đoạn quan trọng rồi bấm “AI soạn câu hỏi tại đây”.</Empty>}
-              {qs.data?.map((q) => (
-                <div key={q.question_id} className="qcard">
+              {qs.data && !questions.length && <Empty title="Chưa có câu hỏi">Tua video đến đoạn cần kiểm tra rồi chọn Tạo câu hỏi.</Empty>}
+              {qs.data && questions.length > 0 && !visibleQuestions.length && <Empty title="Không có câu hỏi ở trạng thái này">
+                <Button size="sm" variant="ghost" onClick={() => setQuestionFilter('all')}>Xem tất cả câu hỏi</Button>
+              </Empty>}
+              {visibleQuestions.map((q) => (
+                <div key={q.question_id} data-question-id={q.question_id} className={`qcard ${Math.abs(q.timestamp - now) < 1 ? 'qcard-at-time' : ''}`}>
                   <div className="row" style={{ gap: 6 }}>
                     <button className="src" onClick={() => seek(q.timestamp)}><Icon name="play" size={14} />{fmtTime(q.timestamp)}</button>
                     <Badge tone={q.status === 'approved' ? 'green' : q.status === 'rejected' ? 'red' : 'yellow'}>{q.status === 'approved' ? 'Đã duyệt' : q.status === 'rejected' ? 'Từ chối' : 'Nháp'}</Badge>
@@ -382,18 +499,53 @@ export function VideoDetail({ videoId }: { videoId: string }) {
                   </div>
                 </div>
               ))}
+              </>}
+              </div>
             </div>
           )}
           {tab === 'transcript' && (
+            <>
+            {tr.error && <ErrorBox message={tr.error} onRetry={tr.reload} />}
             <TranscriptEditor videoId={videoId} tr={tr.data} loading={tr.loading} now={now} onSeek={seek} hasFile={!!v?.has_file}
               job={job} transcribing={transcriptionJob.data?.status === 'queued' || transcriptionJob.data?.status === 'running'}
               onTranscribe={transcribe} onSaved={() => { tr.reload(); info.reload(); }} />
+            </>
           )}
         </div>
       </div>
-      {editQ && <QuestionEditor videoId={videoId} q={editQ === 'new' ? null : editQ} defaultTime={now} onClose={() => setEditQ(null)} onSaved={() => { setEditQ(null); qs.reload(); info.reload(); }} />}
     </>
   );
+}
+
+function TeacherTimeline({ duration, now, segments, questions, onSeek }: {
+  duration: number; now: number; segments: TranscriptSegment[]; questions: TQuestion[];
+  onSeek: (time: number, kind: 'subtitle' | 'question', questionId?: string) => void;
+}) {
+  const position = (time: number) => `${Math.max(0, Math.min(100, (time / duration) * 100))}%`;
+  const coverage = [...segments].sort((a, b) => a.start_time - b.start_time).reduce<{ start: number; end: number }[]>((ranges, segment) => {
+    const last = ranges[ranges.length - 1];
+    if (last && segment.start_time <= last.end + 0.5) last.end = Math.max(last.end, segment.end_time);
+    else ranges.push({ start: segment.start_time, end: segment.end_time });
+    return ranges;
+  }, []);
+  return <div className="teacher-timeline" aria-label="Mốc phụ đề và câu hỏi trong video">
+    <div className="teacher-timeline-head"><strong>Phụ đề và câu hỏi</strong><span>Thời lượng {fmtTime(duration)}</span></div>
+    <div className="teacher-timeline-track">
+      <div className="teacher-timeline-progress" style={{ width: position(now) }} />
+      <button type="button" className="teacher-timeline-subtitle-lane" disabled={!segments.length} aria-label="Tua video theo phụ đề"
+        onClick={(event) => {
+          const bounds = event.currentTarget.getBoundingClientRect();
+          onSeek(Math.max(0, Math.min(duration, ((event.clientX - bounds.left) / bounds.width) * duration)), 'subtitle');
+        }}>
+        {coverage.map((range, i) => <span key={`coverage-${i}`} style={{ left: position(range.start), width: `${Math.max(0, (range.end - range.start) / duration * 100)}%` }} />)}
+      </button>
+      {questions.map((question) => <button key={question.question_id} type="button" className={`teacher-timeline-question ${question.status === 'approved' ? 'approved' : question.status === 'rejected' ? 'rejected' : 'draft'}`}
+        style={{ left: position(question.timestamp) }} title={`${fmtTime(question.timestamp)} · ${question.question}`}
+        aria-label={`Câu hỏi ${fmtTime(question.timestamp)}: ${question.question}`} onClick={() => onSeek(question.timestamp, 'question', question.question_id)} />)}
+      <div className="teacher-timeline-cursor" style={{ left: position(now) }} />
+    </div>
+    <div className="teacher-timeline-legend"><span><i className="caption-key" /> Phụ đề</span><span><i className="question-key" /> Câu hỏi nháp</span><span><i className="question-key approved" /> Câu đã duyệt</span><span><i className="question-key rejected" /> Từ chối</span></div>
+  </div>;
 }
 
 function TranscriptEditor({ videoId, tr, loading, now, onSeek, hasFile, job, transcribing, onTranscribe, onSaved }: {
@@ -407,8 +559,11 @@ function TranscriptEditor({ videoId, tr, loading, now, onSeek, hasFile, job, tra
   const [showVersions, setShowVersions] = useState(false);
   const versions = useAsync((s) => (showVersions ? api<Version[]>(`/ai/videos/${encodeURIComponent(videoId)}/transcript/versions`, { signal: s }) : Promise.resolve([] as Version[])), [showVersions, tr?.version]);
   const fileRef = useRef<HTMLInputElement>(null);
+  const activeSegRef = useRef<HTMLDivElement>(null);
+  const activeSegIndex = segs.findIndex((segment) => now >= segment.start_time && now < segment.end_time);
 
   useEffect(() => { setSegs(tr?.segments || []); setDirty(false); }, [tr]);
+  useEffect(() => { activeSegRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, [activeSegIndex]);
 
   const save = async () => {
     setBusy(true);
@@ -427,7 +582,7 @@ function TranscriptEditor({ videoId, tr, loading, now, onSeek, hasFile, job, tra
   };
 
   return (
-    <div className="card col" style={{ gap: 10 }}>
+    <div className="card col teacher-transcript-card" style={{ gap: 10 }}>
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <strong>{tr ? `Phiên bản ${tr.version} · ${tr.source}` : 'Chưa có phụ đề'}</strong>
         <div className="row">
@@ -449,9 +604,9 @@ function TranscriptEditor({ videoId, tr, loading, now, onSeek, hasFile, job, tra
         </div>
       )}
       {loading && <Spinner />}
-      <div className="col" style={{ gap: 6, maxHeight: 460, overflowY: 'auto' }}>
+      <div className="col teacher-transcript-segments" style={{ gap: 6 }}>
         {segs.map((s, i) => (
-          <div key={i} className="seg-edit" style={now >= s.start_time && now < s.end_time ? { background: 'var(--green-soft)', borderRadius: 8 } : undefined}>
+          <div key={i} ref={i === activeSegIndex ? activeSegRef : undefined} className={`seg-edit ${i === activeSegIndex ? 'seg-edit-on' : ''}`}>
             <button className="ts" onClick={() => onSeek(s.start_time)}>{fmtTime(s.start_time)}</button>
             <input aria-label={`Đoạn ${fmtTime(s.start_time)}`} value={s.text} onChange={(e) => { const n = [...segs]; n[i] = { ...s, text: e.target.value }; setSegs(n); setDirty(true); }} />
           </div>
@@ -462,12 +617,17 @@ function TranscriptEditor({ videoId, tr, loading, now, onSeek, hasFile, job, tra
   );
 }
 
-function QuestionEditor({ videoId, q, defaultTime, onClose, onSaved }: { videoId: string; q: TQuestion | null; defaultTime: number; onClose: () => void; onSaved: () => void }) {
+function QuestionEditor({ videoId, q, defaultTime, maxDuration, onPreview, inline = false, onClose, onSaved }: {
+  videoId: string; q: TQuestion | null; defaultTime: number; maxDuration?: number; onPreview: (time: number) => void; inline?: boolean; onClose: () => void; onSaved: () => void;
+}) {
+  const initialTime = Math.floor(q?.timestamp ?? defaultTime);
   const [f, setF] = useState({
-    timestamp: Math.floor(q?.timestamp ?? defaultTime), type: q?.type || 'multiple_choice', difficulty: q?.difficulty || 'medium',
+    timestamp: initialTime, type: q?.type || 'multiple_choice', difficulty: q?.difficulty || 'medium',
     question: q?.question || '', options: q?.options?.length ? q.options : ['', '', '', ''], correct_index: q?.correct_index ?? 0,
     correct_answer: q?.correct_answer || '', explanation: q?.explanation || '',
   });
+  const [timestampInput, setTimestampInput] = useState(fmtTime(initialTime));
+  const [timestampValid, setTimestampValid] = useState(true);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const mc = f.type === 'multiple_choice' || f.type === 'true_false';
@@ -484,13 +644,34 @@ function QuestionEditor({ videoId, q, defaultTime, onClose, onSaved }: { videoId
       onSaved();
     } catch (e) { setErr(errorText(e)); } finally { setBusy(false); }
   };
-  const valid = f.question.trim() && (mc ? opts.filter((x) => x.trim()).length >= 2 : f.correct_answer.trim());
+  const correctChoice = mc && opts[f.correct_index]?.trim();
+  const valid = timestampValid && f.question.trim() && (mc
+    ? opts.filter((x) => x.trim()).length >= 2 && !!correctChoice
+    : f.correct_answer.trim());
 
-  return (
-    <Modal open onClose={onClose} title={q ? 'Sửa câu hỏi' : 'Soạn câu hỏi'} wide dismissable={!busy}>
-      <form className="modal-body" onSubmit={(e) => { e.preventDefault(); if (valid) save(); }}>
+  const form = (
+      <form className={`modal-body ${inline ? 'teacher-question-form' : ''}`} onSubmit={(e) => { e.preventDefault(); if (valid) save(); }}>
         <div className="form-grid">
-          <Field label="Thời điểm (giây)" hint={fmtTime(f.timestamp)}><input type="number" min={0} value={f.timestamp} onChange={(e) => setF({ ...f, timestamp: Number(e.target.value) })} /></Field>
+          <Field label="Mốc câu hỏi (mm:ss)" hint={maxDuration ? `Nhập mm:ss hoặc hh:mm:ss · video dài ${fmtTime(maxDuration)}` : 'Nhập mm:ss hoặc hh:mm:ss'}>
+            <div className="teacher-question-time-control">
+            <input inputMode="numeric" value={timestampInput} aria-invalid={!timestampValid} placeholder="00:00" onChange={(e) => {
+              const value = e.target.value.trim();
+              setTimestampInput(value);
+              const parts = value.split(':');
+              if (parts.length < 2 || parts.length > 3 || parts.some((part) => !/^\d+$/.test(part))) { setTimestampValid(false); return; }
+              const values = parts.map(Number);
+              const seconds = parts.reduce((total, part) => total * 60 + Number(part), 0);
+              const validTime = values[values.length - 1] < 60 && (parts.length !== 3 || values[1] < 60)
+                && (!maxDuration || seconds <= maxDuration);
+              if (!validTime) { setTimestampValid(false); return; }
+              setTimestampValid(true); setF({ ...f, timestamp: seconds });
+            }} />
+            {inline && <div className="teacher-question-time-actions">
+              <Button size="sm" variant="ghost" onClick={() => { setTimestampInput(fmtTime(Math.floor(defaultTime))); setTimestampValid(true); setF((current) => ({ ...current, timestamp: Math.floor(defaultTime) })); }}>Dùng mốc đang xem</Button>
+              <Button size="sm" variant="ghost" icon="play" disabled={!timestampValid} onClick={() => onPreview(f.timestamp)}>Phát từ mốc này</Button>
+            </div>}
+            </div>
+          </Field>
           <Field label="Loại">
             <select value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>
               <option value="multiple_choice">Trắc nghiệm</option><option value="true_false">Đúng / Sai</option><option value="short_answer">Tự luận ngắn</option>
@@ -524,6 +705,10 @@ function QuestionEditor({ videoId, q, defaultTime, onClose, onSaved }: { videoId
           <Button type="submit" loading={busy} disabled={!valid}>{q ? 'Lưu' : 'Lưu & duyệt'}</Button>
         </div>
       </form>
-    </Modal>
   );
+  if (inline) return <section className="teacher-question-editor">
+    <div className="teacher-question-editor-head"><strong>{q ? 'Sửa câu hỏi' : 'Soạn câu hỏi'}</strong><IconButton icon="x" label="Đóng phần soạn" onClick={onClose} /></div>
+    {form}
+  </section>;
+  return <Modal open onClose={onClose} title={q ? 'Sửa câu hỏi' : 'Soạn câu hỏi'} wide dismissable={!busy}>{form}</Modal>;
 }
