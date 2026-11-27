@@ -625,7 +625,7 @@ html::-webkit-scrollbar, .sidenav::-webkit-scrollbar { display: none; }
   .sidenav-logo .logo, .sidenav-logo .logo-text, .shell-compact .sidenav-logo .logo-text { display: inline-flex; white-space: nowrap; }
   .shell-compact .sidenav-toggle { position: absolute; left: 7px; top: 6px; opacity: 0; }
   .shell-compact .sidenav-top:hover .sidenav-toggle, .shell-compact .sidenav-toggle:focus-visible { opacity: 1; background: var(--brand-soft); }
-  .shell-compact .sidenav-top:hover .logo-mark, .shell-compact .sidenav-top:focus-within .logo-mark { opacity: 0; }
+  .shell-compact .sidenav-top:hover .logo-mark, .shell-compact .sidenav-top:has(.sidenav-toggle:focus-visible) .logo-mark { opacity: 0; }
   .logo-mark { transition: opacity .12s; }
   .sidenav-toggle { transition: opacity .12s, background .15s, color .15s; }
 
