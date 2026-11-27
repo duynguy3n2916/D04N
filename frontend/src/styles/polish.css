@@ -520,7 +520,7 @@ html::-webkit-scrollbar, .sidenav::-webkit-scrollbar { display: none; }
 .dm-cbtn:hover:not(:disabled) { background: var(--brand-soft); }
 .dm-cbtn:disabled { opacity: .4; cursor: default; }
 .dm-field { flex: 1; min-width: 0; background: var(--bg-soft); border-radius: 22px; display: flex; flex-direction: column; margin: 0 4px; }
-.dm-field textarea, .dm-compose .dm-field textarea.input { border: 0; outline: 0; background: transparent; resize: none; width: 100%; font: inherit; color: inherit; line-height: 1.4; padding: 11px 16px; min-height: 44px; max-height: 150px; display: block; box-shadow: none; }
+.dm-field textarea, .dm-compose .dm-field textarea.input { border: 0; outline: 0; background: transparent; resize: none; width: 100%; font: inherit; color: inherit; line-height: 1.4; padding: 11px 16px; min-height: 44px; max-height: 150px; display: block; box-shadow: none; overflow-y: hidden; scrollbar-width: thin; }
 .dm-drafts { display: flex; gap: 8px; padding: 10px 12px 2px; overflow-x: auto; }
 .dm-draft { position: relative; width: 64px; height: 64px; border-radius: 12px; overflow: hidden; flex: none; background: var(--line); }
 .dm-draft img, .dm-draft video { width: 100%; height: 100%; object-fit: cover; display: block; }

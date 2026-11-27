@@ -138,6 +138,8 @@ function Chat({ conversationId, conv, onChange }: { conversationId: string; conv
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 150)}px`;
+    // chỉ hiện thanh cuộn khi đã cao tối đa (tránh mũi tên cuộn ở cuối ô nhập 1 dòng)
+    el.style.overflowY = el.scrollHeight > 150 ? 'auto' : 'hidden';
   }, [text]);
 
   const append = (m: Message) => data.setData((prev) => prev && !prev.messages.some((x) => x.message_id === m.message_id)
