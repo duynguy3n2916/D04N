@@ -600,43 +600,48 @@ html::-webkit-scrollbar, .sidenav::-webkit-scrollbar { display: none; }
 .cc-course-option { padding: 8px 12px; font-weight: 500; }
 .cc-course-option svg { color: var(--brand); }
 
-/* ===== Thu / mở menu trái không làm tràn / nhảy chữ =====
-   Menu đổi bề rộng ngay lập tức (không co giãn dần), nên chữ không bị lộ ra từng phần hay xuống dòng trong lúc chuyển.
-   Khi thu gọn: chữ ẩn ngay. Khi mở rộng: menu đã đủ rộng rồi chữ mới hiện (mờ nhẹ vào).
-   Chữ luôn một dòng, biểu tượng giữ nguyên vị trí, tiêu đề nhóm giữ chiều cao nên các mục không bị đẩy lên xuống. */
+/* ===== Thu / mở menu trái: co giãn mượt nhưng chữ đứng yên =====
+   Khung menu co giãn bề rộng (overflow hidden), còn bên trong không hề đổi bố cục: lề trái của biểu tượng, logo, avatar
+   giống nhau ở cả hai trạng thái; nhãn chữ một dòng, không co lại (flex: none) nên không xuống dòng hay trượt theo,
+   chỉ bị khung che dần và mờ đi. Tiêu đề nhóm giữ chiều cao nên các mục không bị đẩy lên xuống. */
 @media (min-width: 901px) {
-  .sidenav, .shell-compact .sidenav { overflow-x: hidden; transition: none; }
-  .sidenav-group .nav-item, .user-chip { white-space: nowrap; overflow: hidden; transition: background .2s, color .2s; }
-  .sidenav-group .nav-item:hover { transform: none; }
-  .sidenav-group .nav-item > span:not(.nav-badge), .user-chip .sidenav-user-text, .sidenav-title, .sidenav-logo .logo-text {
-    animation: sn-label-in .14s ease both; }
-  .sidenav-group .nav-item > span:not(.nav-badge) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-  .sidenav-title { white-space: nowrap; overflow: hidden; }
-  .sidenav-top { position: relative; }
+  .sidenav, .shell-compact .sidenav { overflow-x: hidden; padding-left: 14px; padding-right: 14px;
+    transition: flex-basis .24s cubic-bezier(.2, .7, .2, 1), width .24s cubic-bezier(.2, .7, .2, 1); }
+  .shell-compact .sidenav { flex: 0 0 76px; width: 76px; align-items: stretch; gap: 8px; }
 
-  .shell-compact .sidenav { flex: 0 0 76px; width: 76px; padding-left: 14px; padding-right: 14px; align-items: stretch; gap: 8px; }
-  .shell-compact .sidenav-top { flex-direction: row; justify-content: flex-start; gap: 6px; }
-  .shell-compact .sidenav-logo { padding: 6px 7px; margin: 0 0 6px; }
-  .shell-compact .sidenav-logo .logo-text { display: none; }
+  .sidenav-group, .shell-compact .sidenav-group { align-items: stretch; width: auto; }
+  .shell-compact .sidenav-group + .sidenav-group { border-top: 0; padding-top: 0; }
+  .sidenav-group .nav-item, .shell-compact .nav-item { position: relative; justify-content: flex-start; width: auto;
+    padding: 0 14px; gap: 14px; white-space: nowrap; overflow: hidden; transition: background .2s, color .2s; }
+  .sidenav-group .nav-item:hover { transform: none; }
+  .sidenav-group .nav-item > svg { flex: none; }
+  .sidenav-group .nav-item > span:not(.nav-badge), .shell-compact .nav-item > span:not(.nav-badge) { display: inline; flex: none; }
+  .shell-compact .nav-badge { position: absolute; top: 3px; left: 29px; right: auto; }
+
+  .sidenav-title, .shell-compact .sidenav-title { display: block; white-space: nowrap; overflow: hidden; }
+
+  .sidenav-top, .shell-compact .sidenav-top { position: relative; flex-direction: row; justify-content: space-between; gap: 6px; }
+  .sidenav-logo, .shell-compact .sidenav-logo { padding: 6px 7px; margin: 0 0 6px; flex: none; }
+  .sidenav-logo .logo, .sidenav-logo .logo-text, .shell-compact .sidenav-logo .logo-text { display: inline-flex; white-space: nowrap; }
   .shell-compact .sidenav-toggle { position: absolute; left: 7px; top: 6px; opacity: 0; }
   .shell-compact .sidenav-top:hover .sidenav-toggle, .shell-compact .sidenav-toggle:focus-visible { opacity: 1; background: var(--brand-soft); }
   .shell-compact .sidenav-top:hover .logo-mark, .shell-compact .sidenav-top:focus-within .logo-mark { opacity: 0; }
   .logo-mark { transition: opacity .12s; }
   .sidenav-toggle { transition: opacity .12s, background .15s, color .15s; }
 
-  /* tiêu đề nhóm: giữ chỗ, chữ ẩn */
-  .shell-compact .sidenav-title { display: block; visibility: hidden; animation: none; }
-  .shell-compact .sidenav-group { align-items: stretch; width: auto; }
-  .shell-compact .sidenav-group + .sidenav-group { border-top: 0; padding-top: 0; }
-  .shell-compact .nav-item { position: relative; justify-content: flex-start; width: auto; padding: 0 13px; gap: 14px; }
-  .shell-compact .nav-item > span:not(.nav-badge) { display: none; }
-  .shell-compact .nav-badge { position: absolute; top: 3px; left: 28px; right: auto; }
+  .sidenav-user, .shell-compact .sidenav-user { flex-direction: row; width: auto; align-items: stretch; }
+  .user-chip, .shell-compact .user-chip { justify-content: flex-start; width: 100%; margin: 0; padding: 8px 6px; white-space: nowrap; overflow: hidden; }
+  .user-chip .avatar { flex: none; }
+  .user-chip .sidenav-user-text, .shell-compact .sidenav-user-text { display: flex; flex: none; width: 128px; }
+  .shell-compact .user-chip-caret { display: none; }
 
-  .shell-compact .sidenav-user { flex-direction: row; width: auto; align-items: stretch; }
-  .shell-compact .user-chip { justify-content: flex-start; width: 100%; margin: 0; padding: 8px 5px; }
-  .shell-compact .sidenav-user-text { display: none; }
+  /* chữ: mở rộng thì hiện sau khi khung đã giãn gần đủ; thu gọn thì mờ đi ngay */
+  .sidenav-group .nav-item > span:not(.nav-badge), .sidenav-title, .sidenav-logo .logo-text, .user-chip .sidenav-user-text, .user-chip-caret {
+    opacity: 1; transition: opacity .16s ease .1s; }
+  .shell-compact .nav-item > span:not(.nav-badge), .shell-compact .sidenav-title, .shell-compact .sidenav-logo .logo-text,
+  .shell-compact .user-chip .sidenav-user-text { opacity: 0; transition: opacity .1s ease; }
 }
-@keyframes sn-label-in { from { opacity: 0; } }
+
 
 /* ---------- Thẻ của tôi: khóa học → bộ thẻ → thẻ ---------- */
 .mf-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
