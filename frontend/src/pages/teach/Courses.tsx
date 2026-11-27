@@ -9,6 +9,7 @@ import { useAsync } from '../../lib/hooks';
 import { Link, navigate } from '../../lib/router';
 import { TYPE_ICON, TYPE_LABEL } from '../Learn';
 import { ManualCreateDialog } from '../../components/ManualCreateDialog';
+import { Select } from '../../components/Select';
 
 interface AdminItem { item_id: string; type: ItemType; title: string; position: number; video_id: string | null; document_id: string | null; meta: any; has_content: boolean }
 interface AdminLesson { lesson_id: string; code: string; title: string; description?: string; items: AdminItem[] }
@@ -648,14 +649,14 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
         <>
         <Field label="Video" hint="Chọn video đã có, hoặc tải video mới ngay bên dưới. Câu hỏi giữa video quản lý theo video.">
           {videos.loading ? <Spinner /> : (
-            <select value={videoId} onChange={(e) => setVideoId(e.target.value)}>
+            <Select value={videoId} onChange={(v) => setVideoId(v)}>
               <option value="">— Chọn video —</option>
               {videos.data?.map((v) => (
                 <option key={v.video_id} value={v.video_id}>
                   {v.title} ({v.video_id}){!v.has_file ? ' · chưa có file' : ''}{v.transcript ? '' : ' · chưa có transcript'} · {v.questions.approved} câu hỏi
                 </option>
               ))}
-            </select>
+            </Select>
           )}
         </Field>
         <Field label="…hoặc tải video mới (MP4, WebM)">
@@ -669,12 +670,12 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
       {type === 'slide' && (
         <>
           <Field label="Tài liệu slide của bài" hint="PDF hiển thị đúng như bản gốc; PPTX hiển thị dạng chữ theo từng slide.">
-            <select value={docId} onChange={(e) => setDocId(e.target.value)}>
+            <Select value={docId} onChange={(v) => setDocId(v)}>
               <option value="">— Chọn tài liệu —</option>
               {docs.data?.filter((d) => ['pdf', 'pptx'].includes(d.source_type)).map((d) => (
                 <option key={d.document_id} value={d.document_id}>{d.title} · {d.source_type.toUpperCase()} · {d.status}</option>
               ))}
-            </select>
+            </Select>
           </Field>
           <Field label="…hoặc tải file mới (PDF/PPTX)">
             <input type="file" accept=".pdf,.pptx" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadSlide(f); }} />

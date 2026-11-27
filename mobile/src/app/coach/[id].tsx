@@ -26,7 +26,7 @@ const BUSY_TEXT: Record<string, string> = {
 const busyText = (tool?: string) => (tool && BUSY_TEXT[tool]) || 'Đang soạn câu trả lời';
 const MAX_SOURCES = 5;
 
-type CompactAction = { kind: 'item'; label: string; item_id: string } | { kind: 'cards'; label: string; lesson_code: string | null };
+type CompactAction = { kind: 'item'; label: string; item_id: string } | { kind: 'cards'; label: string; lesson_code: string | null } | { kind: 'mine'; label: string };
 
 /** Gộp nút hành động: tối đa một nút "Học tiếp" và một nút "Ôn thẻ" (cộng dồn số thẻ của mọi bài). */
 function compactActions(actions: CoachAction[] | undefined): CompactAction[] {
@@ -40,6 +40,8 @@ function compactActions(actions: CoachAction[] | undefined): CompactAction[] {
     const total = counts.every((n) => Number.isFinite(n)) ? counts.reduce((s, n) => s + n, 0) : 0;
     out.push({ kind: 'cards', label: total ? `Ôn ${total} thẻ đến hạn` : 'Ôn thẻ đến hạn', lesson_code: codes.length === 1 ? codes[0] : null });
   }
+  const mine = (actions || []).find((a) => a.type === 'my_flashcards');
+  if (mine) out.push({ kind: 'mine', label: mine.label });
   return out;
 }
 
@@ -203,6 +205,7 @@ export default function CoachChat() {
   };
 
   const openAction = (a: CompactAction) => {
+    if (a.kind === 'mine') { router.push('/flashcards/mine'); return; }
     if (a.kind === 'item') router.push(`/item/${a.item_id}`);
     else if (a.lesson_code) router.push(`/flashcards/${encodeURIComponent(a.lesson_code)}`);
     else router.push('/review');
@@ -250,7 +253,7 @@ export default function CoachChat() {
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {compactActions(m.res?.actions).map((a) => (
                   <Pressable key={a.kind} onPress={() => openAction(a)} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: C.brandSoft }}>
-                    <Ionicons name={a.kind === 'cards' ? 'layers-outline' : 'arrow-forward-circle-outline'} size={16} color={C.brand} />
+                    <Ionicons name={a.kind === 'item' ? 'arrow-forward-circle-outline' : 'layers-outline'} size={16} color={C.brand} />
                     <Text style={{ color: C.brand, fontWeight: '700' }}>{a.label}</Text>
                   </Pressable>
                 ))}

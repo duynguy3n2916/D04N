@@ -34,15 +34,23 @@ def test_feed_kinds_tags_search_sort_and_likes(client):
 
     assert {t["thread_id"] for t in client.get("/ai/forum/classes/lop-sn/threads?tag=oop", headers=a).json()} == {q1, p1}
     assert [t["thread_id"] for t in client.get("/ai/forum/classes/lop-sn/threads?q=getter", headers=a).json()] == [q1]
-    assert [t["thread_id"] for t in client.get("/ai/forum/classes/lop-sn/threads?kind=post", headers=a).json()] == [p1]
-    assert q1 in [t["thread_id"] for t in client.get("/ai/forum/classes/lop-sn/threads?sort=unanswered", headers=a).json()]
+    # "question" và "post" đã gộp làm một loại bài thường; chỉ thông báo là loại riêng
+    assert {t["kind"] for t in feed} == {"announcement", "post"}
+    assert {t["thread_id"] for t in client.get("/ai/forum/classes/lop-sn/threads?kind=post", headers=a).json()} == {q1, p1}
+    assert [t["thread_id"] for t in client.get("/ai/forum/classes/lop-sn/threads?kind=announcement", headers=a).json()] == [ann]
+    unanswered = [t["thread_id"] for t in client.get("/ai/forum/classes/lop-sn/threads?sort=unanswered", headers=a).json()]
+    assert set(unanswered) == {q1, p1}  # mọi bài chưa có bình luận, trừ thông báo
+    # bài nào cũng chọn được câu trả lời đúng (trước đây chỉ bài "Câu hỏi")
+    rep = client.post(f"/ai/forum/threads/{p1}/replies", headers=a, json={"body": "cảm ơn bạn"}).json()
+    assert client.post(f"/ai/forum/replies/{rep['reply_id']}/accept", headers=b).status_code == 200
+    assert p1 not in [t["thread_id"] for t in client.get("/ai/forum/classes/lop-sn/threads?sort=unanswered", headers=a).json()]
 
     # thích / bỏ thích; "nổi bật" xếp theo lượt thích
     r = client.post("/ai/forum/likes", headers=a, json={"target_type": "thread", "target_id": p1}).json()
     assert r == {"liked": True, "like_count": 1}
     client.post("/ai/forum/likes", headers=gv, json={"target_type": "thread", "target_id": p1})
     top = [t for t in client.get("/ai/forum/classes/lop-sn/threads?sort=top", headers=b).json() if t["kind"] != "announcement"]
-    assert top[0]["thread_id"] == p1 and top[0]["like_count"] == 2
+    assert top[0]["thread_id"] == p1 and top[0]["like_count"] == 2  # 2 thích + 1 bình luận
     assert client.post("/ai/forum/likes", headers=a, json={"target_type": "thread", "target_id": p1}).json()["liked"] is False
     other = token(client, "sn-x", "student", ["lop-khac"])
     assert client.post("/ai/forum/likes", headers=other, json={"target_type": "thread", "target_id": p1}).status_code == 403

@@ -27,6 +27,8 @@ function RootStack() {
         <Stack.Screen name="item/[id]" options={{ title: '' }} />
         <Stack.Screen name="flashcards/[code]" options={{ title: 'Ôn thẻ ghi nhớ' }} />
         <Stack.Screen name="flashcards/library/all" options={{ title: 'Tất cả thẻ đã học' }} />
+        <Stack.Screen name="flashcards/mine/index" options={{ title: 'Thẻ của tôi' }} />
+        <Stack.Screen name="flashcards/mine/deck" options={{ title: 'Bộ thẻ' }} />
         <Stack.Screen name="coach/[id]" options={{ title: 'Trợ lý học tập' }} />
         <Stack.Screen name="classes" options={{ title: 'Lớp của tôi' }} />
       </Stack.Protected>

@@ -1,5 +1,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { Icon } from './Icon';
+import { Select } from './Select';
 
 /* Mẫu "danh sách quản lý" dùng chung cho các trang giáo viên:
    ô số liệu → viên lọc + ô tìm → bảng (chọn nhiều) → thanh thao tác nổi ở đáy. */
@@ -36,13 +37,7 @@ export function FilterPills<T extends string>({ options, value, onChange, label 
 
 /** Ô chọn dạng viên (cho danh sách dài như bài học). */
 export function PillSelect({ value, onChange, label, children }: { value: string; onChange: (v: string) => void; label: string; children: ReactNode }) {
-  return (
-    <label className={`m-select ${value ? 'on' : ''}`}>
-      <span className="sr-only">{label}</span>
-      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label}>{children}</select>
-      <Icon name="chevronDown" size={14} />
-    </label>
-  );
+  return <Select variant="pill" value={value} onChange={onChange} aria-label={label}>{children}</Select>;
 }
 
 export function SearchBox({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {

@@ -5,6 +5,7 @@ import { Button, Empty, ErrorBox, Field, Spinner, useToast } from '../../compone
 import { api, errorText } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { CourseScope, useCourseTrees, useScope } from '../../components/CourseScope';
+import { Select } from '../../components/Select';
 
 interface AiCard { card_id: string; lesson_code: string; front: string; back: string; status: 'draft' | 'approved' | 'rejected'; sources: { label: string; display?: string }[] }
 type St = '' | AiCard['status'];
@@ -63,12 +64,8 @@ export function FlashcardBank() {
     <>
       <PageHeader title="Thẻ ghi nhớ" sub="AI soạn thẻ hỏi–đáp từ bài đọc, slide và lời giảng. Học sinh chỉ ôn các thẻ bạn đã duyệt."
         actions={course && <div className="row" style={{ gap: 8 }}>
-          {!lesson && choices.length > 0 && <label className="m-select"><span className="sr-only">Bài</span>
-            <select value={target} onChange={(e) => setPick(e.target.value)} aria-label="Bài để AI soạn thẻ">{choices.map((l) => <option key={l.code} value={l.code}>{l.title}</option>)}</select>
-          </label>}
-          <label className="m-select"><span className="sr-only">Số thẻ</span>
-            <select value={count} onChange={(e) => setCount(Number(e.target.value))} aria-label="Số thẻ AI soạn">{[5, 10, 15, 20].map((v) => <option key={v} value={v}>{v} thẻ</option>)}</select>
-          </label>
+          {!lesson && choices.length > 0 && <Select variant="pill" value={target} onChange={(v) => setPick(v)} aria-label="Bài để AI soạn thẻ">{choices.map((l) => <option key={l.code} value={l.code}>{l.title}</option>)}</Select>}
+          <Select variant="pill" value={count} onChange={(v) => setCount(Number(v))} aria-label="Số thẻ AI soạn">{[5, 10, 15, 20].map((v) => <option key={v} value={v}>{v} thẻ</option>)}</Select>
           <Button icon="wand" loading={busy} disabled={busy} onClick={generate}>AI soạn thẻ</Button>
         </div>} />
       <CourseScope courses={trees.data} loading={trees.loading} error={trees.error} onRetry={trees.reload}

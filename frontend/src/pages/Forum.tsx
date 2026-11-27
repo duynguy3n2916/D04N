@@ -10,9 +10,10 @@ import { useAsync } from '../lib/hooks';
 import { markForumSeen } from '../lib/notifications';
 import { Link, navigate } from '../lib/router';
 import { MessageBody, type Message as DmMessage } from './Messages';
+import { Select } from '../components/Select';
 
 type Kind = 'question' | 'post' | 'announcement';
-type Sort = 'new' | 'top' | 'unanswered';
+type Sort = 'new' | 'top';
 interface ThreadRow {
   thread_id: string; class_id: string; lesson_code: string | null; title: string; body: string; kind: Kind; tags: string[]; images: string[];
   author_id: string; author_name: string; pinned: boolean; locked: boolean; hidden?: boolean; reply_count: number; has_answer: boolean;
@@ -32,9 +33,8 @@ interface Report {
 interface DmReport { report_id: string; message_id: string; body: string; kind?: DmMessage['kind']; url?: string | null; sender_name: string; reporter_name: string; reason: string; created_at: string | null }
 type ReportTarget = { thread_id?: string; reply_id?: string };
 
-const KIND_LABEL: Record<Kind, string> = { question: 'Câu hỏi', post: 'Chia sẻ', announcement: 'Thông báo' };
-const KIND_TONE: Record<Kind, 'blue' | 'purple' | 'orange'> = { question: 'blue', post: 'purple', announcement: 'orange' };
-const SORTS: { id: Sort; label: string }[] = [{ id: 'new', label: 'Mới nhất' }, { id: 'top', label: 'Nổi bật' }, { id: 'unanswered', label: 'Chưa có trả lời' }];
+// Bài thường (question/post cũ) không còn chia loại; chỉ thông báo của giáo viên có nhãn riêng.
+const SORTS: { id: Sort; label: string }[] = [{ id: 'new', label: 'Mới nhất' }, { id: 'top', label: 'Nổi bật' }];
 
 /** Làm nổi @tên trong nội dung (Markdown đậm). */
 const withMentions = (s: string) => s.replace(/(^|[^\w@])@([a-z0-9][a-z0-9._-]{2,63})/gi, '$1**@$2**');
@@ -86,9 +86,9 @@ export function Forum({ threadId }: { threadId?: string }) {
           {classes.length > 1 && (
             <div className="row" style={{ marginBottom: 14, alignItems: 'flex-end' }}>
               <Field label="Lớp">
-                <select value={cid} onChange={(e) => setClassId(e.target.value)}>
+                <Select value={cid} onChange={(v) => setClassId(v)}>
                   {classes.map((c) => <option key={c.class_id} value={c.class_id}>{c.name ? `${c.class_id} · ${c.name}` : c.class_id}</option>)}
-                </select>
+                </Select>
               </Field>
             </div>
           )}
@@ -105,9 +105,7 @@ function Feed({ classId, moderator }: { classId: string; moderator: boolean }) {
   const { user } = useAuth();
   const toast = useToast();
   const [sort, setSort] = useState<Sort>('new');
-  const [kind, setKind] = useState<Kind | ''>('');
   const [tag, setTag] = useState('');
-  const [lesson, setLesson] = useState('');
   const [qInput, setQInput] = useState('');
   const [q, setQ] = useState('');
   useEffect(() => { const t = setTimeout(() => setQ(qInput.trim()), 350); return () => clearTimeout(t); }, [qInput]);
@@ -115,9 +113,7 @@ function Feed({ classId, moderator }: { classId: string; moderator: boolean }) {
   const lessons = useAsync((s) => api<LessonRef[]>(`/ai/forum/classes/${encodeURIComponent(classId)}/lessons`, { signal: s }), [classId]);
   const lessonTitle = useMemo(() => Object.fromEntries((lessons.data || []).map((l) => [l.code, l.title])), [lessons.data]);
   const params = new URLSearchParams({ sort });
-  if (kind) params.set('kind', kind);
   if (tag) params.set('tag', tag);
-  if (lesson) params.set('lesson_code', lesson);
   if (q) params.set('q', q);
   const qs = params.toString();
   const list = useAsync((s) => api<ThreadRow[]>(`/ai/forum/classes/${encodeURIComponent(classId)}/threads?${qs}`, { signal: s }), [classId, qs]);
@@ -129,7 +125,7 @@ function Feed({ classId, moderator }: { classId: string; moderator: boolean }) {
       list.setData((rows) => rows?.map((x) => (x.thread_id === t.thread_id ? { ...x, liked: r.liked, like_count: r.like_count } : x)) ?? rows);
     } catch (e) { toast(errorText(e), 'error'); }
   };
-  const filtered = !!(kind || tag || lesson || q);
+  const filtered = !!(tag || q);
   return (
     <div className="forum-layout">
       <div className="forum-feed">
@@ -138,16 +134,6 @@ function Feed({ classId, moderator }: { classId: string; moderator: boolean }) {
           <div className="sn-tabs" role="tablist" aria-label="Sắp xếp">
             {SORTS.map((s) => <button key={s.id} role="tab" aria-selected={sort === s.id} className={sort === s.id ? 'on' : ''} onClick={() => setSort(s.id)}>{s.label}</button>)}
           </div>
-          <select className="forum-select" value={kind} onChange={(e) => setKind(e.target.value as Kind | '')} aria-label="Loại bài">
-            <option value="">Mọi loại bài</option>
-            {(['question', 'post', 'announcement'] as const).map((k) => <option key={k} value={k}>{KIND_LABEL[k]}</option>)}
-          </select>
-          {!!lessons.data?.length && (
-            <select className="forum-select" value={lesson} onChange={(e) => setLesson(e.target.value)} aria-label="Bài học">
-              <option value="">Mọi bài học</option>
-              {lessons.data.map((l) => <option key={l.code} value={l.code}>{l.course_title ? `${l.title} · ${l.course_title}` : l.title}</option>)}
-            </select>
-          )}
           <label className="sn-search forum-search">
             <Icon name="search" size={17} />
             <span className="sr-only">Tìm bài đăng</span>
@@ -165,7 +151,7 @@ function Feed({ classId, moderator }: { classId: string; moderator: boolean }) {
           <div className="col" style={{ gap: 12 }}>
             {list.data.map((t) => (
               <PostCard key={t.thread_id} t={t} mine={t.author_id === user?.user_id} lessonTitle={t.lesson_code ? lessonTitle[t.lesson_code] : undefined}
-                onLike={() => like(t)} onTag={setTag} onLesson={setLesson} onMessage={() => openDirect(t.author_id, toast)} />
+                onLike={() => like(t)} onTag={setTag} onMessage={() => openDirect(t.author_id, toast)} />
             ))}
           </div>
         )}
@@ -182,7 +168,7 @@ function PostHead({ t, onMessage, mine }: { t: ThreadRow; onMessage?: () => void
       <div className="grow">
         <div className="row" style={{ gap: 6 }}>
           <strong>{t.author_name}</strong>
-          <Badge tone={KIND_TONE[t.kind]}>{KIND_LABEL[t.kind]}</Badge>
+          {t.kind === 'announcement' && <Badge tone="orange">Thông báo</Badge>}
           {t.pinned && <Badge tone="yellow">Ghim</Badge>}
           {t.locked && <Badge tone="gray">Đã khóa</Badge>}
           {t.hidden && <Badge tone="red">Đã ẩn</Badge>}
@@ -195,18 +181,18 @@ function PostHead({ t, onMessage, mine }: { t: ThreadRow; onMessage?: () => void
   );
 }
 
-function TagRow({ t, lessonTitle, onTag, onLesson }: { t: ThreadRow; lessonTitle?: string; onTag?: (v: string) => void; onLesson?: (v: string) => void }) {
+function TagRow({ t, lessonTitle, onTag }: { t: ThreadRow; lessonTitle?: string; onTag?: (v: string) => void }) {
   if (!t.tags.length && !t.lesson_code) return null;
   return (
     <div className="row" style={{ gap: 6 }}>
-      {t.lesson_code && <button type="button" className="sn-tag sn-tag-lesson" onClick={(e) => { e.stopPropagation(); onLesson ? onLesson(t.lesson_code!) : undefined; }}><Icon name="book" size={13} /> {lessonTitle || t.lesson_code}</button>}
+      {t.lesson_code && <span className="sn-tag sn-tag-lesson"><Icon name="book" size={13} /> {lessonTitle || t.lesson_code}</span>}
       {t.tags.map((g) => <button key={g} type="button" className="sn-tag" onClick={(e) => { e.stopPropagation(); onTag?.(g); }}>#{g}</button>)}
     </div>
   );
 }
 
-function PostCard({ t, mine, lessonTitle, onLike, onTag, onLesson, onMessage }: {
-  t: ThreadRow; mine: boolean; lessonTitle?: string; onLike: () => void; onTag: (v: string) => void; onLesson: (v: string) => void; onMessage: () => void;
+function PostCard({ t, mine, lessonTitle, onLike, onTag, onMessage }: {
+  t: ThreadRow; mine: boolean; lessonTitle?: string; onLike: () => void; onTag: (v: string) => void; onMessage: () => void;
 }) {
   const open = () => navigate(`/forum/${t.thread_id}`);
   const plain = stripMarkdown(t.body);
@@ -219,7 +205,7 @@ function PostCard({ t, mine, lessonTitle, onLike, onTag, onLesson, onMessage }: 
         <p className="sn-excerpt">{excerpt}</p>
       </button>
       <ImageGrid urls={t.images} />
-      <TagRow t={t} lessonTitle={lessonTitle} onTag={onTag} onLesson={onLesson} />
+      <TagRow t={t} lessonTitle={lessonTitle} onTag={onTag} />
       <div className="sn-actions">
         <LikeButton liked={t.liked} count={t.like_count} onClick={onLike} />
         <button type="button" className="sn-act" onClick={open}><Icon name="chat" size={18} /> {t.reply_count ? `${t.reply_count} bình luận` : 'Bình luận'}</button>
@@ -234,22 +220,22 @@ function Composer({ classId, moderator, members, lessons, onPosted }: {
   const { user } = useAuth();
   const toast = useToast();
   const [open, setOpen] = useState(false);
-  const [kind, setKind] = useState<Kind>('question');
+  const [announce, setAnnounce] = useState(false);
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [tags, setTags] = useState('');
   const [lesson, setLesson] = useState('');
   const [images, setImages] = useState<PickedImage[]>([]);
   const [busy, setBusy] = useState(false);
-  const reset = () => { setTitle(''); setBody(''); setTags(''); setLesson(''); setImages([]); setKind('question'); setOpen(false); };
+  const reset = () => { setTitle(''); setBody(''); setTags(''); setLesson(''); setImages([]); setAnnounce(false); setOpen(false); };
   const submit = async () => {
     setBusy(true);
     try {
       await api(`/ai/forum/classes/${encodeURIComponent(classId)}/threads`, {
-        json: { kind, title, body, lesson_code: lesson || null, images: images.map((i) => i.image_id),
+        json: { kind: announce ? 'announcement' : 'post', title, body, lesson_code: lesson || null, images: images.map((i) => i.image_id),
           tags: tags.split(/[,\s]+/).map((x) => x.replace(/^#/, '').trim()).filter(Boolean).slice(0, 5) },
       });
-      toast(kind === 'question' ? 'Đã đăng câu hỏi' : 'Đã đăng bài', 'success');
+      toast(announce ? 'Đã đăng thông báo' : 'Đã đăng bài', 'success');
       reset();
       onPosted();
     } catch (e) { toast(errorText(e), 'error'); } finally { setBusy(false); }
@@ -262,14 +248,15 @@ function Composer({ classId, moderator, members, lessons, onPosted }: {
       </button>
     );
   }
-  const kinds: Kind[] = moderator ? ['question', 'post', 'announcement'] : ['question', 'post'];
   return (
     <section className="card col sn-compose">
-      <div className="sn-tabs" role="radiogroup" aria-label="Loại bài">
-        {kinds.map((k) => <button key={k} role="radio" aria-checked={kind === k} className={kind === k ? 'on' : ''} onClick={() => setKind(k)}>{KIND_LABEL[k]}</button>)}
-      </div>
+      {moderator && (
+        <label className="row small" style={{ gap: 6, cursor: 'pointer' }}>
+          <input type="checkbox" checked={announce} onChange={(e) => setAnnounce(e.target.checked)} /> Đăng dưới dạng thông báo (luôn hiện đầu bảng tin)
+        </label>
+      )}
       <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={200} autoFocus aria-label="Tiêu đề"
-        placeholder={kind === 'question' ? 'Bạn đang thắc mắc điều gì?' : kind === 'post' ? 'Tiêu đề bài chia sẻ' : 'Tiêu đề thông báo'} />
+        placeholder={announce ? 'Tiêu đề thông báo' : 'Tiêu đề'} />
       <MentionTextarea value={body} onChange={setBody} members={members} rows={4}
         placeholder="Nội dung (hỗ trợ Markdown). Gõ @ để nhắc tên bạn cùng lớp. Đừng ghi số điện thoại hay mật khẩu." />
       <div className="sn-compose-meta">
@@ -278,10 +265,10 @@ function Composer({ classId, moderator, members, lessons, onPosted }: {
         </label>
         {lessons.length > 0 && (
           <label className="sn-inline"><Icon name="book" size={16} /><span className="sr-only">Gắn bài học</span>
-            <select className="input" value={lesson} onChange={(e) => setLesson(e.target.value)}>
+            <Select value={lesson} onChange={(v) => setLesson(v)}>
               <option value="">Không gắn bài học</option>
               {lessons.map((l) => <option key={l.code} value={l.code}>{l.course_title} · {l.title}</option>)}
-            </select>
+            </Select>
           </label>
         )}
       </div>
@@ -463,7 +450,7 @@ function ThreadView({ threadId }: { threadId: string }) {
           <span className="muted small">{timeAgo(r.created_at)}</span>
           <LikeButton liked={r.liked} count={r.like_count} onClick={() => like('reply', r.reply_id)} />
           {canWrite && <button type="button" className="sn-act" onClick={() => { setReplyTo(r); setSubText(r.author_id !== user?.user_id ? `@${r.author_id} ` : ''); }}><Icon name="reply" size={16} /> Trả lời</button>}
-          {(mine || t.can_moderate) && !nested && !r.accepted && !r.hidden && t.kind === 'question' && <button type="button" className="sn-act" disabled={busy} onClick={() => accept(r.reply_id)}><Icon name="check" size={16} /> Đánh dấu đúng</button>}
+          {(mine || t.can_moderate) && !nested && !r.accepted && !r.hidden && t.kind !== 'announcement' && <button type="button" className="sn-act" disabled={busy} onClick={() => accept(r.reply_id)}><Icon name="check" size={16} /> Đánh dấu đúng</button>}
           {t.can_moderate && <button type="button" className="sn-act" disabled={busy} onClick={() => hideReply(r.reply_id, !r.hidden)}><Icon name={r.hidden ? 'eye' : 'eyeOff'} size={16} /> {r.hidden ? 'Hiện lại' : 'Ẩn'}</button>}
           {(r.author_id === user?.user_id || t.can_moderate) && <button type="button" className="sn-act sn-danger" disabled={busy} onClick={() => remove(`/ai/forum/replies/${r.reply_id}`)}><Icon name="trash" size={16} /> Xóa</button>}
           {r.author_id !== user?.user_id && !t.can_moderate && <button type="button" className="sn-act" onClick={() => setReporting({ reply_id: r.reply_id })}><Icon name="flag" size={16} /> Báo cáo</button>}
@@ -513,7 +500,7 @@ function ThreadView({ threadId }: { threadId: string }) {
             <Avatar name={user?.name || user?.user_id || ''} id={user?.user_id || ''} />
             <div className="grow col" style={{ gap: 8 }}>
               <MentionTextarea value={text} onChange={setText} members={members.data || []} rows={2} onSubmit={() => text.trim() && send()}
-                placeholder={t.kind === 'question' ? 'Viết câu trả lời… (gõ @ để nhắc tên, Ctrl+Enter để gửi)' : 'Viết bình luận… (gõ @ để nhắc tên)'} />
+                placeholder="Viết bình luận… (gõ @ để nhắc tên, Ctrl+Enter để gửi)" />
               <div className="row" style={{ justifyContent: 'space-between' }}>
                 <ImagePicker classId={t.class_id} images={images} onChange={setImages} />
                 <Button loading={busy} disabled={!text.trim()} onClick={send} icon="send">Gửi</Button>

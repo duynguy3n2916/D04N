@@ -67,7 +67,7 @@ export default function ThreadScreen() {
       <Text style={{ color: r.hidden ? C.muted : C.ink, fontSize: 15, lineHeight: 21 }}>{r.hidden ? '(Bình luận đã bị ẩn)' : r.body}</Text>
       <Row>
         {!nested && !t?.locked && <Pressable onPress={() => setReplyTo(r)}><Text style={{ color: C.brand, fontWeight: '700', fontSize: 13 }}>Trả lời</Text></Pressable>}
-        {teacher && t?.can_moderate && !r.accepted && !nested && t.kind === 'question' && (
+        {teacher && t?.can_moderate && !r.accepted && !nested && t.kind !== 'announcement' && (
           <Pressable onPress={() => accept(r)}><Text style={{ color: C.okText, fontWeight: '700', fontSize: 13, marginLeft: 12 }}>Chọn làm lời giải</Text></Pressable>
         )}
       </Row>

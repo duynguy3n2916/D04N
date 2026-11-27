@@ -257,7 +257,8 @@ class PersonalFlashcard(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     owner_id = Column(String(128), nullable=False, index=True)
-    deck = Column(String(120), nullable=True)  # chủ đề/bộ thẻ do học sinh đặt
+    course_id = Column(UUID(as_uuid=True), nullable=True, index=True)  # khóa học của bộ thẻ (None = thẻ ngoài khóa)
+    deck = Column(String(120), nullable=True)  # tên bộ thẻ (chủ đề) do học sinh đặt; một khóa có nhiều bộ
     lesson_code = Column(String(128), nullable=True)  # bài học dùng làm nguồn khi nhờ AI soạn
     front = Column(String(300), nullable=False)
     back = Column(String(600), nullable=False)

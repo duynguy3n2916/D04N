@@ -8,6 +8,7 @@ import { useAsync } from '../../lib/hooks';
 import { Link, navigate } from '../../lib/router';
 import { FilterPills, SearchBox, StatusTag, Toolbar } from '../../components/Manage';
 import { CourseScope, UNASSIGNED, useCourseTrees, useScope } from '../../components/CourseScope';
+import { Select } from '../../components/Select';
 
 interface VideoRow {
   video_id: string; title: string; has_file: boolean; source_url: string | null; duration_seconds: number | null; size_mb: number | null;
@@ -162,23 +163,23 @@ function UploadDialog({ onClose, onDone, initialFile, initialCourse, initialLess
         </div>
         <Field label="Tiêu đề video"><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></Field>
         <Field label="Khóa học" hint="Chọn khóa học để thêm video vào một bài, hoặc lưu vào thư viện trước.">
-          <select value={f.course_id} disabled={courses.loading || busy}
-            onChange={(e) => setF({ ...f, course_id: e.target.value, target_lesson_id: '' })}>
+          <Select value={f.course_id} disabled={courses.loading || busy}
+            onChange={(v) => setF({ ...f, course_id: v, target_lesson_id: '' })}>
             <option value="">Lưu vào thư viện video</option>
             {courses.data?.map((c) => <option key={c.course_id} value={c.course_id}>{c.title}</option>)}
-          </select>
+          </Select>
         </Field>
         {courses.error && <ErrorBox message={courses.error} onRetry={courses.reload} />}
         {f.course_id ? (
           <>
             <Field label="Bài học" hint="Video sẽ được thêm vào cuối bài học đã chọn.">
-              <select value={f.target_lesson_id} disabled={destination.loading || busy}
-                onChange={(e) => setF({ ...f, target_lesson_id: e.target.value })}>
+              <Select value={f.target_lesson_id} disabled={destination.loading || busy}
+                onChange={(v) => setF({ ...f, target_lesson_id: v })}>
                 <option value="">— Chọn bài học —</option>
                 {selectedCourse?.chapters.map((ch) => <optgroup key={ch.chapter_id} label={ch.title}>
                   {ch.lessons.map((ls) => <option key={ls.lesson_id} value={ls.lesson_id}>{ls.title}</option>)}
                 </optgroup>)}
-              </select>
+              </Select>
             </Field>
             {!destination.loading && selectedCourse && !selectedCourse.chapters.some((ch) => ch.lessons.length) &&
               <p className="small muted">Khóa học chưa có bài. Thêm chương và bài học trong mục Khóa học trước.</p>}
@@ -673,14 +674,14 @@ function QuestionEditor({ videoId, q, defaultTime, maxDuration, onPreview, inlin
             </div>
           </Field>
           <Field label="Loại">
-            <select value={f.type} onChange={(e) => setF({ ...f, type: e.target.value })}>
+            <Select value={f.type} onChange={(v) => setF({ ...f, type: v })}>
               <option value="multiple_choice">Trắc nghiệm</option><option value="true_false">Đúng / Sai</option><option value="short_answer">Tự luận ngắn</option>
-            </select>
+            </Select>
           </Field>
           <Field label="Độ khó">
-            <select value={f.difficulty} onChange={(e) => setF({ ...f, difficulty: e.target.value })}>
+            <Select value={f.difficulty} onChange={(v) => setF({ ...f, difficulty: v })}>
               <option value="easy">Dễ</option><option value="medium">Vừa</option><option value="hard">Khó</option>
-            </select>
+            </Select>
           </Field>
         </div>
         <Field label="Câu hỏi"><textarea value={f.question} onChange={(e) => setF({ ...f, question: e.target.value })} /></Field>

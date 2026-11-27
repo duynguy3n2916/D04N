@@ -320,10 +320,16 @@ def tool_create_my_flashcards(db: Session, user: Principal, args: dict, state: R
                     "course_lessons": [f"{c}: {ls.title}" for c, ls in visible.items()][:20]}
         from app.services.rag.retrieval import build_context
         grounded = build_context(chunks)
+    # bộ thẻ thuộc khóa: theo bài nguồn, hoặc khóa học sinh đang chọn khi soạn theo chủ đề
+    course_id = None if lesson else (state.course.id if state.course is not None else None)
+    if lesson is None and course_id is None and grounded:
+        course_id = my_flashcards._course_of_lesson(db, chunks[0].get("lesson_id"))
     cards = my_flashcards.generate(db, user, count, lesson.code if lesson else None,
-                                   None if lesson else topic, None if lesson else topic[:120], grounded=grounded)
+                                   None if lesson else topic, None if lesson else topic[:120], grounded=grounded,
+                                   course_id=course_id)
     if cards:
-        state.add_action("my_flashcards", f"Xem {len(cards)} thẻ vừa tạo", deck=cards[0]["deck"])
+        state.add_action("my_flashcards", f"Xem {len(cards)} thẻ vừa tạo", deck=cards[0]["deck"],
+                         course_id=cards[0]["course_id"])
     return {"created": len(cards), "deck": cards[0]["deck"] if cards else "",
             "cards": [{"front": c["front"], "back": c["back"]} for c in cards]}
 
