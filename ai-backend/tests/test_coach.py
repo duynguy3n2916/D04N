@@ -283,3 +283,14 @@ def test_coach_stream_shows_steps_then_text_and_saves(client, teacher, fake_llm)
     r = client.post("/ai/coach/chat/stream", headers=other,
                     json={"message": "x", "conversation_id": done["conversation"]["id"]})
     assert r.status_code == 404
+
+
+def test_coach_creates_my_flashcards(client, fake_llm):
+    sv = token(client, "sv-co-mine", "student", ["lop-a"])
+    fake_llm.push("coach", {"tool_calls": [_call("create_my_flashcards", {"topic": "Đa hình trong OOP", "count": 2})]},
+                  "Mình đã tạo 2 thẻ vào Thẻ của tôi.")
+    d = client.post("/ai/coach/chat", headers=sv, json={"message": "Tạo giúp mình thẻ về đa hình"}).json()
+    assert d["steps"][0]["tool"] == "create_my_flashcards" and d["steps"][0]["ok"] and d["steps"][0]["writes"]
+    assert any(a["type"] == "my_flashcards" for a in d["actions"])
+    mine = client.get("/ai/learn/my-flashcards", headers=sv).json()
+    assert 1 <= mine["total"] <= 2 and all(c["origin"] == "ai" for c in mine["cards"])

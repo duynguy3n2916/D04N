@@ -7,7 +7,7 @@ import { useAuth } from '../lib/auth';
 import { navigate } from '../lib/router';
 
 interface CoachStep { tool: string; arguments: string; ok: boolean; writes: boolean }
-interface CoachAction { type: 'item' | 'flashcards'; label: string; item_id?: string; lesson_id?: string; lesson_code?: string }
+interface CoachAction { type: 'item' | 'flashcards' | 'my_flashcards'; label: string; item_id?: string; lesson_id?: string; lesson_code?: string }
 interface CoachResult { answer: string; steps: CoachStep[]; sources: Source[]; actions: CoachAction[]; guarded: boolean; stopped: string | null }
 interface ConvSummary { id: string; title: string; course_id?: string | null; created_at: string; updated_at: string }
 interface CourseLite { course_id: string; title: string }
@@ -25,11 +25,12 @@ const BUSY_TEXT: Record<string, string> = {
   search_materials: 'Đang tìm trong học liệu',
   get_practice_quiz: 'Đang tìm bài luyện tập',
   queue_flashcards: 'Đang chuẩn bị thẻ ôn',
+  create_my_flashcards: 'Đang soạn thẻ ghi nhớ cho bạn',
 };
 const busyText = (tool?: string) => (tool && BUSY_TEXT[tool]) || 'Đang soạn câu trả lời';
 const MAX_SOURCES = 5;
 
-type CompactAction = { kind: 'item'; label: string; lesson_id: string; item_id: string } | { kind: 'cards'; label: string; lesson_code: string | null };
+type CompactAction = { kind: 'item'; label: string; lesson_id: string; item_id: string } | { kind: 'cards'; label: string; lesson_code: string | null } | { kind: 'mine'; label: string };
 
 /** Gộp nút hành động: tối đa một nút "Học tiếp" và một nút "Ôn thẻ" (cộng dồn số thẻ của mọi bài). */
 function compactActions(actions: CoachAction[] | undefined): CompactAction[] {
@@ -43,6 +44,8 @@ function compactActions(actions: CoachAction[] | undefined): CompactAction[] {
     const total = counts.every((n) => Number.isFinite(n)) ? counts.reduce((s, n) => s + n, 0) : 0;
     out.push({ kind: 'cards', label: total ? `Ôn ${total} thẻ đến hạn` : 'Ôn thẻ đến hạn', lesson_code: codes.length === 1 ? codes[0] : null });
   }
+  const mine = (actions || []).find((a) => a.type === 'my_flashcards');
+  if (mine) out.push({ kind: 'mine', label: mine.label });
   return out;
 }
 
@@ -323,7 +326,8 @@ export function Coach({ conversationId }: { conversationId?: string }) {
   };
 
   const runAction = (a: CompactAction) => {
-    if (a.kind === 'cards') navigate(a.lesson_code ? `/flashcards/${encodeURIComponent(a.lesson_code)}` : '/flashcards');
+    if (a.kind === 'mine') { storage.set('mam.fc.tab', 'mine'); navigate('/flashcards'); }
+    else if (a.kind === 'cards') navigate(a.lesson_code ? `/flashcards/${encodeURIComponent(a.lesson_code)}` : '/flashcards');
     else navigate(`/lesson/${a.lesson_id}/${a.item_id}`);
   };
 
@@ -408,7 +412,7 @@ export function Coach({ conversationId }: { conversationId?: string }) {
                         <div className="cc-actions">
                           {actions.map((a) => (
                             <button key={a.kind} type="button" className="cc-action" onClick={() => runAction(a)}>
-                              <Icon name={a.kind === 'cards' ? 'copy' : 'play'} size={15} /> {a.label}
+                              <Icon name={a.kind === 'item' ? 'play' : 'copy'} size={15} /> {a.label}
                             </button>
                           ))}
                         </div>

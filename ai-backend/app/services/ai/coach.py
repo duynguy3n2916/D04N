@@ -5,8 +5,9 @@ Vòng lặp: model đọc câu hỏi -> yêu cầu gọi tool (tiến độ, câ
 
 Nguyên tắc an toàn (do code kiểm soát, không phó mặc cho prompt):
 - Số bước có giới hạn (settings.coach_max_steps); hết bước thì trả lời dựa trên những gì đã có.
-- Tool chỉ đọc dữ liệu của chính học sinh và học liệu thuộc lớp của học sinh. Tool ghi duy nhất là
-  queue_flashcards: chỉ đưa thẻ (câu đã duyệt) vào lịch ôn của chính học sinh đó.
+- Tool chỉ đọc dữ liệu của chính học sinh và học liệu thuộc lớp của học sinh. Hai tool ghi:
+  queue_flashcards đưa thẻ (câu đã duyệt) vào lịch ôn của chính học sinh đó;
+  create_my_flashcards nhờ AI soạn thẻ mới vào "Thẻ của tôi" (thẻ riêng, chỉ học sinh đó thấy).
 - Không tool nào trả đáp án câu hỏi kiểm tra. Đang làm dở bài kiểm tra thì agent không chạy.
 """
 import json
@@ -246,6 +247,24 @@ def tool_queue_flashcards(db: Session, user: Principal, args: dict, state: RunSt
     return {"queued": queued, "lessons": sorted(lessons)}
 
 
+def tool_create_my_flashcards(db: Session, user: Principal, args: dict, state: RunState) -> dict:
+    from app.services.courses import my_flashcards
+    topic = str(args.get("topic") or "").strip()
+    lesson = _lesson_or_error(db, user, args.get("lesson_code"), state)
+    if lesson is None and len(topic) < 3:
+        raise AppError(400, "INVALID_ARGS", "Cần lesson_code hoặc topic.")
+    try:
+        count = max(1, min(10, int(args.get("count") or 5)))
+    except (TypeError, ValueError):
+        count = 5
+    cards = my_flashcards.generate(db, user, count, lesson.code if lesson else None,
+                                   None if lesson else topic, None if lesson else topic[:120])
+    if cards:
+        state.add_action("my_flashcards", f"Xem {len(cards)} thẻ vừa tạo", deck=cards[0]["deck"])
+    return {"created": len(cards), "deck": cards[0]["deck"] if cards else "",
+            "cards": [{"front": c["front"], "back": c["back"]} for c in cards]}
+
+
 _LESSON_ARG = {"type": "string", "description": "Mã bài học (lesson_code), ví dụ lesson-oop-01. Bỏ trống = mọi bài."}
 
 TOOLS: dict[str, Tool] = {t.name: t for t in [
@@ -268,6 +287,11 @@ TOOLS: dict[str, Tool] = {t.name: t for t in [
     Tool("queue_flashcards", "Đưa các câu hay sai (question_id lấy từ get_weak_points) vào lịch ôn thẻ ngay hôm nay của học sinh.",
          {"type": "object", "properties": {"question_ids": {"type": "array", "items": {"type": "string"}, "maxItems": 30}},
           "required": ["question_ids"], "additionalProperties": False}, tool_queue_flashcards, writes=True),
+    Tool("create_my_flashcards", "AI soạn thẻ ghi nhớ mới về một bài học (lesson_code) hoặc một chủ đề (topic) rồi lưu vào \"Thẻ của tôi\" của học sinh.",
+         {"type": "object", "properties": {"lesson_code": {"type": "string", "description": "Mã bài học để soạn thẻ từ học liệu của bài."},
+                                           "topic": {"type": "string", "description": "Chủ đề/khái niệm khi không soạn theo bài."},
+                                           "count": {"type": "integer", "minimum": 1, "maximum": 10}},
+          "additionalProperties": False}, tool_create_my_flashcards, writes=True),
 ]}
 
 
