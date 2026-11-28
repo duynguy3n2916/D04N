@@ -9,12 +9,33 @@ import { useAsync } from '../../lib/hooks';
 import { Link, navigate } from '../../lib/router';
 import { TYPE_ICON, TYPE_LABEL } from '../Learn';
 import { ManualCreateDialog } from '../../components/ManualCreateDialog';
-import { Select } from '../../components/Select';
 
 interface AdminItem { item_id: string; type: ItemType; title: string; position: number; video_id: string | null; document_id: string | null; meta: any; has_content: boolean }
 interface AdminLesson { lesson_id: string; code: string; title: string; description?: string; items: AdminItem[] }
-interface AdminCourse { course_id: string; code: string; title: string; description?: string; class_id: string | null; class_ids?: string[]; cover_url?: string | null; chapters: { chapter_id: string; title: string; lessons: AdminLesson[] }[] }
-interface CourseRow { course_id: string; code: string; title: string; class_id: string | null; cover_url?: string | null; chapters: number; items: number }
+interface AdminCourse {
+  course_id: string;
+  code: string;
+  title: string;
+  description?: string;
+  class_id: string | null;
+  class_ids?: string[];
+  cover_url?: string | null;
+  created_by?: string | null;
+  can_manage?: boolean;
+  chapters: { chapter_id: string; title: string; lessons: AdminLesson[] }[];
+}
+interface CourseRow {
+  course_id: string;
+  code: string;
+  title: string;
+  class_id: string | null;
+  cover_url?: string | null;
+  created_by?: string | null;
+  can_manage?: boolean;
+  chapters: number;
+  items: number;
+}
+interface CurrentUser { user_id: string; role: string }
 interface VideoRow { video_id: string; title: string; has_file: boolean; transcript: { version: number } | null; questions: { approved: number; draft: number } }
 interface DocRow { document_id: string; title: string; source_type: string; status: string; lesson_id: string | null }
 
@@ -28,6 +49,17 @@ interface BankQuestionItem {
   difficulty?: string | null;
   status: string;
   lesson_id: string | null;
+}
+
+function resolveCanManage(
+  target: { created_by?: string | null; can_manage?: boolean } | null | undefined,
+  me: CurrentUser | null | undefined,
+): boolean {
+  if (!target) return false;
+  if (typeof target.can_manage === 'boolean') return target.can_manage;
+  if (!me) return false;
+  if (me.role === 'admin') return true;
+  return me.role === 'teacher' && Boolean(target.created_by) && target.created_by === me.user_id;
 }
 
 // ---------------------------------------------------------------- Ảnh bìa
@@ -69,7 +101,7 @@ function CoverPicker({ file, onChange }: { file: File | null; onChange: (f: File
   }, [file]);
   return (
     <div className="col" style={{ gap: 8 }}>
-      <span style={{ fontWeight: 600, fontSize: 14 }}>Ảnh bìa <span className="muted">(tùy chọn)</span></span>
+      <span style={{ fontWeight: 800, fontSize: 14 }}>Ảnh bìa <span className="muted">(tùy chọn)</span></span>
       <div className="cover-pick">
         {preview ? <img src={preview} alt="Xem trước ảnh bìa" /> : <span className="muted small">Chưa có ảnh · PNG, JPG hoặc WEBP, tối đa 5 MB</span>}
       </div>
@@ -125,7 +157,7 @@ export function Courses() {
               <strong>{c.title}</strong>
               <span className="muted small">{c.code}{c.class_id ? ` · lớp ${c.class_id}` : ' · mọi lớp'}</span>
               <span className="course-card-foot">
-                <span className="muted small" style={{ fontWeight: 600 }}>{c.chapters} chương · {c.items} mục học</span>
+                <span className="muted small" style={{ fontWeight: 800 }}>{c.chapters} chương · {c.items} mục học</span>
                 <Icon name="chevronRight" />
               </span>
             </span>
@@ -160,33 +192,45 @@ type Sel = { kind: 'course' } | { kind: 'chapter' | 'lesson' | 'item'; id: strin
 
 export function CourseEditor({ courseId }: { courseId: string }) {
   const toast = useToast();
+  const me = useAsync((s) => api<CurrentUser>('/ai/learn/me', { signal: s }), [], 'auth/me');
   const tree = useAsync((s) => api<AdminCourse>(`/ai/courses/${courseId}`, { signal: s }), [courseId], `teach/course/${courseId}`);
   const [dlg, setDlg] = useState<Dialog | null>(null);
   const [addQuizLesson, setAddQuizLesson] = useState<string | null>(null);
   const [sel, setSel] = useState<Sel | null>(null);
 
+  const c = tree.data;
+  const canManage = resolveCanManage(c, me.data);
+
   const run = async (p: Promise<AdminCourse>, msg?: string) => {
     try { tree.setData(await p); if (msg) toast(msg, 'success'); } catch (e) { toast(errorText(e), 'error'); }
   };
-  const move = (kind: 'chapters' | 'lessons' | 'items', id: string, direction: number) =>
+  const move = (kind: 'chapters' | 'lessons' | 'items', id: string, direction: number) => {
+    if (!canManage) return;
     run(api<AdminCourse>(`/ai/${kind}/${id}/move`, { json: { direction } }));
+  };
   const del = async (kind: 'chapters' | 'lessons' | 'items', id: string, label: string) => {
+    if (!canManage) return;
     if (!await confirmDialog(`Xóa ${label}? Tiến độ học sinh của phần này cũng bị xóa.`, { danger: true, okLabel: 'Xóa' })) return;
     run(api<AdminCourse>(`/ai/${kind}/${id}`, { method: 'DELETE' }), 'Đã xóa');
   };
   const delCourse = async () => {
+    if (!canManage) return;
     if (!await confirmDialog('Xóa toàn bộ khóa học này?', { danger: true, okLabel: 'Xóa' })) return;
     try { await api(`/ai/courses/${courseId}`, { method: 'DELETE' }); navigate('/teach/courses'); } catch (e) { toast(errorText(e), 'error'); }
   };
 
-  const c = tree.data;
   return (
     <>
-      <div className="row" style={{ marginBottom: 8 }}><Link to="/teach/courses" className="muted small" style={{ fontWeight: 600 }}>← Tất cả khóa học</Link></div>
+      <div className="row" style={{ marginBottom: 8 }}><Link to="/teach/courses" className="muted small" style={{ fontWeight: 800 }}>← Tất cả khóa học</Link></div>
       <PageHeader title={c?.title || 'Đang tải…'} sub={c ? `${c.code}${c.class_id ? ` · lớp ${c.class_id}` : ' · mọi lớp'}${c.description ? ` · ${c.description}` : ''}` : undefined}
         actions={c && <>
           <Button variant="ghost" icon="play" onClick={() => navigate(`/learn/${c.course_id}`)}>Xem như học sinh</Button>
         </>} />
+      {c && !me.loading && !canManage && (
+        <p className="muted small" style={{ marginBottom: 12 }}>
+          Bạn chỉ có quyền xem khóa học này (chỉ quản trị viên hoặc giáo viên tạo khóa mới được chỉnh sửa).
+        </p>
+      )}
       {tree.loading && !c && <Spinner />}
       {tree.error && <ErrorBox message={tree.error} onRetry={tree.reload} />}
       {c && (() => {
@@ -208,15 +252,21 @@ export function CourseEditor({ courseId }: { courseId: string }) {
             <div key={it.item_id} className="tree-item">
               <span className={`type-ico type-${it.type}`}><Icon name={TYPE_ICON[it.type]} size={18} /></span>
               <button type="button" className="ce-link" onClick={() => setSel({ kind: 'item', id: it.item_id })}><strong>{it.title}</strong><span className="td-sub">{TYPE_LABEL[it.type]} · {itemMeta(it)}</span></button>
-              <Reorder onUp={() => move('items', it.item_id, -1)} onDown={() => move('items', it.item_id, 1)} first={ii === 0} last={ii === ls.items.length - 1} />
-              {isQuiz && (
+              {canManage && (
+                <Reorder onUp={() => move('items', it.item_id, -1)} onDown={() => move('items', it.item_id, 1)} first={ii === 0} last={ii === ls.items.length - 1} />
+              )}
+              {isQuiz && canManage && (
                 <span title={isQuizFull ? 'Số lượng câu hỏi của bài kiểm tra đã đủ' : `Thêm câu hỏi (${currentCount}/${requiredCount})`}>
                   <IconButton icon="plus" label="Thêm câu hỏi" disabled={isQuizFull} onClick={() => setAddQuizLesson(ls.code)} />
                 </span>
               )}
               {it.type === 'video' && it.video_id && <IconButton icon="question" label="Quản lý câu hỏi video" onClick={() => navigate(`/teach/videos/${encodeURIComponent(it.video_id!)}`)} />}
-              <IconButton icon="edit" label="Sửa mục" onClick={() => setDlg({ kind: 'item', lesson: ls, item: it })} />
-              <IconButton icon="trash" label="Xóa mục" onClick={() => del('items', it.item_id, `mục “${it.title}”`)} />
+              {canManage && (
+                <>
+                  <IconButton icon="edit" label="Sửa mục" onClick={() => setDlg({ kind: 'item', lesson: ls, item: it })} />
+                  <IconButton icon="trash" label="Xóa mục" onClick={() => del('items', it.item_id, `mục “${it.title}”`)} />
+                </>
+              )}
             </div>
           );
         };
@@ -225,48 +275,66 @@ export function CourseEditor({ courseId }: { courseId: string }) {
         if (s.kind === 'course') {
           detail = (<>
             <div className="ce-head"><span className="oc-kicker">Khóa học</span><h2>{c.title}</h2>{c.description && <p className="muted">{c.description}</p>}</div>
-            <CoverEditor course={c} onChanged={tree.setData} />
-            <CourseClasses course={c} onChanged={tree.setData} />
-            <div className="row"><Button variant="ghost" icon="edit" onClick={() => setDlg({ kind: 'course' })}>Sửa thông tin</Button><span className="grow" /><Button variant="danger-ghost" icon="trash" onClick={delCourse}>Xóa khóa học</Button></div>
+            <CoverEditor course={c} canManage={canManage} onChanged={tree.setData} />
+            <CourseClasses course={c} canManage={canManage} onChanged={tree.setData} />
+            {canManage && (
+              <div className="row">
+                <Button variant="ghost" icon="edit" onClick={() => setDlg({ kind: 'course' })}>Sửa thông tin</Button>
+                <span className="grow" />
+                <Button variant="danger-ghost" icon="trash" onClick={delCourse}>Xóa khóa học</Button>
+              </div>
+            )}
           </>);
         } else if (s.kind === 'chapter') {
           const ci = chapters.findIndex((x) => x.chapter_id === s.id); const ch = chapters[ci];
           detail = (<>
             <div className="ce-head"><span className="oc-kicker">Chương {ci + 1}</span><h2>{ch.title}</h2><p className="muted">{ch.lessons.length} bài · {ch.lessons.reduce((n, l) => n + l.items.length, 0)} mục học</p></div>
-            <div className="row">
-              <Button variant="ghost" icon="edit" onClick={() => setDlg({ kind: 'chapter', chapterId: ch.chapter_id, title: ch.title })}>Đổi tên</Button>
-              <Reorder onUp={() => move('chapters', ch.chapter_id, -1)} onDown={() => move('chapters', ch.chapter_id, 1)} first={ci === 0} last={ci === chapters.length - 1} />
-              <span className="grow" />
-              <Button variant="danger-ghost" icon="trash" onClick={() => del('chapters', ch.chapter_id, `chương “${ch.title}”`)}>Xóa chương</Button>
-            </div>
+            {canManage && (
+              <div className="row">
+                <Button variant="ghost" icon="edit" onClick={() => setDlg({ kind: 'chapter', chapterId: ch.chapter_id, title: ch.title })}>Đổi tên</Button>
+                <Reorder onUp={() => move('chapters', ch.chapter_id, -1)} onDown={() => move('chapters', ch.chapter_id, 1)} first={ci === 0} last={ci === chapters.length - 1} />
+                <span className="grow" />
+                <Button variant="danger-ghost" icon="trash" onClick={() => del('chapters', ch.chapter_id, `chương “${ch.title}”`)}>Xóa chương</Button>
+              </div>
+            )}
             <div className="card ce-list">
               {ch.lessons.map((ls, li) => (
                 <div key={ls.lesson_id} className="tree-item">
                   <span className="ol-code">{ls.code}</span>
                   <button type="button" className="ce-link" onClick={() => setSel({ kind: 'lesson', id: ls.lesson_id })}><strong>{ls.title}</strong><span className="td-sub">{ls.items.length} mục học</span></button>
-                  <Reorder onUp={() => move('lessons', ls.lesson_id, -1)} onDown={() => move('lessons', ls.lesson_id, 1)} first={li === 0} last={li === ch.lessons.length - 1} />
+                  {canManage && (
+                    <Reorder onUp={() => move('lessons', ls.lesson_id, -1)} onDown={() => move('lessons', ls.lesson_id, 1)} first={li === 0} last={li === ch.lessons.length - 1} />
+                  )}
                 </div>
               ))}
               {!ch.lessons.length && <p className="muted" style={{ padding: '8px 12px' }}>Chương chưa có bài.</p>}
             </div>
-            <div><Button variant="soft" icon="plus" onClick={() => setDlg({ kind: 'lesson', chapterId: ch.chapter_id })}>Thêm bài</Button></div>
+            {canManage && (
+              <div><Button variant="soft" icon="plus" onClick={() => setDlg({ kind: 'lesson', chapterId: ch.chapter_id })}>Thêm bài</Button></div>
+            )}
           </>);
         } else if (s.kind === 'lesson') {
           const { ch, ls, li } = findLesson(s.id)!;
           detail = (<>
             <div className="ce-head"><span className="oc-kicker">{ch.title} · {ls.code}</span><h2>{ls.title}</h2>{ls.description && <p className="muted">{ls.description}</p>}</div>
             <div className="row">
-              <Button variant="ghost" icon="edit" onClick={() => setDlg({ kind: 'lesson', chapterId: ch.chapter_id, lesson: ls })}>Sửa bài</Button>
+              {canManage && <Button variant="ghost" icon="edit" onClick={() => setDlg({ kind: 'lesson', chapterId: ch.chapter_id, lesson: ls })}>Sửa bài</Button>}
               <Button variant="ghost" icon="question" onClick={() => navigate(`/teach/questions?lesson=${encodeURIComponent(ls.code)}`)}>Câu hỏi của bài</Button>
-              <Reorder onUp={() => move('lessons', ls.lesson_id, -1)} onDown={() => move('lessons', ls.lesson_id, 1)} first={li === 0} last={li === ch.lessons.length - 1} />
-              <span className="grow" />
-              <Button variant="danger-ghost" icon="trash" onClick={() => del('lessons', ls.lesson_id, `bài “${ls.title}”`)}>Xóa bài</Button>
+              {canManage && (
+                <>
+                  <Reorder onUp={() => move('lessons', ls.lesson_id, -1)} onDown={() => move('lessons', ls.lesson_id, 1)} first={li === 0} last={li === ch.lessons.length - 1} />
+                  <span className="grow" />
+                  <Button variant="danger-ghost" icon="trash" onClick={() => del('lessons', ls.lesson_id, `bài “${ls.title}”`)}>Xóa bài</Button>
+                </>
+              )}
             </div>
             <div className="card ce-list">
               {ls.items.map((it, ii) => itemRow(ls, it, ii))}
               {!ls.items.length && <p className="muted" style={{ padding: '8px 12px' }}>Bài chưa có mục học. Thêm video, slide, bài đọc hoặc bài kiểm tra.</p>}
             </div>
-            <div><Button icon="plus" onClick={() => setDlg({ kind: 'item', lesson: ls })}>Thêm mục học</Button></div>
+            {canManage && (
+              <div><Button icon="plus" onClick={() => setDlg({ kind: 'item', lesson: ls })}>Thêm mục học</Button></div>
+            )}
           </>);
         } else {
           const { ls, it, ii } = findItem(s.id)!;
@@ -274,7 +342,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
             <div className="ce-head"><span className="oc-kicker">{ls.code} · {TYPE_LABEL[it.type]}</span><h2>{it.title}</h2><p className="muted">{itemMeta(it)}{it.has_content ? '' : ' · chưa có nội dung'}</p></div>
             <div className="card ce-list">{itemRow(ls, it, ii)}</div>
             <div className="row">
-              <Button icon="edit" onClick={() => setDlg({ kind: 'item', lesson: ls, item: it })}>Sửa nội dung</Button>
+              {canManage && <Button icon="edit" onClick={() => setDlg({ kind: 'item', lesson: ls, item: it })}>Sửa nội dung</Button>}
               <Button variant="ghost" icon="chevronLeft" onClick={() => setSel({ kind: 'lesson', id: ls.lesson_id })}>Về bài {ls.code}</Button>
             </div>
           </>);
@@ -291,7 +359,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
                   {ch.lessons.map((ls) => (
                     <div key={ls.lesson_id}>
                       <button type="button" className={`ce-node ce-lesson ${on('lesson', ls.lesson_id) ? 'on' : ''}`} onClick={() => setSel({ kind: 'lesson', id: ls.lesson_id })}>
-                        <span className="ce-lesson-text"><span>{ls.title}</span></span><span className="ce-n">{ls.items.length}</span></button>
+                        {ls.title}<span className="ce-n">{ls.items.length}</span></button>
                       {(on('lesson', ls.lesson_id) || ls.items.some((x) => on('item', x.item_id))) && ls.items.map((it) => (
                         <button key={it.item_id} type="button" className={`ce-node ce-item ${on('item', it.item_id) ? 'on' : ''}`} onClick={() => setSel({ kind: 'item', id: it.item_id })}>
                           <Icon name={TYPE_ICON[it.type]} size={15} />{it.title}</button>
@@ -300,18 +368,24 @@ export function CourseEditor({ courseId }: { courseId: string }) {
                   ))}
                 </div>
               ))}
-              <Button size="sm" variant="soft" icon="plus" onClick={() => setDlg({ kind: 'chapter' })}>Thêm chương</Button>
+              {canManage && (
+                <Button size="sm" variant="soft" icon="plus" onClick={() => setDlg({ kind: 'chapter' })}>Thêm chương</Button>
+              )}
             </nav>
             <div className="ce-detail">
-              {!chapters.length && s.kind === 'course' && <Empty title="Khóa học chưa có chương nào">Bấm “Thêm chương” ở cột trái, sau đó thêm bài và các mục học.</Empty>}
+              {!chapters.length && s.kind === 'course' && (
+                <Empty title="Khóa học chưa có chương nào">
+                  {canManage ? 'Bấm “Thêm chương” ở cột trái, sau đó thêm bài và các mục học.' : 'Khóa học hiện chưa có nội dung chương bài.'}
+                </Empty>
+              )}
               {detail}
             </div>
           </div>
         );
       })()}
 
-      {c && dlg?.kind === 'course' && <CourseDialog course={c} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); }} onCoverChanged={tree.setData} />}
-      {c && dlg?.kind === 'chapter' && (
+      {c && canManage && dlg?.kind === 'course' && <CourseDialog course={c} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); }} onCoverChanged={tree.setData} />}
+      {c && canManage && dlg?.kind === 'chapter' && (
         <TitleDialog title={dlg.chapterId ? 'Đổi tên chương' : 'Thêm chương'} initial={dlg.title || ''} onClose={() => setDlg(null)}
           onSave={async (title) => {
             const t = dlg.chapterId
@@ -320,25 +394,25 @@ export function CourseEditor({ courseId }: { courseId: string }) {
             tree.setData(t); setDlg(null);
           }} />
       )}
-      {c && dlg?.kind === 'lesson' && <LessonDialog chapterId={dlg.chapterId} lesson={dlg.lesson} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); }} />}
-      {c && dlg?.kind === 'item' && <ItemDialog course={c} lesson={dlg.lesson} item={dlg.item} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); toast('Đã lưu mục học', 'success'); }} />}
-    
-      {addQuizLesson && (
-          <ManualCreateDialog 
-            defaultLesson={addQuizLesson} 
-            onClose={() => setAddQuizLesson(null)} 
-            onSaved={() => { 
-              setAddQuizLesson(null); 
-              tree.reload(); 
-              toast('Đã thêm câu hỏi vào ngân hàng đề thi!', 'success'); 
-            }} 
+      {c && canManage && dlg?.kind === 'lesson' && <LessonDialog chapterId={dlg.chapterId} lesson={dlg.lesson} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); }} />}
+      {c && canManage && dlg?.kind === 'item' && <ItemDialog course={c} lesson={dlg.lesson} item={dlg.item} onClose={() => setDlg(null)} onSaved={(t) => { tree.setData(t); setDlg(null); toast('Đã lưu mục học', 'success'); }} />}
+
+      {canManage && addQuizLesson && (
+          <ManualCreateDialog
+            defaultLesson={addQuizLesson}
+            onClose={() => setAddQuizLesson(null)}
+            onSaved={() => {
+              setAddQuizLesson(null);
+              tree.reload();
+              toast('Đã thêm câu hỏi vào ngân hàng đề thi!', 'success');
+            }}
           />
         )}
     </>
   );
 }
 
-function CoverEditor({ course, onChanged }: { course: AdminCourse; onChanged: (c: AdminCourse) => void }) {
+function CoverEditor({ course, canManage, onChanged }: { course: AdminCourse; canManage: boolean; onChanged: (c: AdminCourse) => void }) {
   const toast = useToast();
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
@@ -352,20 +426,22 @@ function CoverEditor({ course, onChanged }: { course: AdminCourse; onChanged: (c
       <div className="col" style={{ gap: 8 }}>
         <strong style={{ fontSize: 16 }}>Ảnh bìa</strong>
         <span className="muted small">Hiện ở danh sách khóa học để dễ nhận biết. PNG, JPG hoặc WEBP, tối đa 5 MB.</span>
-        <div className="row">
-          <input ref={ref} type="file" hidden accept={COVER_ACCEPT} onChange={(e) => {
-            const f = e.target.files?.[0];
-            e.target.value = '';
-            if (!f) return;
-            const bad = coverError(f);
-            if (bad) toast(bad, 'error'); else run(uploadCover(course.course_id, f), 'Đã cập nhật ảnh bìa');
-          }} />
-          <Button type="button" size="sm" variant="soft" icon="upload" loading={busy} onClick={() => ref.current?.click()}>{course.cover_url ? 'Đổi ảnh' : 'Tải ảnh lên'}</Button>
-          {course.cover_url && (
-            <Button type="button" size="sm" variant="danger-ghost" icon="trash" disabled={busy}
-              onClick={() => run(api<AdminCourse>(`/ai/courses/${course.course_id}/cover`, { method: 'DELETE' }), 'Đã gỡ ảnh bìa')}>Gỡ ảnh</Button>
-          )}
-        </div>
+        {canManage && (
+          <div className="row">
+            <input ref={ref} type="file" hidden accept={COVER_ACCEPT} onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (!f) return;
+              const bad = coverError(f);
+              if (bad) toast(bad, 'error'); else run(uploadCover(course.course_id, f), 'Đã cập nhật ảnh bìa');
+            }} />
+            <Button type="button" size="sm" variant="soft" icon="upload" loading={busy} onClick={() => ref.current?.click()}>{course.cover_url ? 'Đổi ảnh' : 'Tải ảnh lên'}</Button>
+            {course.cover_url && (
+              <Button type="button" size="sm" variant="danger-ghost" icon="trash" disabled={busy}
+                onClick={() => run(api<AdminCourse>(`/ai/courses/${course.course_id}/cover`, { method: 'DELETE' }), 'Đã gỡ ảnh bìa')}>Gỡ ảnh</Button>
+            )}
+          </div>
+        )}
       </div>
     </section>
   );
@@ -428,18 +504,19 @@ function TitleDialog({ title, initial, onClose, onSave }: { title: string; initi
 }
 
 /** Gắn một khóa học cho nhiều lớp: giáo viên chỉ thêm được lớp mình phụ trách. */
-function CourseClasses({ course, onChanged }: { course: AdminCourse; onChanged: (c: AdminCourse) => void }) {
+function CourseClasses({ course, canManage, onChanged }: { course: AdminCourse; canManage: boolean; onChanged: (c: AdminCourse) => void }) {
   const toast = useToast();
-  const mine = useAsync((s) => api<ClassInfo[]>('/ai/classes', { signal: s }), []);
+  const mine = useAsync((s) => api<ClassInfo[]>('/ai/classes', { signal: s }), [], 'teach/classes');
   const [pick, setPick] = useState('');
   const linked = course.class_ids?.length ? course.class_ids : (course.class_id ? [course.class_id] : []);
   const addable = (mine.data || []).filter((c) => !linked.includes(c.class_id));
   const add = async () => {
-    if (!pick) return;
+    if (!pick || !canManage) return;
     try { onChanged(await api<AdminCourse>(`/ai/courses/${course.course_id}/classes`, { json: { class_id: pick } })); setPick(''); toast('Đã thêm lớp', 'success'); }
     catch (e) { toast(errorText(e), 'error'); }
   };
   const remove = async (cid: string) => {
+    if (!canManage) return;
     try { onChanged(await api<AdminCourse>(`/ai/courses/${course.course_id}/classes/${encodeURIComponent(cid)}`, { method: 'DELETE' })); toast('Đã gỡ lớp', 'success'); }
     catch (e) { toast(errorText(e), 'error'); }
   };
@@ -451,11 +528,11 @@ function CourseClasses({ course, onChanged }: { course: AdminCourse; onChanged: 
         {linked.map((cid) => (
           <span key={cid} className="chip">
             {cid}{cid === course.class_id ? ' (lớp chính)' : ''}
-            {cid !== course.class_id && <button className="chip-x" aria-label={`Gỡ lớp ${cid}`} onClick={() => remove(cid)}>×</button>}
+            {canManage && cid !== course.class_id && <button className="chip-x" aria-label={`Gỡ lớp ${cid}`} onClick={() => remove(cid)}>×</button>}
           </span>
         ))}
       </div>
-      {!!addable.length && (
+      {canManage && !!addable.length && (
         <div className="row" style={{ gap: 8 }}>
           <PillSelect label="Chọn lớp để thêm" value={pick} onChange={setPick}>
             <option value="">Chọn lớp của bạn…</option>
@@ -472,8 +549,15 @@ function CourseDialog({ course, onClose, onSaved, onCoverChanged }: { course: Ad
   const [f, setF] = useState({ title: course.title, description: course.description || '', class_id: course.class_id || '' });
   return (
     <FormModal title="Thông tin khóa học" onClose={onClose} canSave={!!f.title.trim()}
-      onSave={async () => onSaved(await api<AdminCourse>(`/ai/courses/${course.course_id}`, { method: 'PATCH', json: f }))}>
-      <CoverEditor course={course} onChanged={onCoverChanged} />
+      onSave={async () => {
+        const payload = {
+          title: f.title.trim(),
+          description: f.description,
+          class_id: f.class_id.trim() || null,
+        };
+        onSaved(await api<AdminCourse>(`/ai/courses/${course.course_id}`, { method: 'PATCH', json: payload }));
+      }}>
+      <CoverEditor course={course} canManage={true} onChanged={onCoverChanged} />
       <Field label="Tên khóa học"><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></Field>
       <Field label="Lớp chính" hint="Để trống = mọi lớp. Gắn thêm lớp khác ở phần 'Lớp được học khóa này'."><input value={f.class_id} onChange={(e) => setF({ ...f, class_id: e.target.value })} /></Field>
       <Field label="Mô tả"><textarea value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field>
@@ -522,8 +606,8 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
     (q) => (q.lesson_id === lesson.code || q.lesson_id === lesson.lesson_id) && q.status === 'approved'
   ) || [];
 
-  const [uploadingVideo, setUploadingVideo] = useState(false); 
-  const videoFileRef = useRef<HTMLInputElement>(null); 
+  const [uploadingVideo, setUploadingVideo] = useState(false);
+  const videoFileRef = useRef<HTMLInputElement>(null);
 
   const mdFileRef = useRef<HTMLInputElement>(null);
   const [uploadingMd, setUploadingMd] = useState(false);
@@ -533,7 +617,7 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
     fd.append('file', file);
     if (course.class_id) fd.append('class_id', course.class_id);
     if (title) fd.append('title', title);
-    
+
     setUploadingVideo(true);
     setUpload('Đang tải video lên Cloudflare R2…');
     try {
@@ -613,26 +697,26 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
 
       {/* Nút Toggle giữa Tổng quát và Danh sách câu hỏi cho Quiz */}
       {type === 'quiz' && (
-        <div 
-          className="seg" 
-          role="group" 
-          style={{ 
-            alignSelf: 'flex-start', 
-            width: 'fit-content', 
+        <div
+          className="seg"
+          role="group"
+          style={{
+            alignSelf: 'flex-start',
+            width: 'fit-content',
             display: 'inline-flex',
-            marginBottom: 8 
+            marginBottom: 8
           }}
         >
-          <button 
-            type="button" 
-            className={quizTab === 'general' ? 'on' : ''} 
+          <button
+            type="button"
+            className={quizTab === 'general' ? 'on' : ''}
             onClick={() => setQuizTab('general')}
           >
             Tổng quát
           </button>
-          <button 
-            type="button" 
-            className={quizTab === 'questions' ? 'on' : ''} 
+          <button
+            type="button"
+            className={quizTab === 'questions' ? 'on' : ''}
             onClick={() => setQuizTab('questions')}
           >
             Danh sách câu hỏi ({approvedQuestions.length})
@@ -649,38 +733,38 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
         <>
         <Field label="Video" hint="Chọn video đã có, hoặc tải video mới ngay bên dưới. Câu hỏi giữa video quản lý theo video.">
           {videos.loading ? <Spinner /> : (
-            <Select value={videoId} onChange={(v) => setVideoId(v)}>
+            <select value={videoId} onChange={(e) => setVideoId(e.target.value)}>
               <option value="">— Chọn video —</option>
               {videos.data?.map((v) => (
                 <option key={v.video_id} value={v.video_id}>
                   {v.title} ({v.video_id}){!v.has_file ? ' · chưa có file' : ''}{v.transcript ? '' : ' · chưa có transcript'} · {v.questions.approved} câu hỏi
                 </option>
               ))}
-            </Select>
+            </select>
           )}
         </Field>
         <Field label="…hoặc tải video mới (MP4, WebM)">
           <input ref={videoFileRef} type="file" accept="video/*" disabled={uploadingVideo}
             onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadVideoInline(f); }} />
         </Field>
-        {upload && <p className="small" style={{ fontWeight: 600 }} aria-live="polite">{upload}</p>}
+        {upload && <p className="small" style={{ fontWeight: 700 }} aria-live="polite">{upload}</p>}
         </>
       )}
 
       {type === 'slide' && (
         <>
           <Field label="Tài liệu slide của bài" hint="PDF hiển thị đúng như bản gốc; PPTX hiển thị dạng chữ theo từng slide.">
-            <Select value={docId} onChange={(v) => setDocId(v)}>
+            <select value={docId} onChange={(e) => setDocId(e.target.value)}>
               <option value="">— Chọn tài liệu —</option>
               {docs.data?.filter((d) => ['pdf', 'pptx'].includes(d.source_type)).map((d) => (
                 <option key={d.document_id} value={d.document_id}>{d.title} · {d.source_type.toUpperCase()} · {d.status}</option>
               ))}
-            </Select>
+            </select>
           </Field>
           <Field label="…hoặc tải file mới (PDF/PPTX)">
             <input type="file" accept=".pdf,.pptx" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadSlide(f); }} />
           </Field>
-          {upload && <p className="small" style={{ fontWeight: 600 }} aria-live="polite">{upload}</p>}
+          {upload && <p className="small" style={{ fontWeight: 700 }} aria-live="polite">{upload}</p>}
           <Field label="Ghi chú của giảng viên (hiện dưới slide)"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} /></Field>
         </>
       )}
@@ -688,7 +772,7 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
       {type === 'reading' && (
         <>
           <div className="row" style={{ justifyContent: 'space-between' }}>
-            <span className="field-label" style={{ fontWeight: 600, fontSize: 14 }}>Nội dung (Markdown)</span>
+            <span className="field-label" style={{ fontWeight: 800, fontSize: 14 }}>Nội dung (Markdown)</span>
             <div className="seg" role="group" aria-label="Chế độ soạn">
               <button type="button" className={!preview ? 'on' : ''} onClick={() => setPreview(false)}>Soạn</button>
               <button type="button" className={preview ? 'on' : ''} onClick={() => setPreview(true)}>Xem trước</button>
@@ -718,7 +802,7 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
             <Field label="Mở lúc" hint="Để trống = mở ngay."><input type="datetime-local" value={openAt} onChange={(e) => setOpenAt(e.target.value)} /></Field>
             <Field label="Đóng lúc" hint="Để trống = không hạn chót."><input type="datetime-local" value={closeAt} onChange={(e) => setCloseAt(e.target.value)} /></Field>
           </div>
-          <p className="muted small" style={{ fontWeight: 600 }}>
+          <p className="muted small" style={{ fontWeight: 700 }}>
             Câu hỏi lấy ngẫu nhiên từ ngân hàng câu hỏi <b>đã duyệt</b> của bài {lesson.code}. Sinh và duyệt câu hỏi ở mục <Link to="/teach/questions">Câu hỏi</Link>.
           </p>
         </>
@@ -735,12 +819,12 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
             </Empty>
           )}
           {approvedQuestions.map((q, idx) => (
-            <div 
-              key={q.item_id} 
+            <div
+              key={q.item_id}
               className="col" // Gỡ bỏ class "card" ở đây để sửa lỗi cắt chữ
-              style={{ 
-                padding: 16, 
-                gap: 8, 
+              style={{
+                padding: 16,
+                gap: 8,
                 background: 'var(--bg-soft)',
                 border: '1px solid var(--border)', // Thêm viền thay cho card
                 borderRadius: 8,
@@ -774,13 +858,13 @@ function ItemDialog({ course, lesson, item, onClose, onSaved }: { course: AdminC
                   {q.options.map((opt, oIdx) => {
                     const isCorrect = opt === q.answer;
                     return (
-                      <div 
-                        key={oIdx} 
-                        className="row" 
-                        style={{ 
-                          fontSize: 13, 
-                          color: isCorrect ? 'var(--green)' : undefined, 
-                          fontWeight: isCorrect ? 700 : 400 
+                      <div
+                        key={oIdx}
+                        className="row"
+                        style={{
+                          fontSize: 13,
+                          color: isCorrect ? 'var(--green)' : undefined,
+                          fontWeight: isCorrect ? 700 : 400
                         }}
                       >
                         <span style={{ minWidth: 24 }}>{String.fromCharCode(65 + oIdx)}.</span>

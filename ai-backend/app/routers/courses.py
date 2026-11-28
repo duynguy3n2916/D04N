@@ -51,11 +51,21 @@ def class_submissions_csv(class_id: str, user: Principal = Depends(require_teach
 def _course(db, user, cid) -> Course:
     return learning.get_course(db, user, parse_uuid(cid, "course_id"))
 
+def _managed_course(db, user, cid) -> Course:
+    c = _course(db, user, cid)
+    learning.ensure_can_manage_course(user, c)
+    return c
+
 
 def _chapter(db, user, cid) -> Chapter:
     ch = db.get(Chapter, parse_uuid(cid, "chapter_id"))
     if not ch or not learning.can_see_course(db, user, ch.course):
         raise AppError(404, "NOT_FOUND", "Không tìm thấy chương.")
+    return ch
+
+def _managed_chapter(db, user, cid) -> Chapter:
+    ch = _chapter(db, user, cid)
+    learning.ensure_can_manage_course(user, ch.course)
     return ch
 
 
@@ -121,14 +131,17 @@ def get_course_admin(course_id: str, user: Principal = Depends(require_teacher),
 @router.patch("/courses/{course_id}")
 def update_course(course_id: str, req: CourseIn, user: Principal = Depends(require_teacher),
                   db: Session = Depends(get_db)):
-    c = course_admin.update_course(db, user, _course(db, user, course_id),
-                                   {k: v for k, v in req.model_dump().items() if k != "code" and v is not None})
+    data = {k: v for k, v in req.model_dump().items() if k != "code" and v is not None}
+    if "class_id" in req.model_fields_set:
+        cleaned = clean_id(req.class_id)
+        data["class_id"] = cleaned or None
+    c = course_admin.update_course(db, user, _managed_course(db, user, course_id), data)
     return _tree(db, c)
 
 
 @router.delete("/courses/{course_id}")
 def delete_course(course_id: str, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
-    c = _course(db, user, course_id)
+    c = _managed_course(db, user, course_id)
     cover = c.cover_path
     db.delete(c)
     db.commit()
@@ -151,13 +164,13 @@ def course_cover(course_id: str, request: Request, user: Principal = Depends(get
 @router.post("/courses/{course_id}/cover")
 def upload_course_cover(course_id: str, file: UploadFile = File(...), user: Principal = Depends(require_teacher),
                         db: Session = Depends(get_db)):
-    c = course_admin.set_cover(db, _course(db, user, course_id), file)
+    c = course_admin.set_cover(db, _managed_course(db, user, course_id), file)
     return _tree(db, c)
 
 
 @router.delete("/courses/{course_id}/cover")
 def remove_course_cover(course_id: str, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
-    c = course_admin.clear_cover(db, _course(db, user, course_id))
+    c = course_admin.clear_cover(db, _managed_course(db, user, course_id))
     return _tree(db, c)
 
 
@@ -172,7 +185,7 @@ class MoveIn(BaseModel):
 @router.post("/courses/{course_id}/chapters")
 def add_chapter(course_id: str, req: TitleIn, user: Principal = Depends(require_teacher),
                 db: Session = Depends(get_db)):
-    c = _course(db, user, course_id)
+    c = _managed_course(db, user, course_id)
     course_admin.add_chapter(db, c, req.title)
     return _tree(db, c)
 
@@ -180,7 +193,7 @@ def add_chapter(course_id: str, req: TitleIn, user: Principal = Depends(require_
 @router.patch("/chapters/{chapter_id}")
 def rename_chapter(chapter_id: str, req: TitleIn, user: Principal = Depends(require_teacher),
                    db: Session = Depends(get_db)):
-    ch = _chapter(db, user, chapter_id)
+    ch = _managed_chapter(db, user, chapter_id)
     ch.title = req.title
     db.commit()
     return _tree(db, ch.course)
@@ -189,7 +202,7 @@ def rename_chapter(chapter_id: str, req: TitleIn, user: Principal = Depends(requ
 @router.post("/chapters/{chapter_id}/move")
 def move_chapter(chapter_id: str, req: MoveIn, user: Principal = Depends(require_teacher),
                  db: Session = Depends(get_db)):
-    ch = _chapter(db, user, chapter_id)
+    ch = _managed_chapter(db, user, chapter_id)
     course_admin.move(db, ch, ch.course.chapters, req.direction)
     db.refresh(ch.course)
     return _tree(db, ch.course)
@@ -197,7 +210,7 @@ def move_chapter(chapter_id: str, req: MoveIn, user: Principal = Depends(require
 
 @router.delete("/chapters/{chapter_id}")
 def delete_chapter(chapter_id: str, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
-    ch = _chapter(db, user, chapter_id)
+    ch = _managed_chapter(db, user, chapter_id)
     course = ch.course
     db.delete(ch)
     db.commit()
@@ -216,7 +229,7 @@ def add_lesson(chapter_id: str, req: LessonIn, user: Principal = Depends(require
                db: Session = Depends(get_db)):
     if not req.title or not req.title.strip():
         raise AppError(400, "BAD_REQUEST", "Cần tên bài học.")
-    ch = _chapter(db, user, chapter_id)
+    ch = _managed_chapter(db, user, chapter_id)
     course_admin.add_lesson(db, ch, req.code, req.title, req.description)
     db.refresh(ch.course)
     return _tree(db, ch.course)
@@ -226,6 +239,7 @@ def add_lesson(chapter_id: str, req: LessonIn, user: Principal = Depends(require
 def update_lesson(lesson_id: str, req: LessonIn, user: Principal = Depends(require_teacher),
                   db: Session = Depends(get_db)):
     ls = learning.get_lesson(db, user, parse_uuid(lesson_id, "lesson_id"))
+    learning.ensure_can_manage_course(user, ls.chapter.course)
     if req.title:
         ls.title = req.title
     if req.description is not None:
@@ -238,6 +252,7 @@ def update_lesson(lesson_id: str, req: LessonIn, user: Principal = Depends(requi
 def move_lesson(lesson_id: str, req: MoveIn, user: Principal = Depends(require_teacher),
                 db: Session = Depends(get_db)):
     ls = learning.get_lesson(db, user, parse_uuid(lesson_id, "lesson_id"))
+    learning.ensure_can_manage_course(user, ls.chapter.course)
     course_admin.move(db, ls, ls.chapter.lessons, req.direction)
     db.refresh(ls.chapter)
     return _tree(db, ls.chapter.course)
@@ -246,6 +261,7 @@ def move_lesson(lesson_id: str, req: MoveIn, user: Principal = Depends(require_t
 @router.delete("/lessons/{lesson_id}")
 def delete_lesson(lesson_id: str, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
     ls = learning.get_lesson(db, user, parse_uuid(lesson_id, "lesson_id"))
+    learning.ensure_can_manage_course(user, ls.chapter.course)
     course = ls.chapter.course
     db.delete(ls)
     db.commit()
@@ -270,6 +286,7 @@ class ItemIn(BaseModel):
 @router.post("/lessons/{lesson_id}/items")
 def add_item(lesson_id: str, req: ItemIn, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
     ls = learning.get_lesson(db, user, parse_uuid(lesson_id, "lesson_id"))
+    learning.ensure_can_manage_course(user, ls.chapter.course)
     data = req.model_dump()
     if data.get("document_id"):
         data["document_id"] = parse_uuid(data["document_id"], "document_id")
@@ -289,6 +306,7 @@ def get_item_admin(item_id: str, user: Principal = Depends(require_teacher), db:
 @router.patch("/items/{item_id}")
 def update_item(item_id: str, req: ItemIn, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
     it = learning.get_item(db, user, parse_uuid(item_id, "item_id"))
+    learning.ensure_can_manage_course(user, it.lesson.chapter.course)
     data = {k: v for k, v in req.model_dump().items() if v is not None and k != "type"}
     if data.get("document_id"):
         data["document_id"] = parse_uuid(data["document_id"], "document_id")
@@ -299,6 +317,7 @@ def update_item(item_id: str, req: ItemIn, user: Principal = Depends(require_tea
 @router.post("/items/{item_id}/move")
 def move_item(item_id: str, req: MoveIn, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
     it = learning.get_item(db, user, parse_uuid(item_id, "item_id"))
+    learning.ensure_can_manage_course(user, it.lesson.chapter.course)
     course_admin.move(db, it, it.lesson.items, req.direction)
     db.refresh(it.lesson)
     return _tree(db, it.lesson.chapter.course)
@@ -307,6 +326,7 @@ def move_item(item_id: str, req: MoveIn, user: Principal = Depends(require_teach
 @router.delete("/items/{item_id}")
 def delete_item(item_id: str, user: Principal = Depends(require_teacher), db: Session = Depends(get_db)):
     it = learning.get_item(db, user, parse_uuid(item_id, "item_id"))
+    learning.ensure_can_manage_course(user, it.lesson.chapter.course)
     course = it.lesson.chapter.course
     db.delete(it)
     db.commit()

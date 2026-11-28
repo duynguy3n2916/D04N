@@ -206,10 +206,11 @@ def get_item(db: Session, user: Principal, item_id) -> LessonItem:
 
 
 def set_course_class(db: Session, user: Principal, course_id, class_id: str, add: bool) -> Course:
-    """Gắn thêm / gỡ một lớp khỏi khóa học. Giáo viên phải thuộc lớp đó và thấy được khóa học."""
+    """Gắn thêm / gỡ một lớp khỏi khóa học. Chỉ admin hoặc giáo viên tạo khóa mới được sửa."""
     course = db.get(Course, course_id)
     if course is None or not can_see_course(db, user, course):
         raise AppError(404, "NOT_FOUND", "Không tìm thấy khóa học.")
+    ensure_can_manage_course(user, course)
     if not user.can_access_class(class_id):
         raise AppError(403, "CLASS_FORBIDDEN", f"Bạn không có quyền với lớp {class_id}.")
     if not db.query(ClassRoom.class_id).filter(ClassRoom.class_id == class_id).first():
@@ -406,6 +407,17 @@ def locate(db: Session, user: Principal, lesson: Lesson | None, video_id: str | 
         if can_see_course(db, user, it.lesson.chapter.course):
             return {"lesson_id": str(it.lesson_id), "item_id": str(it.id), "type": it.type}
     return None
+
+def can_manage_course(user: Principal, course: Course) -> bool:
+    """Chỉ admin hoặc giáo viên tạo khóa học mới có quyền thao tác/chỉnh sửa khóa học."""
+    if user.is_admin:
+        return True
+    return user.role == "teacher" and bool(course.created_by) and course.created_by == user.user_id
+
+
+def ensure_can_manage_course(user: Principal, course: Course) -> None:
+    if not can_manage_course(user, course):
+        raise AppError(403, "FORBIDDEN", "Bạn không có quyền thao tác trên khóa học này.")
 
 
 # ----------------------------------------------------------------------------

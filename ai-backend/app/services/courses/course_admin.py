@@ -10,7 +10,7 @@ from app.core.utils import generate_code
 from app.models.documents import AIDocument
 from app.models.learning import Chapter, Course, Lesson, LessonItem, MediaVideo
 from app.models.transcript import VideoTranscript
-from app.services.courses.learning import ITEM_TYPES, cover_url
+from app.services.courses.learning import ITEM_TYPES, cover_url, ensure_can_manage_course
 from app.services.media.object_store import get_store
 from app.services.media.storage import safe_extension, save_upload, sha256_text
 from app.services.rag.ingestion import create_document, find_duplicate
@@ -38,6 +38,7 @@ def admin_tree(course: Course) -> dict:
     return {
         "course_id": str(course.id), "code": course.code, "title": course.title, "description": course.description,
         "class_id": course.class_id, "cover_url": cover_url(course),
+        "created_by": course.created_by,
         "chapters": [{
             "chapter_id": str(ch.id), "title": ch.title, "position": ch.position,
             "lessons": [{
@@ -64,9 +65,11 @@ def create_course(db: Session, user: Principal, code: str | None, title: str, de
 
 
 def update_course(db: Session, user: Principal, course: Course, data: dict) -> Course:
+    ensure_can_manage_course(user, course)
     if "class_id" in data:
-        ensure_class_access(user, data["class_id"])
-        course.class_id = data["class_id"]
+        next_class_id = (data["class_id"] or "").strip() or None
+        ensure_class_access(user, next_class_id)
+        course.class_id = next_class_id
     for k in ("title", "description"):
         if data.get(k) is not None:
             setattr(course, k, data[k])
